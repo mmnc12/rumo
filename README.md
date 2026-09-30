@@ -1,0 +1,1 @@
+"Sistema de monitoramento de exercícios físicos (caminhada, corrida e outros)."
