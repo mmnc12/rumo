@@ -1,8 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import hash_password
+from app.core.dependencies import get_current_user
+from app.core.security import (
+    create_access_token,
+    hash_password,
+    verify_password,
+)
 from app.database import get_db
 from app.models import User
 from app.schemas import UserCreate, UserResponse
@@ -27,7 +33,6 @@ async def register(
     - Hasheia a senha antes de salvar (bcrypt)
     - Retorna os dados públicos do usuário criado (sem senha)
     """
-
     # 1. Verificar se o email já existe
     result = await db.execute(
         select(User).where(User.email == payload.email)
@@ -61,6 +66,65 @@ async def register(
 
     db.add(user)
     await db.commit()
-    await db.refresh(user)  # recarrega o objeto com os defaults do banco (created_at, etc.)
+    await db.refresh(user)
 
     return user
+
+
+@router.post(
+    "/login",
+    summary="Login (form-urlencoded, padrão OAuth2)",
+)
+async def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Autentica o usuário e retorna um access token JWT.
+
+    - Aceita `username` (na verdade, o email) e `password` via form-urlencoded
+    - Retorna `{access_token, token_type}`
+    - Use o token no header: `Authorization: Bearer <token>`
+    """
+    # 1. Busca o usuário pelo email (o campo `username` do form é o email)
+    result = await db.execute(
+        select(User).where(User.email == form_data.username)
+    )
+    user = result.scalar_one_or_none()
+
+    # 2. Verifica se o usuário existe e a senha confere
+    if user is None or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Email ou senha incorretos",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # 3. Verifica se o usuário está ativo
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuário inativo",
+        )
+
+    # 4. Gera o token
+    access_token = create_access_token(subject=user.id)
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+    }
+
+
+@router.get(
+    "/me",
+    response_model=UserResponse,
+    summary="Retorna os dados do usuário autenticado",
+)
+async def me(current_user: User = Depends(get_current_user)):
+    """
+    Endpoint protegido que retorna os dados do usuário logado.
+
+    Requer header: `Authorization: Bearer <token>`
+    """
+    return current_user
