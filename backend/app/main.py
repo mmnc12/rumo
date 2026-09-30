@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from app.routers import auth
 
 from fastapi import FastAPI
 from sqlalchemy import text
@@ -34,6 +35,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.include_router(auth.router)
 
 @app.get("/", tags=["Root"])
 async def root():
@@ -60,3 +62,4 @@ async def health():
         "database": db_status,
         "ambiente": settings.ENVIRONMENT,
     }
+
