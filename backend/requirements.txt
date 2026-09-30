@@ -1,0 +1,31 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# Banco de dados
+sqlalchemy==2.0.36
+asyncpg==0.30.0
+greenlet==3.1.1 
+alembic==1.14.0
+
+# Validação e configuração
+pydantic==2.10.4
+pydantic-settings==2.7.0
+email-validator==2.2.0
+
+# Segurança (vamos usar mais adiante)
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.20
+
+# Redis (cache/filas)
+redis==5.2.1
+
+# Utilitários
+python-dotenv==1.0.1
+
+# Qualidade (dev)
+ruff==0.8.4
+pytest==8.3.4
+pytest-asyncio==0.25.0
+httpx==0.28.1
