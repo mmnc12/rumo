@@ -5,7 +5,7 @@ uvicorn[standard]==0.34.0
 # Banco de dados
 sqlalchemy==2.0.36
 asyncpg==0.30.0
-greenlet==3.1.1 
+greenlet==3.1.1
 alembic==1.14.0
 
 # Validação e configuração
@@ -13,12 +13,15 @@ pydantic==2.10.4
 pydantic-settings==2.7.0
 email-validator==2.2.0
 
-# Segurança (vamos usar mais adiante)
+# Segurança
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.20
 
-# Redis (cache/filas)
+# IDs
+uuid6==2024.7.10
+
+# Redis
 redis==5.2.1
 
 # Utilitários
