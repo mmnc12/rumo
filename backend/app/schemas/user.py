@@ -52,3 +52,13 @@ class UserResponse(BaseModel):
     birth_date: date | None
     is_active: bool
     created_at: datetime
+
+class UserPublic(BaseModel):
+    """Dados públicos de outro usuário (sem email/data de nascimento)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    username: str
+    full_name: str
+    is_active: bool

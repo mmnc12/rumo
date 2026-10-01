@@ -4,6 +4,7 @@ from app.schemas.activity import (
     ActivityResponse,
 )
 from app.schemas.user import UserCreate, UserLogin, UserResponse
+from app.schemas.user import UserPublic
 
 __all__ = [
     "UserCreate",
@@ -28,3 +29,9 @@ __all__ = [
     "StatsWeeklyResponse",
     "StatsMonthlyResponse",
 ]
+
+__all__ = [
+    # ...existentes...
+    "UserPublic",
+]
+
