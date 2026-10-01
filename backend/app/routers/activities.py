@@ -9,6 +9,12 @@ from app.database import get_db
 from app.models import Activity, User
 from app.schemas import ActivityCreate, ActivityListResponse, ActivityResponse
 from app.services import activity_service
+from app.schemas.stats import (
+    StatsSummary,
+    StatsWeeklyResponse,
+    StatsMonthlyResponse,
+)
+from app.services import stats_service
 
 router = APIRouter(prefix="/activities", tags=["Atividades"])
 
@@ -44,9 +50,47 @@ async def list_mine(
     items, total = await activity_service.list_user_activities(
         db, current_user.id, limit=limit, offset=offset
     )
-    return ActivityListResponse(
-        items=items, total=total, limit=limit, offset=offset
+    return ActivityListResponse(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/stats/summary", response_model=StatsSummary)
+async def stats_summary(
+    activity_type: str | None = Query(
+        default=None, description="Filtro opcional por tipo"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Totais gerais das atividades do usuário."""
+    return await stats_service.get_summary(db, current_user.id, activity_type)
+
+
+@router.get("/stats/weekly", response_model=StatsWeeklyResponse)
+async def stats_weekly(
+    weeks: int = Query(default=8, ge=1, le=52, description="Número de semanas"),
+    activity_type: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Resumo das últimas N semanas."""
+    items = await stats_service.get_period_stats(
+        db, current_user.id, "week", weeks, activity_type
     )
+    return {"weeks": weeks, "items": items}
+
+
+@router.get("/stats/monthly", response_model=StatsMonthlyResponse)
+async def stats_monthly(
+    months: int = Query(default=6, ge=1, le=24, description="Número de meses"),
+    activity_type: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Resumo dos últimos N meses."""
+    items = await stats_service.get_period_stats(
+        db, current_user.id, "month", months, activity_type
+    )
+    return {"months": months, "items": items}
 
 
 @router.get(
