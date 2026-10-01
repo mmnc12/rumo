@@ -4,6 +4,8 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.activity import ActivityType
+from app.schemas.user import UserPublic
+
 
 
 # ===== Schemas de entrada =====
@@ -60,3 +62,8 @@ class ActivityListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+class FeedItemResponse(ActivityResponse):
+    """Atividade no feed, com dados do autor."""
+
+    author: UserPublic = Field(validation_alias="user")

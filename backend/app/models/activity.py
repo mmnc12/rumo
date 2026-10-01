@@ -100,7 +100,7 @@ class Activity(Base):
     )
 
     # Relacionamento com User (opcional, útil para queries futuras)
-    user = relationship("User", backref="activities")
+    user = relationship("User", backref="activities", lazy="raise")
 
     # Constraints de sanidade
     __table_args__ = (

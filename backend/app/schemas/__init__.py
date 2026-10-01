@@ -5,6 +5,7 @@ from app.schemas.activity import (
 )
 from app.schemas.user import UserCreate, UserLogin, UserResponse
 from app.schemas.user import UserPublic
+from app.schemas.activity import FeedItemResponse
 
 __all__ = [
     "UserCreate",
@@ -34,4 +35,5 @@ __all__ = [
     # ...existentes...
     "UserPublic",
 ]
+__all__ = [..., "FeedItemResponse"]
 

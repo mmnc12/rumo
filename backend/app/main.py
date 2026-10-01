@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from app.routers import activities, auth, users
+from app.routers import activities, auth, feed, users
 
 
 from fastapi import FastAPI
@@ -39,6 +39,7 @@ app = FastAPI(
 app.include_router(auth.router)
 app.include_router(activities.router)
 app.include_router(users.router, prefix="/users", tags=["users"])
+app.include_router(feed.router, prefix="/feed", tags=["feed"])
 
 @app.get("/", tags=["Root"])
 async def root():
