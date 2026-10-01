@@ -10,7 +10,7 @@ from app.database import Base
 
 # Importante: importar os models para o Alembic "enxergar" as tabelas.
 # Toda vez que você criar um model novo, adicione o import aqui.
-from app.models import User  # noqa: F401
+from app.models import Activity, User  # noqa: F401
 
 # Configuração do Alembic
 config = context.config
