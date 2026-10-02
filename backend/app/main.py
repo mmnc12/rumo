@@ -37,7 +37,7 @@ app = FastAPI(
 )
 
 app.include_router(auth.router)
-app.include_router(activities.router)
+app.include_router(activities.router, prefix="/activities", tags=["activities"])
 app.include_router(users.router, prefix="/users", tags=["users"])
 app.include_router(feed.router, prefix="/feed", tags=["feed"])
 

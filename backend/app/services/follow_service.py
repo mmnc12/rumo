@@ -8,32 +8,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.follow import Follow
 from app.models.user import User
-
-
-class FollowError(Exception):
-    """Erro de negócio em operações de follow."""
-
-    def __init__(self, message: str, status_code: int):
-        self.message = message
-        self.status_code = status_code
-        super().__init__(message)
+from app.services.errors import BadRequestError, ConflictError, NotFoundError
 
 
 async def _get_user_or_404(db: AsyncSession, user_id: UUID) -> User:
-    """Busca usuário por id ou levanta FollowError 404."""
+    """Busca usuário por id ou levanta NotFoundError."""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None:
-        raise FollowError("User not found", status_code=404)
+        raise NotFoundError("User not found")
     return user
 
 
 async def follow_user(
     db: AsyncSession, follower_id: UUID, following_id: UUID
 ) -> None:
-    """Cria relação de follow. Levanta FollowError em caso de conflito."""
+    """Cria relação de follow. Levanta ServiceError em caso de conflito."""
     if follower_id == following_id:
-        raise FollowError("Cannot follow yourself", status_code=400)
+        raise BadRequestError("Cannot follow yourself")
 
     await _get_user_or_404(db, following_id)
 
@@ -43,13 +35,13 @@ async def follow_user(
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        raise FollowError("Already following this user", status_code=409)
+        raise ConflictError("Already following this user")
 
 
 async def unfollow_user(
     db: AsyncSession, follower_id: UUID, following_id: UUID
 ) -> None:
-    """Remove relação de follow. Levanta FollowError 404 se não existia."""
+    """Remove relação de follow. Levanta NotFoundError se não existia."""
     stmt = delete(Follow).where(
         Follow.follower_id == follower_id,
         Follow.following_id == following_id,
@@ -58,7 +50,7 @@ async def unfollow_user(
     await db.commit()
 
     if result.rowcount == 0:
-        raise FollowError("Not following this user", status_code=404)
+        raise NotFoundError("Not following this user")
 
 
 async def get_followers(

@@ -1,63 +1,34 @@
-import uuid
+"""Endpoints de atividades (CRUD, estatísticas, curtidas)."""
+
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
 from app.database import get_db
-from app.models import Activity, User
-from app.schemas import ActivityCreate, ActivityListResponse, ActivityResponse
-from app.services import activity_service
+from app.models.user import User
+from app.schemas.activity import (
+    ActivityCreate,
+    ActivityResponse,
+)
+from app.schemas.like import LikeListResponse, LikeStateResponse
 from app.schemas.stats import (
+    StatsMonthlyResponse,
     StatsSummary,
     StatsWeeklyResponse,
-    StatsMonthlyResponse,
 )
-from app.services import stats_service
+from app.services import activity_service, like_service, stats_service
+from app.services.errors import ServiceError
 
-router = APIRouter(prefix="/activities", tags=["Atividades"])
-
-
-@router.post(
-    "",
-    response_model=ActivityResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Registra uma nova atividade",
-)
-async def create(
-    payload: ActivityCreate,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Cria uma atividade para o usuário autenticado."""
-    activity = await activity_service.create_activity(db, current_user.id, payload)
-    return activity
+router = APIRouter()
 
 
-@router.get(
-    "",
-    response_model=ActivityListResponse,
-    summary="Lista atividades do usuário autenticado (paginado)",
-)
-async def list_mine(
-    limit: int = Query(20, ge=1, le=100),
-    offset: int = Query(0, ge=0),
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Retorna as atividades do usuário logado, mais recentes primeiro."""
-    items, total = await activity_service.list_user_activities(
-        db, current_user.id, limit=limit, offset=offset
-    )
-    return ActivityListResponse(items=items, total=total, limit=limit, offset=offset)
-
+# ===== Estatísticas (declaradas ANTES das rotas dinâmicas /{activity_id}) =====
 
 @router.get("/stats/summary", response_model=StatsSummary)
 async def stats_summary(
-    activity_type: str | None = Query(
-        default=None, description="Filtro opcional por tipo"
-    ),
+    activity_type: str | None = Query(default=None, description="Filtro opcional por tipo"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -93,56 +64,95 @@ async def stats_monthly(
     return {"months": months, "items": items}
 
 
-@router.get(
-    "/{activity_id}",
-    response_model=ActivityResponse,
-    summary="Detalhes de uma atividade",
-)
-async def get_one(
-    activity_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+# ===== CRUD =====
+
+@router.post("", response_model=ActivityResponse, status_code=status.HTTP_201_CREATED)
+async def create_activity(
+    payload: ActivityCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Retorna os detalhes de uma atividade do usuário autenticado."""
-    result = await db.execute(
-        select(Activity).where(
-            Activity.id == activity_id,
-            Activity.user_id == current_user.id,
-        )
-    )
-    activity = result.scalar_one_or_none()
-    if activity is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Atividade não encontrada",
-        )
-    return activity
+    """Cria uma nova atividade para o usuário autenticado."""
+    return await activity_service.create_activity(db, current_user.id, payload)
 
 
-@router.delete(
-    "/{activity_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Remove uma atividade",
-)
-async def delete(
-    activity_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+@router.get("", response_model=list[ActivityResponse])
+async def list_activities(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lista atividades do usuário autenticado (paginado)."""
+    return await activity_service.list_activities(db, current_user.id, limit, offset)
+
+
+@router.get("/{activity_id}", response_model=ActivityResponse)
+async def get_activity(
+    activity_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retorna detalhes de uma atividade do usuário autenticado."""
+    try:
+        return await activity_service.get_activity(db, current_user.id, activity_id)
+    except ServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
+
+
+@router.delete("/{activity_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_activity(
+    activity_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Remove uma atividade do usuário autenticado."""
-    result = await db.execute(
-        select(Activity).where(
-            Activity.id == activity_id,
-            Activity.user_id == current_user.id,
-        )
-    )
-    activity = result.scalar_one_or_none()
-    if activity is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Atividade não encontrada",
-        )
+    try:
+        await activity_service.delete_activity(db, current_user.id, activity_id)
+    except ServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
-    await db.delete(activity)
-    await db.commit()
-    return None
+
+# ===== Curtidas =====
+
+@router.post("/{activity_id}/like", response_model=LikeStateResponse)
+async def like_activity(
+    activity_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Curte uma atividade (idempotente). Retorna o estado atual."""
+    try:
+        return await like_service.like_activity(db, current_user.id, activity_id)
+    except ServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
+
+
+@router.delete("/{activity_id}/like", status_code=status.HTTP_204_NO_CONTENT)
+async def unlike_activity(
+    activity_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Remove curtida (idempotente)."""
+    try:
+        await like_service.unlike_activity(db, current_user.id, activity_id)
+    except ServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
+
+
+@router.get("/{activity_id}/likes", response_model=LikeListResponse)
+async def list_likes(
+    activity_id: UUID,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lista quem curtiu + contagem + flag do user atual."""
+    try:
+        return await like_service.get_likes(
+            db, current_user.id, activity_id, limit, offset
+        )
+    except ServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)

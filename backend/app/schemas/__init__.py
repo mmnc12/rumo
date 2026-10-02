@@ -6,6 +6,7 @@ from app.schemas.activity import (
 from app.schemas.user import UserCreate, UserLogin, UserResponse
 from app.schemas.user import UserPublic
 from app.schemas.activity import FeedItemResponse
+from app.schemas.like import LikeStateResponse, LikeListResponse
 
 __all__ = [
     "UserCreate",
@@ -36,4 +37,5 @@ __all__ = [
     "UserPublic",
 ]
 __all__ = [..., "FeedItemResponse"]
+__all__ = [..., "LikeStateResponse", "LikeListResponse"]
 
