@@ -1,8 +1,17 @@
-"""Endpoints de atividades (CRUD, estatísticas, curtidas)."""
+"""Endpoints de atividades (CRUD, estatísticas, curtidas, upload)."""
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
@@ -72,8 +81,48 @@ async def create_activity(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Cria uma nova atividade para o usuário autenticado."""
+    """Cria uma nova atividade (JSON pré-calculado, com track_points opcional)."""
     return await activity_service.create_activity(db, current_user.id, payload)
+
+
+@router.post(
+    "/upload",
+    response_model=ActivityResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_activity(
+    file: UploadFile = File(..., description="Arquivo .gpx"),
+    title: str | None = Form(None, max_length=120),
+    activity_type: str | None = Form(None),
+    description: str | None = Form(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Cria uma atividade a partir de um arquivo GPX.
+
+    O backend parseia o arquivo, calcula distância, pace, elevação
+    e preenche rota (PostGIS) + raw_track_points automaticamente.
+    """
+    if not file.filename or not file.filename.lower().endswith(".gpx"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Formato não suportado. Envie um arquivo .gpx",
+        )
+
+    file_bytes = await file.read()
+
+    try:
+        return await activity_service.create_activity_from_gpx(
+            db=db,
+            user_id=current_user.id,
+            file_bytes=file_bytes,
+            title=title,
+            activity_type=activity_type,
+            description=description,
+        )
+    except ServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
 
 @router.get("", response_model=list[ActivityResponse])

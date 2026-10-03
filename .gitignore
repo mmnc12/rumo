@@ -28,3 +28,5 @@ Thumbs.db
 
 # Dados locais (bancos em volume)
 data/
+
+backend/samples/
