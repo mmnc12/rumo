@@ -29,3 +29,9 @@ class BadRequestError(ServiceError):
 
     def __init__(self, message: str = "Bad request"):
         super().__init__(message, status_code=400)
+
+class ForbiddenError(ServiceError):
+    """Sem permissão para a ação (403)."""
+
+    def __init__(self, message: str = "Forbidden"):
+        super().__init__(message, status_code=403)
