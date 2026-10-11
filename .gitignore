@@ -30,3 +30,6 @@ Thumbs.db
 data/
 
 backend/samples/
+
+# Pasta de scripts descartáveis (não versionar)
+_scratch/

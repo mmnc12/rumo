@@ -3,7 +3,108 @@
 ## Sobre o projeto
 Sistema de monitoramento de exercícios físicos (tipo Strava). Nome: **Rumo**.
 Usuário: iniciante em Python/backend, experiente em JS (2 sistemas em produção).
-Objetivo: produção real.
+Objetivo: produção real, com usuários reais usando no dia a dia.
+
+---
+
+## Visão do produto (NORTE — ler antes de qualquer decisão)
+
+**O Rumo é um app de exercício físico ambicioso, semelhante ao Strava.** Não é
+um projeto de portfólio nem um CRUD de treinos. O objetivo é produção real,
+com usuários reais usando no dia a dia.
+
+### O que o Rumo DEVE ter (roadmap ambicioso)
+
+**Core (essencial pra ser "Strava-like"):**
+- [x] Auth (register/login/JWT)
+- [x] CRUD de atividades
+- [x] Upload de GPX com cálculo automático (distância, pace, elevação)
+- [ ] Upload de FIT (formato cru dos relógios Garmin/Polar)
+- [ ] Upload de fotos da atividade (storage S3/Cloudinary/R2)
+- [ ] Perfil público com stats agregadas (km totais, PRs, gráficos)
+- [ ] Splits por km (pace e elevação por trecho)
+- [ ] Mapa/visualização da rota no cliente (endpoint dedicado)
+
+**Social (o que faz o app engajar):**
+- [x] Follows (seguir/seguidores)
+- [x] Feed (atividades próprias + de quem segue)
+- [x] Likes (kudos)
+- [x] Comentários
+- [ ] Notificações push ("fulano curtiu", "sicrano te seguiu", "novo PR")
+- [ ] Feed personalizado com filtros (só corrida, só amigos mútuos)
+- [ ] Compartilhamento externo (card/imagem pra Instagram/WhatsApp)
+
+**Diferenciais (o que faz o Strava ser Strava):**
+- [ ] Segments (trechos famosos onde compete por tempo contra outros)
+- [ ] Leaderboards por segmento
+- [ ] Achievements/badges ("primeiro 10K", "recorde pessoal")
+- [ ] Análise de treino (zonas de FC, cadência, comparação semana a semana)
+
+**Infra/operacional (obrigatório antes de ir pra produção real):**
+- [ ] Rate limiting
+- [ ] Cache (Redis — já no docker-compose, não usado ainda)
+- [ ] Testes automatizados
+- [ ] Background jobs (processar GPX grandes fora do request)
+- [ ] Observabilidade (logs estruturados, métricas, tracing)
+- [ ] Backup do banco
+
+### Como usar essa visão
+
+Quando estiver em dúvida sobre uma decisão técnica, **perguntar: isso aproxima
+o Rumo do Strava ou afasta?** Exemplos:
+
+- "Devo expor `raw_track_points` no `ActivityResponse`?" → **Não**, porque
+  o cliente (mobile) vai precisar desenhar o mapa — melhor endpoint dedicado
+  que retorna só a geometria, pra não pesar a listagem.
+- "Devo fazer upload GPX síncrono ou em background?" → No MVP síncrono;
+  no futuro, background com fila (Celery/RQ/arq) pra aguentar arquivos grandes.
+- "Devo usar SQLite pra simplificar?" → **Não.** PostGIS é obrigatório (Strava
+  é geo-first). Neon já está planejado.
+
+### O que o Rumo NÃO é
+
+- ❌ Não é um projeto de portfólio — é um produto de verdade.
+- ❌ Não é um "CRUD de exercícios" — é uma rede social de exercícios.
+- ❌ Não é um clone literal do Strava — é inspirado, com identidade própria.
+
+---
+
+## Roadmap em fases (vertical slice, não horizontal)
+
+**Estratégia:** construir features completas atravessando backend + frontend +
+mobile, em vez de terminar o backend inteiro antes de começar o frontend.
+
+**Por quê:**
+1. "Backend 100%" é miragem — sempre falta algo.
+2. Frontend/mobile **informam** o backend sobre o que ainda falta.
+3. Ver funcionando na tela **recarrega a motivação**.
+4. Deploy cedo é barato depois da primeira vez (Render faz redeploy automático).
+5. Padrão da indústria é vertical slice, não horizontal.
+
+### Fase 1 — Deploy + primeira feature visível (curto prazo)
+1. **Bloco 11: Deploy backend** (Render + Neon) — deixa a API pública
+2. **Bloco 13a: Frontend mínimo** (React/Vercel) — só:
+   - Tela de login/registro
+   - Tela de "minhas atividades" (lista)
+   - Tela de upload GPX (arrasta arquivo → mostra que criou)
+   - Tela de detalhe de atividade (mapa + métricas)
+3. **Bloco 14a: Mobile mínimo** (Flutter) — mesma coisa
+
+**Resultado:** app funcional de ponta a ponta. Sobe GPX, vê rota no mapa,
+lista atividades. Suficiente pra usar de verdade e descobrir o que falta.
+
+### Fase 2 — Refinar o que existe (médio prazo)
+4. **Bloco 13b/14b:** feed, likes, comentários no frontend/mobile
+5. **Bloco 15:** fotos de atividade
+6. **Bloco 16:** perfil público + stats visuais
+
+### Fase 3 — Diferenciais do Strava (longo prazo)
+7. **Bloco 17+:** segments, achievements, notificações, análise de treino
+
+**O que NÃO fazer:** tentar "terminar o backend antes de tudo". Isso atrasa
+meses, mata a motivação, e ignora que o frontend ensina o backend.
+
+---
 
 ## Stack
 - **Backend:** Python 3.13.7 + FastAPI + SQLAlchemy 2.0 async + Alembic + GeoAlchemy2
@@ -57,7 +158,8 @@ D:\Rumo
 │ └── tests
 ├── mobile\ (vazio)
 └── web\ (vazio)
- 
+
+
 ## Models existentes
 
 ### User
@@ -135,10 +237,14 @@ D:\Rumo
 ✅ 12 - Upload GPX + cálculo automático de métricas (parser, Haversine, elevação, PostGIS + JSONB, refatoração do activity_service)
 
 ## Blocos pendentes
-⏳ 11 - Deploy Render + Neon (PRÓXIMO)
+⏳ 11 - Deploy Render + Neon (PRÓXIMO — Fase 1 do roadmap)
 ⏳ 12b - Upload FIT (opcional, formato binário com fitdecode/garmin-fit-sdk)
-⏳ 13 - Frontend React (Vercel)
-⏳ 14 - Mobile Flutter
+⏳ 13a - Frontend React mínimo (login, lista, upload GPX, detalhe) — Fase 1
+⏳ 14a - Mobile Flutter mínimo — Fase 1
+⏳ 13b/14b - Feed/likes/comentários no frontend/mobile — Fase 2
+⏳ 15 - Fotos de atividade — Fase 2
+⏳ 16 - Perfil público + stats visuais — Fase 2
+⏳ 17+ - Segments, achievements, notificações, análise de treino — Fase 3
 
 ## Pendências técnicas (dívida para limpar)
 1. **`calories` fica NULL no upload GPX** — cálculo precisa de peso + FC + tipo, é bloco separado.
@@ -149,6 +255,7 @@ D:\Rumo
 6. **`UserResponse` expõe `email` e `birth_date`** — usado só em `/auth/me` (ok), mas vale revisar antes de prod.
 7. **`GET /activities/{id}/comments` exige auth** — se quiser público depois, remover `Depends(get_current_user)`.
 8. **Não há `/activities/{id}/route` ou `/track`** — o `ActivityResponse` não expõe `route` nem `raw_track_points` (decisão de performance). Se o frontend precisar desenhar o mapa, criar endpoint dedicado que retorna a geometria.
+9. **Upload GPX é síncrono** — bloqueia o request por ~1s. No futuro, background com fila (arq/Celery/RQ).
 
 ## Comandos essenciais
 ```powershell
@@ -222,9 +329,7 @@ Usuários de teste
 
     Pylance "X is not accessed" → import não usado, limpar mas não é erro de runtime
 
-        Pylance "X is not accessed" → import não usado, limpar mas não é erro de runtime
-
-    uuid.uuid7 NÃO existe no Python 3.13 — usar from uuid6 import uuid7
+        uuid.uuid7 NÃO existe no Python 3.13 — usar from uuid6 import uuid7
 
     DateTime sem timezone=True — bug silencioso, sempre conferir no \d tabela se aparece timestamp with time zone
 
@@ -271,79 +376,35 @@ Como retomar no próximo chat
 
 Mensagem sugerida:
 
-    Continuando o projeto Rumo. Aqui está o handoff (após Bloco 12). Bora para o Bloco 11 — Deploy Render + Neon. Gostaria de seguir nesta pegando quando o chat estiver próximo do limite, gerar um Handoff para passar para o próximo chat.
+    Continuando o projeto Rumo. Aqui está o handoff (após Bloco 12, com visão do produto e roadmap em fases). Bora para o Bloco 11 — Deploy Render + Neon (Fase 1 do roadmap). Gostaria de seguir nesta pegando quando o chat estiver próximo do limite, gerar um Handoff para passar para o próximo chat.
 
 text
 
 
 ---
 
-Salva isso em `docs\HANDOFF.md` e commita:
+## Salvar e commitar
 
 ```powershell
 cd D:\Rumo
 git add docs/HANDOFF.md
-git commit -m "docs: atualiza handoff apos Bloco 12"
+git commit -m "docs: adiciona visao do produto e roadmap em fases ao handoff"
 git push
 
-Pronto. Agora você pode abrir o chat novo com segurança. Cola o handoff + a mensagem sugerida e bora pro Bloco 11 — Deploy Render + Neon. 🚀
+O que mudou nesta versão
 
-## Visão do produto (NORTE — ler antes de qualquer decisão)
+Comparado ao handoff anterior:
 
-**Rumo é um app de exercício físico ambicioso, semelhante ao Strava.** Não é
-um projeto de portfólio nem um CRUD de treinos. O objetivo é produção real,
-com usuários reais usando no dia a dia.
+    Nova seção "Visão do produto" logo depois de "Sobre o projeto" — deixa cristalino que o Rumo é um app ambicioso tipo Strava, não um CRUD de exercícios. Inclui a lista de features (core/social/diferenciais/infra) e exemplos de como usar a visão pra decidir.
 
-### O que o Rumo DEVE ter (roadmap ambicioso)
+    Nova seção "Roadmap em fases" — explica a estratégia vertical slice (backend + frontend + mobile juntos), em vez de esperar backend "100%".
 
-**Core (essencial pra ser "Strava-like"):**
-- [x] Auth (register/login/JWT)
-- [x] CRUD de atividades
-- [x] Upload de GPX com cálculo automático (distância, pace, elevação)
-- [ ] Upload de FIT (formato cru dos relógios Garmin/Polar)
-- [ ] Upload de fotos da atividade (storage S3/Cloudinary/R2)
-- [ ] Perfil público com stats agregadas (km totais, PRs, gráficos)
-- [ ] Splits por km (pace e elevação por trecho)
-- [ ] Mapa/visualização da rota no cliente (endpoint dedicado)
+    Atualização dos "Blocos pendentes" — reorganizados por fase (11, 12b, 13a, 14a → Fase 1; 13b/14b, 15, 16 → Fase 2; 17+ → Fase 3).
 
-**Social (o que faz o app engajar):**
-- [x] Follows (seguir/seguidores)
-- [x] Feed (atividades próprias + de quem segue)
-- [x] Likes (kudos)
-- [x] Comentários
-- [ ] Notificações push ("fulano curtiu", "sicrano te seguiu", "novo PR")
-- [ ] Feed personalizado com filtros (só corrida, só amigos mútuos)
-- [ ] Compartilhamento externo (card/imagem pra Instagram/WhatsApp)
+    Nova pendência técnica #9 — upload GPX síncrono (mencionado como possível gargalo futuro).
 
-**Diferenciais (o que faz o Strava ser Strava):**
-- [ ] Segments (trechos famosos onde compete por tempo contra outros)
-- [ ] Leaderboards por segmento
-- [ ] Achievements/badges ("primeiro 10K", "recorde pessoal")
-- [ ] Análise de treino (zonas de FC, cadência, comparação semana a semana)
+    Mensagem sugerida atualizada — menciona "visão do produto e roadmap em fases".
 
-**Infra/operacional (obrigatório antes de ir pra produção real):**
-- [ ] Rate limiting
-- [ ] Cache (Redis — já no docker-compose, não usado ainda)
-- [ ] Testes automatizados
-- [ ] Background jobs (processar GPX grandes fora do request)
-- [ ] Observabilidade (logs estruturados, métricas, tracing)
-- [ ] Backup do banco
+Pronto. Agora você pode abrir o chat novo com segurança e o handoff comunica o norte de verdade. Qualquer decisão futura (deploy, frontend, mobile, até refatoração) vai passar por esse filtro "isso aproxima ou afasta do Strava?".
 
-### Como usar essa visão
-
-Quando estiver em dúvida sobre uma decisão técnica, **perguntar: isso aproxima
-o Rumo do Strava ou afasta?** Exemplos:
-
-- "Devo expor `raw_track_points` no `ActivityResponse`?" → **Não**, porque
-  o cliente (mobile) vai precisar desenhar o mapa — melhor endpoint dedicado
-  que retorna só a geometria, pra não pesar a listagem.
-- "Devo fazer upload GPX síncrono ou em background?" → No MVP síncrono;
-  no futuro, background com fila (Celery/RQ/arq) pra aguentar arquivos grandes.
-- "Devo usar SQLite pra simplificar?" → **Não.** PostGIS é obrigatório (Strava
-  é geo-first). Neon já está planejado.
-
-### O que o Rumo NÃO é
-
-- ❌ Não é um projeto de portfólio — é um produto de verdade.
-- ❌ Não é um "CRUD de exercícios" — é uma rede social de exercícios.
-- ❌ Não é um clone literal do Strava — é inspirado, com identidade própria.
+Cola o handoff no próximo chat + a mensagem sugerida e bora pro Bloco 11 — Deploy Render + Neon. 🚀

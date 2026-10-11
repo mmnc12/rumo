@@ -1,6 +1,7 @@
 # Web framework
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
+gunicorn==23.0.0
 
 # Banco de dados
 sqlalchemy==2.0.36
@@ -29,10 +30,11 @@ redis==5.2.1
 # Utilitários
 python-dotenv==1.0.1
 
-# Qualidade (dev)
+# Qualidade (dev) — remover do prod no futuro
 ruff==0.8.4
 pytest==8.3.4
 pytest-asyncio==0.25.0
 httpx==0.28.1
 
+# GPX
 gpxpy==1.6.2

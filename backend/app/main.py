@@ -1,8 +1,8 @@
 from contextlib import asynccontextmanager
 from app.routers import activities, auth, comments, feed, users
 
-
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.config import settings
@@ -36,11 +36,21 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# CORS — libera o frontend (Vercel) e mobile a consumirem a API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(auth.router)
 app.include_router(activities.router, prefix="/activities", tags=["activities"])
 app.include_router(users.router, prefix="/users", tags=["users"])
 app.include_router(feed.router, prefix="/feed", tags=["feed"])
 app.include_router(comments.router, tags=["comments"])
+
 
 @app.get("/", tags=["Root"])
 async def root():
@@ -67,4 +77,3 @@ async def health():
         "database": db_status,
         "ambiente": settings.ENVIRONMENT,
     }
-
