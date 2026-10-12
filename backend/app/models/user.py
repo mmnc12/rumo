@@ -28,7 +28,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(
         String(50), unique=True, nullable=False, index=True
     )
-    full_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    full_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # Dados físicos (opcionais, para cálculo de calorias e pace)

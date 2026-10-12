@@ -17,7 +17,9 @@ class UserCreate(BaseModel):
         pattern=r"^[a-zA-Z0-9_]+$",
         description="Username único (letras, números e _)",
     )
-    full_name: str = Field(..., min_length=2, max_length=120)
+    # full_name é opcional — o frontend manda null quando o campo vem vazio.
+    # max_length=120 alinha com o model. Sem min_length porque null é válido.
+    full_name: str | None = Field(default=None, max_length=120)
     password: str = Field(
         ...,
         min_length=8,
@@ -46,12 +48,13 @@ class UserResponse(BaseModel):
     id: uuid.UUID
     email: EmailStr
     username: str
-    full_name: str
+    full_name: str | None
     weight_kg: float | None
     height_cm: float | None
     birth_date: date | None
     is_active: bool
     created_at: datetime
+
 
 class UserPublic(BaseModel):
     """Dados públicos de outro usuário (sem email/data de nascimento)."""
@@ -60,5 +63,5 @@ class UserPublic(BaseModel):
 
     id: uuid.UUID
     username: str
-    full_name: str
+    full_name: str | None
     is_active: bool
