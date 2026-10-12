@@ -1,0 +1,51 @@
+/**
+ * Tipos espelhando os schemas Pydantic do backend.
+ * Manter sincronizado manualmente por enquanto (Fase 2: gerar via OpenAPI).
+ */
+
+export type ActivityType = "run" | "walk" | "cycle" | "hike" | "swim" | "other";
+
+export interface UserPublic {
+  id: string;
+  username: string;
+  full_name: string | null;
+}
+
+export interface UserResponse extends UserPublic {
+  email: string;
+  weight_kg: number | null;
+  height_cm: number | null;
+  birth_date: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface Activity {
+  id: string;
+  user_id: string;
+  activity_type: ActivityType;
+  title: string | null;
+  description: string | null;
+  started_at: string;
+  finished_at: string | null;
+  duration_s: number | null;
+  distance_m: number;
+  elevation_gain_m: number | null;
+  calories: number | null;
+  avg_pace_s_per_km: number | null;
+  avg_speed_mps: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+}
+
+/** Erro 422 do FastAPI (validação Pydantic). */
+export interface ValidationErrorDetail {
+  loc: (string | number)[];
+  msg: string;
+  type: string;
+}
