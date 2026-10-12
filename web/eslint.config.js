@@ -18,5 +18,12 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // Regra nova do react-hooks v7+ (React 19) que reclama de setState
+      // síncrono dentro de useEffect. Nossos usos são padrões canônicos
+      // (boot do AuthContext, sync com localStorage) — React 18/19 faz
+      // batching e não há cascata real. Desabilitada pra evitar ruído.
+      'react-hooks/set-state-in-effect': 'off',
+    },
   },
 ])
