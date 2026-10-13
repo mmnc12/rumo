@@ -67,3 +67,22 @@ class FeedItemResponse(ActivityResponse):
     """Atividade no feed, com dados do autor."""
 
     author: UserPublic = Field(validation_alias="user")
+
+# ===== Track (geometria pro mapa) =====
+
+class TrackResponse(BaseModel):
+    """Geometria da rota de uma atividade, em formato GeoJSON-like.
+
+    Decisão: expor APENAS a geometria (não raw_track_points) pra não pesar
+    a resposta. Cliente desenha o mapa; streams (elevação/tempo por ponto)
+    ficam pra um endpoint dedicado no futuro.
+    """
+
+    activity_id: uuid.UUID
+    type: str = "LineString"
+    # [[lon, lat], ...] — ordem GeoJSON (lon primeiro!)
+    coordinates: list[list[float]]
+    # [minLon, minLat, maxLon, maxLat]
+    bbox: list[float]
+    n_points: int
+    simplified: bool = False

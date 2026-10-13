@@ -5,6 +5,7 @@
 
 import { apiFetch } from "./client";
 import type { Activity } from "../types/api";
+import type { TrackResponse } from "../types/api"
 
 export interface ListActivitiesParams {
   limit?: number;
@@ -72,4 +73,14 @@ export async function uploadGpx(
     method: "POST",
     rawBody: form,
   });
+}
+
+/**
+ * Busca a geometria da rota de uma atividade (GeoJSON-like).
+ *
+ * Endpoint dedicado — não vem no ActivityResponse pra não pesar a listagem.
+ * Só o dono da atividade acessa (404 caso contrário).
+ */
+export function getActivityTrack(id: string): Promise<TrackResponse> {
+  return apiFetch<TrackResponse>(`/activities/${id}/track`);
 }

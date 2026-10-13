@@ -5,6 +5,7 @@ import ActivitiesPage from "./pages/ActivitiesPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import UploadPage from "./pages/UploadPage";
+import ActivityDetailPage from "./pages/ActivityDetailPage";
 
 export default function App() {
   return (
@@ -30,6 +31,15 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+
+      <Route
+        path="/activities/:id"
+        element={
+          <ProtectedRoute>
+            <ActivityDetailPage />
+          </ProtectedRoute>
+        }
+      />  
 
       {/* Redirecionamentos */}
       <Route path="/" element={<Navigate to="/activities" replace />} />

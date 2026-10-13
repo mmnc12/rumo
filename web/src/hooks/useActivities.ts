@@ -1,55 +1,114 @@
-/**
- * Hooks de leitura de atividades via TanStack Query.
- *
- * Padrão de query keys: ["activities", params] e ["activities", id].
- * Isso permite invalidar só uma parte do cache depois de mutações
- * (ex: depois do upload do 13a.3 → invalidateQueries(["activities"])).
- */
-
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getActivity, listActivities, uploadGpx } from "../api/activities";
-import type {
-  ListActivitiesParams,
-  UploadGpxMeta,
+
+import {
+  deleteActivity,
+  getActivity,
+  getActivityTrack,
+  listActivities,
+  uploadGpx,
 } from "../api/activities";
-import type { Activity } from "../types/api";
+import type { Activity, TrackResponse } from "../types/api";
+
+// ===== Query keys =====
 
 export const activitiesKeys = {
   all: ["activities"] as const,
-  list: (params: ListActivitiesParams) =>
-    ["activities", "list", params] as const,
-  detail: (id: string) => ["activities", "detail", id] as const,
+  lists: () => [...activitiesKeys.all, "list"] as const,
+  list: (params?: { limit?: number; offset?: number }) =>
+    [...activitiesKeys.lists(), params] as const,
+  details: () => [...activitiesKeys.all, "detail"] as const,
+  detail: (id: string) => [...activitiesKeys.details(), id] as const,
+  tracks: () => [...activitiesKeys.all, "track"] as const,
+  track: (id: string) => [...activitiesKeys.tracks(), id] as const,
 };
 
-// ===== Queries =====
-
-export function useActivities(params: ListActivitiesParams = {}) {
-  return useQuery({
-    queryKey: activitiesKeys.list(params),
-    queryFn: () => listActivities(params),
-  });
-}
-
-export function useActivity(id: string | undefined) {
-  return useQuery({
-    queryKey: activitiesKeys.detail(id ?? ""),
-    queryFn: () => getActivity(id!),
-    enabled: !!id, // não roda se id for undefined
-  });
-}
-
-// ===== Mutations =====
+// ===== Lista =====
 
 /**
- * Upload de GPX. Ao sucesso, invalida a lista de atividades
- * (o card novo aparece no topo — backend ordena por started_at desc).
+ * Lista atividades do usuário autenticado (paginado).
+ *
+ * staleTime 30s: lista muda com frequência (uploads recentes),
+ * mas não precisa refetch a cada focus.
+ */
+export function useActivities(params?: { limit?: number; offset?: number }) {
+  return useQuery<Activity[]>({
+    queryKey: activitiesKeys.list(params),
+    queryFn: () => listActivities(params),
+    staleTime: 30_000,
+    retry: 1,
+  });
+}
+
+// ===== Detalhe =====
+
+/**
+ * Busca uma atividade específica do usuário.
+ *
+ * `enabled: !!id` evita disparar a query quando o id ainda não resolveu.
+ */
+export function useActivity(id: string | undefined) {
+  return useQuery<Activity>({
+    queryKey: activitiesKeys.detail(id!),
+    queryFn: () => getActivity(id!),
+    enabled: !!id,
+    staleTime: 30_000,
+    retry: 1,
+  });
+}
+
+// ===== Track (geometria pro mapa) =====
+
+/**
+ * Busca a geometria da rota de uma atividade.
+ *
+ * staleTime 5 min: a geometria de uma atividade nunca muda depois de criada
+ * (não há edição de rota), então cache agressivo é seguro.
+ */
+export function useActivityTrack(id: string | undefined) {
+  return useQuery<TrackResponse>({
+    queryKey: activitiesKeys.track(id!),
+    queryFn: () => getActivityTrack(id!),
+    enabled: !!id,
+    staleTime: 5 * 60_000,
+    retry: 1,
+  });
+}
+
+// ===== Upload =====
+
+/**
+ * Faz upload de um GPX e invalida a lista pra refletir a nova atividade.
  */
 export function useUploadGpx() {
-  const qc = useQueryClient();
-  return useMutation<Activity, Error, { file: File; meta?: UploadGpxMeta }>({
-    mutationFn: ({ file, meta }) => uploadGpx(file, meta),
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      file,
+      meta,
+    }: {
+      file: File;
+      meta?: { title?: string; activity_type?: string; description?: string };
+    }) => uploadGpx(file, meta),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: activitiesKeys.all });
+      queryClient.invalidateQueries({ queryKey: activitiesKeys.all });
+    },
+  });
+}
+
+// ===== Delete =====
+
+/**
+ * Remove uma atividade e invalida listas + caches de detalhe/track.
+ */
+export function useDeleteActivity() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteActivity(id),
+    onSuccess: (_data, id) => {
+      // Invalida tudo relacionado a essa atividade (lista, detail, track)
+      queryClient.invalidateQueries({ queryKey: activitiesKeys.all });
+      queryClient.removeQueries({ queryKey: activitiesKeys.detail(id) });
+      queryClient.removeQueries({ queryKey: activitiesKeys.track(id) });
     },
   });
 }

@@ -49,3 +49,16 @@ export interface ValidationErrorDetail {
   msg: string;
   type: string;
 }
+
+// ===== Track (geometria pro mapa) =====
+
+export interface TrackResponse {
+  activity_id: string;
+  type: "LineString";
+  /** [[lon, lat], ...] — ordem GeoJSON (lon primeiro!) */
+  coordinates: [number, number][];
+  /** [minLon, minLat, maxLon, maxLat] */
+  bbox: [number, number, number, number];
+  n_points: number;
+  simplified: boolean;
+}

@@ -1,4 +1,4 @@
-"""Endpoints de atividades (CRUD, estatísticas, curtidas, upload)."""
+"""Endpoints de atividades (CRUD, estatísticas, curtidas, upload, track)."""
 
 from uuid import UUID
 
@@ -20,6 +20,7 @@ from app.models.user import User
 from app.schemas.activity import (
     ActivityCreate,
     ActivityResponse,
+    TrackResponse,
 )
 from app.schemas.like import LikeListResponse, LikeStateResponse
 from app.schemas.stats import (
@@ -145,6 +146,26 @@ async def get_activity(
     """Retorna detalhes de uma atividade do usuário autenticado."""
     try:
         return await activity_service.get_activity(db, current_user.id, activity_id)
+    except ServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
+
+
+@router.get("/{activity_id}/track", response_model=TrackResponse)
+async def get_activity_track(
+    activity_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Retorna a geometria da rota (GeoJSON-like) da atividade do usuário.
+
+    Só o dono acessa. Não inclui raw_track_points — apenas a geometria
+    da rota pra desenhar o mapa no cliente.
+    """
+    try:
+        return await activity_service.get_activity_track(
+            db, current_user.id, activity_id
+        )
     except ServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 

@@ -1,12 +1,15 @@
-"""Service de atividades: CRUD + upload de GPX."""
+"""Service de atividades: CRUD + upload de GPX + track (geometria)."""
+
+import json
 
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Activity
 from app.models.activity import ActivityType
 from app.schemas import ActivityCreate
+from app.schemas.activity import TrackResponse
 from app.services.errors import NotFoundError
 from app.services.gpx_service import map_gpx_type, parse_gpx
 
@@ -173,6 +176,51 @@ async def get_activity(
     if activity is None:
         raise NotFoundError("Atividade não encontrada")
     return activity
+
+
+async def get_activity_track(
+    db: AsyncSession,
+    user_id,
+    activity_id,
+) -> TrackResponse:
+    """
+    Retorna a geometria da rota de uma atividade em formato GeoJSON-like.
+
+    - Só o dono acessa (404 caso contrário — não vaza existência pra terceiros).
+    - Usa ST_AsGeoJSON + ST_XMin/YMin/XMax/YMax do PostGIS: uma única query.
+    - Não expõe raw_track_points — só geometria (decisão do 13a.0).
+    """
+    # 1) Confirma que a atividade existe e é do dono (reusa get_activity -> 404)
+    activity = await get_activity(db, user_id, activity_id)
+
+    if activity.route is None:
+        raise NotFoundError("Atividade não possui rota")
+
+    # 2) Extrai GeoJSON + bbox + n_points direto do PostGIS
+    stmt = select(
+        func.ST_AsGeoJSON(Activity.route).label("geojson"),
+        func.ST_NPoints(Activity.route).label("n_points"),
+        func.ST_XMin(Activity.route).label("min_lon"),
+        func.ST_YMin(Activity.route).label("min_lat"),
+        func.ST_XMax(Activity.route).label("max_lon"),
+        func.ST_YMax(Activity.route).label("max_lat"),
+    ).where(Activity.id == activity_id)
+
+    result = await db.execute(stmt)
+    row = result.one()
+
+    # ST_AsGeoJSON retorna uma string JSON — parsear
+    geojson = json.loads(row.geojson)
+    coordinates = geojson["coordinates"]  # [[lon, lat], ...]
+
+    return TrackResponse(
+        activity_id=activity_id,
+        type="LineString",
+        coordinates=coordinates,
+        bbox=[row.min_lon, row.min_lat, row.max_lon, row.max_lat],
+        n_points=row.n_points,
+        simplified=False,
+    )
 
 
 async def delete_activity(
