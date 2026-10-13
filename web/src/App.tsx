@@ -1,44 +1,53 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import { AuthProvider } from "./contexts/AuthContext";
+
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import ActivitiesPage from "./pages/ActivitiesPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
-import ActivitiesPage from "./pages/ActivitiesPage";
+import UploadPage from "./pages/UploadPage";
 
-/**
- * Árvore de rotas do Rumo.
- * - /login, /register → públicas
- * - /activities → protegida (ProtectedRoute)
- * - / → redireciona pra /activities (o ProtectedRoute cuida do resto)
- * - * → 404 simples
- */
 export default function App() {
   return (
-    <AuthProvider>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route
-          path="/activities"
-          element={
-            <ProtectedRoute>
-              <ActivitiesPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="/" element={<Navigate to="/activities" replace />} />
-        <Route
-          path="*"
-          element={
-            <div className="min-h-screen flex items-center justify-center">
-              <div className="text-center">
-                <h1 className="text-2xl font-bold">404</h1>
-                <p className="text-gray-600">Página não encontrada.</p>
-              </div>
+    <Routes>
+      {/* Públicas */}
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+
+      {/* Protegidas */}
+      <Route
+        path="/activities"
+        element={
+          <ProtectedRoute>
+            <ActivitiesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/upload"
+        element={
+          <ProtectedRoute>
+            <UploadPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Redirecionamentos */}
+      <Route path="/" element={<Navigate to="/activities" replace />} />
+
+      {/* 404 */}
+      <Route
+        path="*"
+        element={
+          <div className="flex min-h-screen items-center justify-center">
+            <div className="text-center">
+              <h1 className="text-4xl font-semibold text-gray-900">404</h1>
+              <p className="mt-2 text-sm text-gray-500">
+                Página não encontrada.
+              </p>
             </div>
-          }
-        />
-      </Routes>
-    </AuthProvider>
+          </div>
+        }
+      />
+    </Routes>
   );
 }

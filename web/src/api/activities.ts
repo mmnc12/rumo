@@ -42,3 +42,34 @@ export async function getActivity(id: string): Promise<Activity> {
 export async function deleteActivity(id: string): Promise<void> {
   return apiFetch<void>(`/activities/${id}`, { method: "DELETE" });
 }
+
+// ===== Upload GPX =====
+
+export interface UploadGpxMeta {
+  title?: string;
+  activity_type?: string;
+  description?: string;
+}
+
+/**
+ * POST /activities/upload — envia um arquivo .gpx (multipart).
+ *
+ * O backend parseia o GPX, calcula distância/pace/elevação e devolve
+ * o ActivityResponse completo. `rawBody` passa o FormData cru pro fetch,
+ * deixando o browser setar o Content-Type com boundary.
+ */
+export async function uploadGpx(
+  file: File,
+  meta: UploadGpxMeta = {}
+): Promise<Activity> {
+  const form = new FormData();
+  form.append("file", file);
+  if (meta.title) form.append("title", meta.title);
+  if (meta.activity_type) form.append("activity_type", meta.activity_type);
+  if (meta.description) form.append("description", meta.description);
+
+  return apiFetch<Activity>("/activities/upload", {
+    method: "POST",
+    rawBody: form,
+  });
+}
