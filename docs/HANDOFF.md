@@ -1,4 +1,4 @@
-# Rumo — Handoff Atualizado (após Bloco 13a.3)
+# Rumo — Handoff Atualizado (após Bloco 13a.5)
 
 ## Sobre o projeto
 Sistema de monitoramento de exercícios físicos (tipo Strava). Nome: **Rumo**.
@@ -23,13 +23,15 @@ com usuários reais usando no dia a dia.
 - [ ] Upload de fotos da atividade (storage S3/Cloudinary/R2)
 - [ ] Perfil público com stats agregadas (km totais, PRs, gráficos)
 - [ ] Splits por km (pace e elevação por trecho)
-- [ ] Mapa/visualização da rota no cliente (endpoint dedicado) ← **13a.4**
+- [x] Mapa/visualização da rota no cliente (endpoint dedicado)
+- [ ] Mapa com layer switcher OSM/Satélite (Fase 2)
 
 **Social (o que faz o app engajar):**
-- [x] Follows (seguir/seguidores)
-- [x] Feed (atividades próprias + de quem segue)
-- [x] Likes (kudos)
-- [x] Comentários
+- [x] Follows (seguir/seguidores) — backend
+- [x] Feed (atividades próprias + de quem segue) — backend
+- [x] Likes (kudos) — backend
+- [x] Comentários — backend
+- [ ] Feed/likes/comentários no frontend ← **13b**
 - [ ] Notificações push ("fulano curtiu", "sicrano te seguiu", "novo PR")
 - [ ] Feed personalizado com filtros (só corrida, só amigos mútuos)
 - [ ] Compartilhamento externo (card/imagem pra Instagram/WhatsApp)
@@ -81,19 +83,20 @@ mobile, em vez de terminar o backend inteiro antes de começar o frontend.
 4. Deploy cedo é barato depois da primeira vez (Render faz redeploy automático).
 5. Padrão da indústria é vertical slice, não horizontal.
 
-### Fase 1 — Deploy + primeira feature visível (curto prazo)
-1. ✅ **Bloco 11: Deploy backend** (Render + Neon) — **CONCLUÍDO**
-2. ⏳ **Bloco 13a: Frontend mínimo** (React/Vercel)
-   - ✅ **13a.0:** Setup Vite + TS + Tailwind + Router + Query + Leaflet
-   - ✅ **13a.1:** Auth (login, registro, ProtectedRoute, AuthContext)
-   - ✅ **13a.2:** Lista de atividades (cards, formatadores, empty state)
-   - ✅ **13a.3:** Upload GPX (drag & drop + multipart + useMutation)
-   - ⏳ **13a.4:** Detalhe + mapa (precisa de `GET /activities/{id}/track` no backend) ← PRÓXIMO
-   - ⏳ **13a.5:** Deploy Vercel + CORS produção
+### Fase 1 — Deploy + primeira feature visível ✅ CONCLUÍDA
+1. ✅ **Bloco 11: Deploy backend** (Render + Neon)
+2. ✅ **Bloco 13a: Frontend mínimo** (React/Vercel)
+   - ✅ 13a.0: Setup Vite + TS + Tailwind + Router + Query + Leaflet
+   - ✅ 13a.1: Auth (login, registro, ProtectedRoute, AuthContext)
+   - ✅ 13a.2: Lista de atividades (cards, formatadores, empty state)
+   - ✅ 13a.3: Upload GPX (drag & drop + multipart + useMutation)
+   - ✅ 13a.4: Detalhe + mapa (GET /activities/{id}/track + Leaflet)
+   - ✅ 13a.5: Deploy Vercel + CORS produção + SPA fallback
 3. ⏳ **Bloco 14a: Mobile mínimo** (Flutter) — mesma coisa
 
-**Resultado:** app funcional de ponta a ponta. Sobe GPX, vê rota no mapa,
-lista atividades. Suficiente pra usar de verdade e descobrir o que falta.
+**Resultado da Fase 1:** app funcional de ponta a ponta, público, com login,
+upload de GPX, lista e visualização de rota no mapa. Acessível de qualquer
+navegador (incluindo celular) via https://rumo-wheat.vercel.app
 
 ### Fase 2 — Refinar o que existe (médio prazo)
 4. **Bloco 13b/14b:** feed, likes, comentários no frontend/mobile
@@ -119,15 +122,19 @@ meses, mata a motivação, e ignora que o frontend ensina o backend.
   - **URL produção:** `https://rumo-api-5s0b.onrender.com`
   - **Docs:** `https://rumo-api-5s0b.onrender.com/docs`
 
-### Frontend (novo)
+### Frontend
 - **Vite 8.3.4** + **React 19.2.8** + **TypeScript 6.0.2**
 - **React Router DOM 7.18.4** (modo SPA, `BrowserRouter`)
 - **TanStack Query 5.104.2** (cache/servidor state)
-- **react-hook-form 7.90.0** + **zod 4.6.6** + **@hookform/resolvers 5.9.1** (formulários)
+- **react-hook-form 7.90.0** + **zod 4.6.6** + **@hookform/resolvers 5.9.1**
 - **Tailwind CSS 3.4.19** (paleta `rumo` custom + Inter)
-- **Leaflet 1.9.4** + **react-leaflet 5.0.0** (mapas)
-- **ESLint 10** (config flat do Vite v9, regra `react-hooks/set-state-in-effect` desabilitada — ver dívida técnica)
-- **Deploy:** Vercel (ainda NÃO configurado — Bloco 13a.5)
+- **Leaflet 1.9.4** + **react-leaflet 5.0.0** (mapas — OSM Standard)
+- **ESLint 10** (config flat do Vite v9, `react-hooks/set-state-in-effect` desabilitada)
+- **Deploy:** Vercel (produção)
+  - **URL produção:** `https://rumo-wheat.vercel.app`
+  - **Root Directory:** `web/`
+  - **Env var:** `VITE_API_URL=https://rumo-api-5s0b.onrender.com`
+  - **SPA fallback:** `web/vercel.json` com rewrite catch-all → `/index.html`
 - **Pasta:** `web/` na raiz do monorepo
 
 ### Repo / IDE / OS
@@ -162,28 +169,30 @@ D:\Rumo
 ├── package.json, package-lock.json, postcss.config.js
 ├── tailwind.config.js (paleta rumo)
 ├── tsconfig.json, tsconfig.app.json, tsconfig.node.json
+├── vercel.json ← SPA fallback (13a.5)
 ├── vite.config.ts
 └── src
 ├── api
 │ ├── client.ts ← apiFetch + ApiError + token helpers
 │ ├── auth.ts ← login/register/getMe
-│ └── activities.ts ← list/get/delete/uploadGpx (13a.3)
+│ └── activities.ts ← list/get/delete/uploadGpx/getActivityTrack (13a.4)
 ├── components
-│ ├── ProtectedRoute.tsx ← named export (13a.1)
-│ ├── AppHeader.tsx ← named export + link "+ Enviar" (13a.3)
-│ └── ActivityCard.tsx ← (13a.2)
+│ ├── ProtectedRoute.tsx ← named export
+│ ├── AppHeader.tsx ← named export + link "+ Enviar"
+│ └── ActivityCard.tsx ← named export + <Link> pro detalhe (13a.4)
 ├── contexts
 │ └── AuthContext.tsx ← AuthProvider (named export)
 ├── hooks
 │ ├── useAuth.ts
-│ └── useActivities.ts ← queries + useUploadGpx (13a.3)
+│ └── useActivities.ts ← queries + useUploadGpx + useActivity + useActivityTrack + useDeleteActivity (13a.4)
 ├── lib
 │ └── format.ts
 ├── pages
 │ ├── LoginPage.tsx ← default export
 │ ├── RegisterPage.tsx ← default export
 │ ├── ActivitiesPage.tsx ← default export
-│ └── UploadPage.tsx ← default export (13a.3)
+│ ├── UploadPage.tsx ← default export (13a.3)
+│ └── ActivityDetailPage.tsx ← default export (13a.4)
 ├── types
 │ └── api.ts ← espelho dos schemas Pydantic
 ├── App.tsx ← rotas
@@ -229,84 +238,33 @@ D:\Rumo
 - `POST /activities/upload` — 201 (multipart, `.gpx`)
 - `GET /activities?limit=20&offset=0` — lista próprias
 - `GET /activities/{id}` — detalhes (só do dono)
-- `DELETE /activities/{id}` — 204
-- `GET /activities/stats/summary?activity_type=`
-- `GET /activities/stats/weekly?weeks=8&activity_type=`
-- `GET /activities/stats/monthly?months=6&activity_type=`
-- `POST /activities/{id}/like` — 200
-- `DELETE /activities/{id}/like` — 204
-- `GET /activities/{id}/likes?limit&offset` — 200
+- `GET /activities/{id}/track` — **NOVO no 13a.4** — GeoJSON-like:
+  ```json
+  {
+    "activity_id": "uuid",
+    "type": "LineString",
+    "coordinates": [[lon, lat], ...],
+    "bbox": [minLon, minLat, maxLon, maxLat],
+    "n_points": 2345,
+    "simplified": false
+  }
 
-**⚠️ Endpoint a CRIAR no 13a.4:** `GET /activities/{id}/track` — retorna GeoJSON:
-```json
-{
-  "activity_id": "uuid",
-  "type": "LineString",
-  "coordinates": [[lon, lat, ele], ...],
-  "bbox": [minLon, minLat, maxLon, maxLat],
-  "n_points": 2345,
-  "simplified": false
-}
+  Protegido, só do dono (404 caso contrário). Não expõe raw_track_points.
 
+    DELETE /activities/{id} — 204
 
-## Models existentes (backend)
+    GET /activities/stats/summary?activity_type=
 
-### User
-- id (UUID v7), email (unique), username (unique), full_name (**nullable desde 13a.1**)
-- hashed_password, weight_kg, height_cm, birth_date
-- is_active, created_at, updated_at (todos `DateTime(timezone=True)`)
+    GET /activities/stats/weekly?weeks=8&activity_type=
 
-### Activity
-- id (UUID v7), user_id (FK users CASCADE)
-- activity_type (enum: run/walk/cycle/hike/swim/other)
-- title, description
-- started_at (indexed), finished_at, duration_s
-- distance_m, elevation_gain_m, calories, avg_pace_s_per_km, avg_speed_mps
-- route (Geometry LINESTRING 4326), raw_track_points (JSONB) — formato `[[lat, lon, ele, unix_ts], ...]`
-- created_at, updated_at
-- `user = relationship("User", backref="activities", lazy="raise")`
+    GET /activities/stats/monthly?months=6&activity_type=
 
-### Follow / Like / Comment
-(inalterados desde o Bloco 10)
+    POST /activities/{id}/like — 200
 
-## Endpoints existentes (backend)
+    DELETE /activities/{id}/like — 204
 
-### Auth & Users
-- `GET /` — metadados
-- `GET /health` — status API + banco
-- `POST /auth/register` — cria usuário (201, 409 se duplicado)
-- `POST /auth/login` — form-urlencoded (username=email), retorna JWT
-- `GET /auth/me` — protegido
-- `POST /users/{user_id}/follow` — 204
-- `DELETE /users/{user_id}/follow` — 204
-- `GET /users/{user_id}/followers?limit&offset`
-- `GET /users/{user_id}/following?limit&offset`
+    GET /activities/{id}/likes?limit&offset — 200
 
-### Activities
-- `POST /activities` — 201 (JSON pré-calculado)
-- `POST /activities/upload` — 201 (multipart, `.gpx`)
-- `GET /activities?limit=20&offset=0` — lista próprias
-- `GET /activities/{id}` — detalhes (só do dono)
-- `DELETE /activities/{id}` — 204
-- `GET /activities/stats/summary?activity_type=`
-- `GET /activities/stats/weekly?weeks=8&activity_type=`
-- `GET /activities/stats/monthly?months=6&activity_type=`
-- `POST /activities/{id}/like` — 200
-- `DELETE /activities/{id}/like` — 204
-- `GET /activities/{id}/likes?limit&offset` — 200
-
-**⚠️ Endpoint a CRIAR no 13a.4:** `GET /activities/{id}/track` — retorna GeoJSON:
-```json
-{
-  "activity_id": "uuid",
-  "type": "LineString",
-  "coordinates": [[lon, lat, ele], ...],
-  "bbox": [minLon, minLat, maxLon, maxLat],
-  "n_points": 2345,
-  "simplified": false
-}
-
-Decisão tomada no 13a.0: não expor route/raw_track_points no ActivityResponse. Endpoint dedicado, só geometria, pra não pesar a listagem.
 Comments
 
     POST /activities/{activity_id}/comments — 201
@@ -319,12 +277,14 @@ Feed
 
     GET /feed?limit=20&offset=0
 
-Frontend — Padrões e decisões (Bloco 13a)
+Frontend — Padrões e decisões
 web/ como monorepo
 
-    Vercel vai apontar pra web/ (Root Directory). Render continua em backend/.
+    Vercel aponta pra web/ (Root Directory). Render continua em backend/.
 
     .env.local NUNCA versionado.
+
+    vercel.json dentro de web/ (não na raiz do monorepo).
 
 Cliente HTTP (src/api/client.ts)
 
@@ -358,7 +318,9 @@ Rotas atuais (App.tsx)
 
     /activities (protegida)
 
-    /upload (protegida) ← 13a.3
+    /upload (protegida)
+
+    /activities/:id (protegida) ← 13a.4
 
     / → redireciona pra /activities
 
@@ -372,31 +334,37 @@ Convenção de exports (IMPORTANTE — não misturar)
 
     Páginas → default export (export default function X)
 
-        ActivitiesPage, UploadPage, LoginPage, RegisterPage
+        ActivitiesPage, UploadPage, LoginPage, RegisterPage, ActivityDetailPage
 
-    Isso já custou um bug de build no 13a.3 (ProtectedRoute importado como default). Padrão confirmado — não misturar.
+    Já custou um bug de build no 13a.3 (ProtectedRoute importado como default).
 
-Upload GPX (13a.3)
+Track (13a.4)
 
-    uploadGpx(file, meta?) em api/activities.ts usa rawBody: FormData.
+    getActivityTrack(id) em api/activities.ts → GET /activities/{id}/track
 
-    useUploadGpx() em hooks/useActivities.ts → useMutation invalidando activitiesKeys.all.
+    useActivityTrack(id) em hooks/useActivities.ts → query key ["activities","track",id], staleTime: 5min
 
-    UploadPage.tsx: drag & drop + validação client-side (.gpx, ≤20MB) + spinner + erro via ApiError.detail.
+    ActivityDetailPage.tsx → <MapContainer> + <Polyline> + <FitBounds> (useMap)
 
-    Redireciona pra /activities no sucesso (o detalhe só existe no 13a.4).
+    Inversão [lon, lat] (GeoJSON) → [lat, lng] (Leaflet) acontece no page, não no hook
 
-    Link "+ Enviar" no AppHeader aponta pra /upload.
+    bbox do backend vira fitBounds no Leaflet (mapa abre enquadrando a rota)
+
+Query keys (TanStack)
+
+    Factory em useActivities.ts:
+
+        activitiesKeys.all = ["activities"]
+
+        activitiesKeys.list(params), .detail(id), .track(id)
+
+    staleTime: 30s em listas, 5min em track
+
+    retry: 1, refetchOnWindowFocus: false
 
 Formatadores (src/lib/format.ts)
 
     formatDistance(m), formatDuration(s), formatPace(sPerKm), formatSpeed(mps), formatDateTime(iso), formatRelativeDate(iso), formatActivityType("run"), activityEmoji("run")
-
-TanStack Query (useActivities)
-
-    Query keys: ["activities"], ["activities","list",params], ["activities","detail",id]
-
-    staleTime: 30_000, retry 1, refetchOnWindowFocus: false
 
 Tailwind
 
@@ -404,7 +372,14 @@ Tailwind
 
     Fonte: Inter. Body: bg-gray-50 text-gray-900 antialiased.
 
-Produção (Render + Neon)
+Tipos (src/types/api.ts)
+
+    Interface da atividade se chama Activity (não ActivityResponse) — espelho local do schema Pydantic.
+
+    Inconsistência com o backend (ActivityResponse) é cosmética; resolvida quando gerar tipos via OpenAPI (Fase 2).
+
+Produção (Render + Neon + Vercel)
+Backend
 
     API: https://rumo-api-5s0b.onrender.com
 
@@ -412,7 +387,24 @@ Produção (Render + Neon)
 
     Free tier dorme após 15 min. Primeira request ~30-50s.
 
-    Env vars no Render: DATABASE_URL, ENVIRONMENT=production, DEBUG=false, SECRET_KEY, ALGORITHM=HS256, ACCESS_TOKEN_EXPIRE_MINUTES=30, ALLOWED_ORIGINS=["http://localhost:5173"], PYTHON_VERSION=3.13.7
+    Env vars no Render: DATABASE_URL, ENVIRONMENT=production, DEBUG=false, SECRET_KEY, ALGORITHM=HS256, ACCESS_TOKEN_EXPIRE_MINUTES=30, PYTHON_VERSION=3.13.7
+
+    ALLOWED_ORIGINS (formato JSON, list[str]):
+    text
+
+    ["http://localhost:5173","https://rumo-wheat.vercel.app"]
+
+Frontend
+
+    App: https://rumo-wheat.vercel.app
+
+    Deploy: git push origin main → Vercel rebuilda (~1 min).
+
+    Root Directory: web/
+
+    Env var: VITE_API_URL=https://rumo-api-5s0b.onrender.com
+
+    SPA fallback: web/vercel.json com { "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
 
 Blocos concluídos
 
@@ -432,49 +424,39 @@ Blocos concluídos
 
     ✅ 13a.3 Upload GPX no frontend (drag & drop + useMutation + AppHeader "+ Enviar")
 
+    ✅ 13a.4 Detalhe + mapa Leaflet (GET /activities/{id}/track + ActivityDetailPage + ActivityCard vira Link)
+
+    ✅ 13a.5 Deploy Vercel + CORS produção + SPA fallback (web/vercel.json)
+
 Blocos pendentes
 
-    ⏳ 13a.4 Detalhe + mapa ← PRÓXIMO
+    ⏳ Teste manual no celular (navegador mobile) — validar usabilidade antes de decidir 14a
 
-        Backend primeiro:
+    ⏳ 13b Feed/likes/comentários no frontend ← RECOMENDADO como próximo (aproveita backend pronto)
 
-            Schema TrackResponse em schemas/activity.py
+    ⏳ 14a Mobile Flutter mínimo — Fase 1 restante
 
-            get_activity_track() em services/activity_service.py (lê route PostGIS → GeoJSON)
-
-            GET /activities/{id}/track no router (protegido, só do dono)
-
-        Frontend depois:
-
-            getActivityTrack(id) em api/activities.ts
-
-            useActivityTrack(id) em hooks/useActivities.ts
-
-            ActivityDetailPage.tsx com <MapContainer> + <Polyline> (Leaflet)
-
-            Rota /activities/:id no App.tsx
-
-            ActivityCard vira <Link> pro detalhe
-
-    ⏳ 13a.5 Deploy Vercel + CORS produção
-
-        Vercel Root Directory = web/
-
-        VITE_API_URL=https://rumo-api-5s0b.onrender.com nas env vars do Vercel
-
-        Atualizar ALLOWED_ORIGINS no Render com URL real da Vercel
-
-    ⏳ 14a Mobile Flutter mínimo — Fase 1
-
-    ⏳ 12b Upload FIT (opcional)
-
-    ⏳ 13b/14b Feed/likes/comentários no frontend/mobile — Fase 2
+    ⏳ 12b Upload FIT (opcional, se houver relógio real pra testar)
 
     ⏳ 15 Fotos de atividade — Fase 2
 
-    ⏳ 16 Perfil público + stats visuais — Fase 2
+    ⏳ 16 Perfil público + stats visuais — Fase 2 (endpoints prontos)
 
     ⏳ 17+ Segments, achievements, notificações, análise de treino — Fase 3
+
+Recomendação de ordem (após o handoff)
+
+    Teste no celular (15 min, zero código) — informa se 14a é urgente
+
+    13b — Feed/likes/comentários no web (backend já existe — maior impacto pelo menor custo)
+
+    14a — Flutter (quando o site no celular já não bastar)
+
+    16 — Perfil + stats (endpoints prontos)
+
+    15 — Fotos (precisa escolher storage)
+
+    12b — FIT (quando houver relógio pra testar)
 
 Pendências técnicas (dívida para limpar)
 Backend
@@ -493,17 +475,15 @@ Backend
 
     GET /activities/{id}/comments exige auth — se quiser público, remover Depends(get_current_user).
 
-    Sem /activities/{id}/track — criar no 13a.4.
-
     Upload GPX síncrono — futuro: fila (arq/Celery/RQ).
 
     Cold start do Render free tier (~30-50s). Fase 2: subir pro plano pago (~$7/mês).
 
-    ALLOWED_ORIGINS no Render aponta só pra localhost:5173 — atualizar no 13a.5.
-
     SECRET_KEY local e prod diferentes — JWTs não intercambiáveis (correto por design).
 
 Frontend
+
+    Mapa sem layer switcher — só tem OSM Standard. Adicionar toggle Standard/Satélite (Esri World Imagery) na Fase 2 (Leaflet tem LayersControl nativo).
 
     Tipos em src/types/api.ts não são gerados do OpenAPI — sincronizados manualmente. Fase 2: openapi-typescript.
 
@@ -511,15 +491,25 @@ Frontend
 
     Sem tratamento global de 401 pós-login — hoje apiFetch limpa token mas não redireciona. Fase 2: interceptor global.
 
+    client.ts: as string no VITE_API_URL — cast desnecessário; o if (!API_URL) já faz narrowing. Trocar quando passar por aqui.
+
     ActivityCard mostra title ou cai pro formatActivityType — se ambos vazios, mostrar "Atividade" genérico.
 
     Lista sem paginação visível — useActivities só busca limit=20. Fase 2.
 
     Sem AppHeader link pra perfil/feed — só "Rumo" + "+ Enviar" + "Sair". Adicionar no 13b.
 
-    Upload sem gestão de "rascunho" — permite navegar pra fora no meio do upload; sem AbortController. Link "Cancelar e voltar" adicionado no 13a.3 (se feito). Polimento completo (confirmar descarte + abort) na Fase 2.
+    Upload sem gestão de "rascunho" — permite navegar pra fora no meio do upload; sem AbortController. Polimento na Fase 2.
 
     Erro de rede no upload cai em mutation.error.message ("Failed to fetch") — sem tratamento amigável. Fase 2.
+
+    Fallback "sem rota" do ActivityDetailPage foi implementado mas não testado (não há atividade sem rota no banco local). Validar no 13b.
+
+Infra / deploy
+
+    vercel.json PRECISA estar em web/ (não na raiz do monorepo) porque o Root Directory do Vercel é web/. Colocar na raiz faz o Vercel ignorar silenciosamente — foi o que aconteceu no 13a.5.
+
+    Preview deploys do Vercel (cada PR gera URL) vão precisar de CORS. Hoje só Production está em ALLOWED_ORIGINS.
 
 Armadilhas conhecidas (CRÍTICO)
 Backend / Python
@@ -546,9 +536,11 @@ Backend / Python
 
     pip install fora da venv cai no Python global
 
-    Pydantic v2: campo str obrigatório rejeita null com Field required. Pra aceitar null, precisa str | None = Field(default=None, ...).
+    Pydantic v2: campo str obrigatório rejeita null com "Field required". Pra aceitar null, precisa str | None = Field(default=None, ...).
 
     Model vs banco: editar nullable=True no model sem migração NÃO altera a coluna.
+
+    Pydantic Settings + list[str]: o valor da env var é parseado via json.loads. Aspas tipográficas (" ") em vez de retas (" ") quebram com SettingsError: error parsing value for field "ALLOWED_ORIGINS". Foi o que aconteceu no 13a.5 — colar no painel do Render às vezes converte pra curly quotes. Fix: digitar as aspas manualmente.
 
 Banco / PostGIS
 
@@ -562,7 +554,7 @@ Banco / PostGIS
 
     Diferença dev/prod: Docker PG 16.4 + PostGIS 3.4; Neon PG 17.11 + PostGIS 3.5
 
-    ST_AsGeoJSON() retorna GeoJSON válido — usar no 13a.4 pra serializar route
+    ST_AsGeoJSON() retorna string JSON — fazer json.loads() no service. Em alguns casos o driver asyncpg devolve dict direto — defensivamente, checar isinstance(x, dict).
 
 Neon
 
@@ -570,7 +562,7 @@ Neon
 
     Postgres 18 NÃO tem PostGIS ainda no Neon — usar 17
 
-    Duas connection strings: Pooled (host com -pooler) vs Direct (sem -pooler). Usar Direct com asyncpg
+    Duas connection strings: Pooled (host com -pooler) vs Direct (sem -pooler). Usar Direct com asyncpg.
 
     Formato: postgresql+asyncpg:// (não postgresql://), ssl=require, sem channel_binding
 
@@ -586,6 +578,16 @@ Render
 
     SECRET_KEY com generateValue: true — diferente da local
 
+Vercel
+
+    vercel.json vai no Root Directory configurado (aqui: web/), NÃO na raiz do monorepo.
+
+    SPA fallback obrigatório: sem rewrite catch-all → /index.html, F5 em rota interna dá 404 do Vercel.
+
+    Se cleanUrls: true, o destino do rewrite é /index (sem .html).
+
+    Env vars VITE_* só são expostas ao código client-side. Prefixo obrigatório.
+
 Frontend / Vite 8 / React 19 / Tailwind 3
 
     Vite 8 + TS 6: vite-env.d.ts não existe mais — types via tsconfig.app.json → "types": ["vite/client"]
@@ -600,19 +602,23 @@ Frontend / Vite 8 / React 19 / Tailwind 3
 
     react-leaflet v5 + React 19: importar "leaflet/dist/leaflet.css" no main.tsx é obrigatório (senão tiles desalinhados).
 
+    MapContainer precisa de height explícita (ex: style={{ height: "24rem" }}) — senão não renderiza.
+
+    <Polyline> espera [[lat, lng], ...] — GeoJSON do backend vem [lon, lat]. Inverter no frontend.
+
     React Router v7: pacote continua react-router-dom, API compatível com v6.
 
     zod v4: @hookform/resolvers precisa ser v5+.
 
     Backend espera form-urlencoded no login (OAuth2PasswordRequestForm), não JSON.
 
-    FormData no apiFetch: setar Content-Type: multipart/form-data manualmente quebra. Deixar o browser setar.
+    FormData no apiFetch: NÃO setar Content-Type: multipart/form-data manualmente. Deixar o browser setar (com boundary).
 
     npm run dev vs npm run lint vs npm run build: só build roda o ESLint + TS. Dev server sobe mesmo com erro de linter.
 
-    AuthProvider no main.tsx — se faltar, useAuth explode em runtime com useAuth precisa estar dentro de <AuthProvider>. Não pega no build.
+    <AuthProvider> no main.tsx — se faltar, useAuth explode em runtime. Não pega no build.
 
-    Convenção de exports: componentes = named, páginas = default. Não misturar (bug do 13a.3).
+    Convenção de exports: componentes = named, páginas = default. Não misturar.
 
 Ambiente / tooling
 
@@ -632,7 +638,7 @@ Ambiente / tooling
 
     PowerShell curl é alias de Invoke-WebRequest. Usar curl.exe ou Invoke-RestMethod.
 
-    Ordem de rotas no router: estáticas antes das dinâmicas.
+    Ordem de rotas no router: estáticas antes das dinâmicas (exceto quando o path tem segmentos diferentes — aí não importa).
 
     git commit "nothing to commit" — algo já foi commitado antes, ou não está rastreado. Conferir git log + git ls-files <path>.
 
@@ -678,7 +684,7 @@ Local (Docker)
 
     Usuários criados no 13a.1: novo1@rumo.com, novo2@rumo.com (sem full_name)
 
-    [A PREENCHER] — atividade criada via upload no teste do 13a.3 (se houver)
+    Atividade criada via upload no teste do 13a.3/13a.4 (se houver — preencher UUID)
 
 Produção (Neon)
 
@@ -686,67 +692,50 @@ Produção (Neon)
 
     prod2@rumo.com / senha12345
 
-Próximo passo (13a.4 — Detalhe + mapa)
+Próximo passo (recomendado)
 
-Ordem de implementação — backend primeiro:
-Backend
+Decisão antes do próximo bloco: testar o app no navegador do celular
+(15 min, zero código). O resultado informa se o Bloco 14a (Flutter) é
+urgente ou se pode vir depois do 13b (feed social).
 
-    backend/app/schemas/activity.py — adicionar TrackResponse:
-    python
+Ordem recomendada:
 
-    class TrackResponse(BaseModel):
-        activity_id: UUID
-        type: Literal["LineString"] = "LineString"
-        coordinates: list[list[float]]  # [[lon, lat, ele], ...]
-        bbox: list[float]  # [minLon, minLat, maxLon, maxLat]
-        n_points: int
-        simplified: bool = False
+    Teste no navegador mobile (validação de UX)
 
-    backend/app/services/activity_service.py — get_activity_track(db, user_id, activity_id):
+    13b — Feed/likes/comentários no frontend (backend pronto, maior impacto pelo menor custo)
 
-        Busca atividade (só do dono — senão 404)
+    14a — Flutter (quando o site no celular não bastar)
 
-        Usa ST_AsGeoJSON(route) do PostGIS + ST_NPoints(route) + ST_Envelope(route) (ou calcula bbox das coords)
+    16 — Perfil + stats (endpoints prontos)
 
-        Retorna TrackResponse
+    15 — Fotos (precisa escolher storage)
 
-        Não expor raw_track_points — só geometria
+    12b — FIT (quando houver relógio pra testar)
 
-    backend/app/routers/activities.py — GET /activities/{id}/track:
+Escopo do 13b (quando começar)
 
-        response_model=TrackResponse
+Backend já tem todos os endpoints. Falta só o frontend:
 
-        Protegido, só do dono (404 se não for)
+    FeedPage.tsx (atividades próprias + de quem segue)
 
-        Declarar DEPOIS de /{activity_id} ou antes? Cuidado com ordem de rotas dinâmicas. /{id}/track é mais específico, declarar depois de /{id} funciona (FastAPI resolve certo). Validar.
+    Botão de like nos cards (kudos)
 
-Frontend
+    Seção de comentários na ActivityDetailPage
 
-    web/src/api/activities.ts — getActivityTrack(id)
+    Página de perfil público (/users/:id ou /profile)
 
-    web/src/hooks/useActivities.ts — useActivityTrack(id) (query key ["activities","track",id])
+    Follow/unfollow nos cards de autor
 
-    web/src/pages/ActivityDetailPage.tsx — <MapContainer> + <Polyline> + cards de métricas + botão deletar
+    Header com links pra Feed e Perfil
 
-    web/src/App.tsx — rota /activities/:id protegida
+    Query keys novas: ["feed"], ["comments", activityId], ["likes", activityId]
 
-    web/src/components/ActivityCard.tsx — virar <Link to={/activities/${id}}>
+Escopo do 14a (quando começar)
 
-Ponto de atenção no Leaflet: o MapContainer precisa de height explícita (ex: h-96), senão não renderiza. E o <Polyline> espera positions no formato [[lat, lng], ...] — o GeoJSON do backend vem [lon, lat, ele], então inverter no frontend. Cuidado com isso.
-text
+    Setup Flutter + Dart
 
+    Replicar as 5 telas do web: login, registro, lista, upload, detalhe + mapa
 
----
+    Consumir a mesma API (mesmos endpoints)
 
-## Quando você colar isso no `docs/HANDOFF.md`
-
-1. Substitui o arquivo inteiro pelo bloco acima
-2. Preenche o `[A PREENCHER]` do usuário de teste se tiver o UUID da atividade nova
-3. Confirma se o "Cancelar e voltar" entrou no `UploadPage.tsx` (o item 19 da dívida técnica menciona isso condicionalmente)
-4. Commita:
-   ```powershell
-   git add docs/HANDOFF.md
-   git commit -m "docs: handoff atualizado após 13a.3"
-   git push origin main
-
-Pronto pro próximo chat. Abre uma sessão nova, cola o HANDOFF.md atualizado, e a gente começa o 13a.4 pelo backend (TrackResponse + get_activity_track + endpoint).
+    Deploy: Android (Play Store depois)
