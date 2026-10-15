@@ -5,6 +5,7 @@ import ActivitiesPage from "./pages/ActivitiesPage";
 import ActivityDetailPage from "./pages/ActivityDetailPage";
 import FeedPage from "./pages/FeedPage";
 import LoginPage from "./pages/LoginPage";
+import ProfilePage from "./pages/ProfilePage";
 import RegisterPage from "./pages/RegisterPage";
 import UploadPage from "./pages/UploadPage";
 
@@ -40,12 +41,19 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-
       <Route
         path="/activities/:id"
         element={
           <ProtectedRoute>
             <ActivityDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/users/:id"
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
           </ProtectedRoute>
         }
       />
