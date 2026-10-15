@@ -2,10 +2,11 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import ActivitiesPage from "./pages/ActivitiesPage";
+import ActivityDetailPage from "./pages/ActivityDetailPage";
+import FeedPage from "./pages/FeedPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import UploadPage from "./pages/UploadPage";
-import ActivityDetailPage from "./pages/ActivityDetailPage";
 
 export default function App() {
   return (
@@ -20,6 +21,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <ActivitiesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/feed"
+        element={
+          <ProtectedRoute>
+            <FeedPage />
           </ProtectedRoute>
         }
       />
@@ -39,7 +48,7 @@ export default function App() {
             <ActivityDetailPage />
           </ProtectedRoute>
         }
-      />  
+      />
 
       {/* Redirecionamentos */}
       <Route path="/" element={<Navigate to="/activities" replace />} />

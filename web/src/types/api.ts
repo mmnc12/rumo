@@ -9,6 +9,7 @@ export interface UserPublic {
   id: string;
   username: string;
   full_name: string | null;
+  is_active: boolean;
 }
 
 export interface UserResponse extends UserPublic {
@@ -16,7 +17,6 @@ export interface UserResponse extends UserPublic {
   weight_kg: number | null;
   height_cm: number | null;
   birth_date: string | null;
-  is_active: boolean;
   created_at: string;
 }
 
@@ -61,4 +61,34 @@ export interface TrackResponse {
   bbox: [number, number, number, number];
   n_points: number;
   simplified: boolean;
+}
+
+// ===== Social (13b) =====
+
+/** Atividade no feed, com dados do autor aninhados. */
+export interface FeedItem extends Activity {
+  author: UserPublic;
+}
+
+/** Estado de curtidas de uma atividade. */
+export interface LikeState {
+  count: number;
+  liked_by_me: boolean;
+}
+
+/** Lista paginada de quem curtiu. */
+export interface LikeList {
+  count: number;
+  liked_by_me: boolean;
+  users: UserPublic[];
+}
+
+/** Comentário em uma atividade. */
+export interface Comment {
+  id: string;
+  activity_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  author: UserPublic;
 }
