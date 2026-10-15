@@ -39,9 +39,10 @@ export function useActivityLikes(activityId: string) {
   });
 }
 
-// Otimista: DELETE e 204 (sem body), entao nao da pra confiar no retorno.
+// Otimista: POST devolve LikeState (200); DELETE e 204 sem body.
 // Estrategia: onMutate atualiza o cache local; onError faz rollback;
-// onSettled invalida pra reconciliar com o servidor.
+// onSettled invalida SO o cache de ["likes", id] (o feed nao tem
+// contagem de likes, entao invalidar o feed so causa refetch inutil).
 export function useToggleLike(activityId: string) {
   const qc = useQueryClient();
   const key = socialKeys.likes(activityId);
@@ -51,7 +52,7 @@ export function useToggleLike(activityId: string) {
       if (currentlyLiked) {
         await unlikeActivity(activityId);
       } else {
-        await likeActivity(activityId); // 200 com LikeState (ignoramos)
+        await likeActivity(activityId);
       }
     },
     onMutate: async (currentlyLiked) => {
@@ -60,7 +61,11 @@ export function useToggleLike(activityId: string) {
 
       qc.setQueryData<LikeList>(key, (old) => {
         if (!old) {
-          return { count: currentlyLiked ? 0 : 1, liked_by_me: !currentlyLiked, users: [] };
+          return {
+            count: currentlyLiked ? 0 : 1,
+            liked_by_me: !currentlyLiked,
+            users: [],
+          };
         }
         return {
           ...old,
@@ -78,7 +83,6 @@ export function useToggleLike(activityId: string) {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: key });
-      qc.invalidateQueries({ queryKey: ["feed"] });
     },
   });
 }
