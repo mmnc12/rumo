@@ -143,9 +143,16 @@ async def get_activity(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retorna detalhes de uma atividade do usuário autenticado."""
+    """
+    Retorna detalhes de uma atividade.
+
+    Acessível pelo dono OU por quem segue o dono (mesma regra do feed).
+    Quem não é dono nem seguidor recebe 404 (não vaza existência).
+    """
     try:
-        return await activity_service.get_activity(db, current_user.id, activity_id)
+        return await activity_service.get_activity(
+            db, current_user.id, activity_id, allow_following=True
+        )
     except ServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
@@ -157,10 +164,10 @@ async def get_activity_track(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Retorna a geometria da rota (GeoJSON-like) da atividade do usuário.
+    Retorna a geometria da rota (GeoJSON-like) da atividade.
 
-    Só o dono acessa. Não inclui raw_track_points — apenas a geometria
-    da rota pra desenhar o mapa no cliente.
+    Acessível pelo dono OU por quem segue o dono.
+    Não inclui raw_track_points — apenas a geometria da rota pro mapa.
     """
     try:
         return await activity_service.get_activity_track(
@@ -176,7 +183,7 @@ async def delete_activity(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Remove uma atividade do usuário autenticado."""
+    """Remove uma atividade do usuário autenticado (só o dono)."""
     try:
         await activity_service.delete_activity(db, current_user.id, activity_id)
     except ServiceError as exc:

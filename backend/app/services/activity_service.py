@@ -10,6 +10,7 @@ from app.models import Activity
 from app.models.activity import ActivityType
 from app.schemas import ActivityCreate
 from app.schemas.activity import TrackResponse
+from app.services import follow_service
 from app.services.errors import NotFoundError
 from app.services.gpx_service import map_gpx_type, parse_gpx
 
@@ -166,16 +167,35 @@ async def get_activity(
     db: AsyncSession,
     user_id,
     activity_id,
+    *,
+    allow_following: bool = False,
 ) -> Activity:
-    """Retorna uma atividade do usuário (404 se não existir ou não for dele)."""
-    stmt = select(Activity).where(
-        Activity.id == activity_id, Activity.user_id == user_id
-    )
+    """
+    Retorna uma atividade.
+
+    - allow_following=False: só o dono (comportamento original).
+    - allow_following=True: dono OU quem segue o dono.
+
+    Levanta NotFoundError em ambos os casos (não vaza existência).
+    """
+    stmt = select(Activity).where(Activity.id == activity_id)
     result = await db.execute(stmt)
     activity = result.scalar_one_or_none()
+
     if activity is None:
         raise NotFoundError("Atividade não encontrada")
-    return activity
+
+    if activity.user_id == user_id:
+        return activity
+
+    if allow_following:
+        following = await follow_service.is_following(
+            db, user_id, activity.user_id
+        )
+        if following:
+            return activity
+
+    raise NotFoundError("Atividade não encontrada")
 
 
 async def get_activity_track(
@@ -186,12 +206,15 @@ async def get_activity_track(
     """
     Retorna a geometria da rota de uma atividade em formato GeoJSON-like.
 
-    - Só o dono acessa (404 caso contrário — não vaza existência pra terceiros).
+    - Dono OU seguidor do dono acessa (404 caso contrário — não vaza existência).
     - Usa ST_AsGeoJSON + ST_XMin/YMin/XMax/YMax do PostGIS: uma única query.
     - Não expõe raw_track_points — só geometria (decisão do 13a.0).
     """
-    # 1) Confirma que a atividade existe e é do dono (reusa get_activity -> 404)
-    activity = await get_activity(db, user_id, activity_id)
+    # 1) Confirma que a atividade existe e o usuário pode vê-la
+    #    (reusa get_activity com allow_following=True -> 404 caso contrário)
+    activity = await get_activity(
+        db, user_id, activity_id, allow_following=True
+    )
 
     if activity.route is None:
         raise NotFoundError("Atividade não possui rota")
@@ -228,7 +251,12 @@ async def delete_activity(
     user_id,
     activity_id,
 ) -> None:
-    """Remove uma atividade do usuário (404 se não existir ou não for dele)."""
+    """
+    Remove uma atividade do usuário.
+
+    Só o dono apaga (404 se não existir ou não for dele).
+    NÃO usa allow_following — segue a regra original de escrita.
+    """
     activity = await get_activity(db, user_id, activity_id)
     await db.delete(activity)
     await db.commit()

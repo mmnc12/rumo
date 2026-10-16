@@ -87,3 +87,20 @@ async def get_following(
     )
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
+
+async def is_following(
+    db: AsyncSession, follower_id: UUID, following_id: UUID
+) -> bool:
+    """
+    Retorna True se `follower_id` segue `following_id`.
+
+    Usado pelo activity_service pra decidir se um usuário pode ver a
+    atividade de outro (dono OU seguidor do dono).
+    """
+    stmt = select(Follow.id).where(
+        Follow.follower_id == follower_id,
+        Follow.following_id == following_id,
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none() is not None
