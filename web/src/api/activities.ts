@@ -5,15 +5,19 @@
 
 import { apiFetch } from "./client";
 import type { Activity } from "../types/api";
-import type { TrackResponse } from "../types/api"
+import type { TrackResponse } from "../types/api";
 
 export interface ListActivitiesParams {
   limit?: number;
   offset?: number;
+  /** Filtra atividades de outro usuário (requer seguir o dono). */
+  userId?: string;
 }
 
 /**
- * GET /activities?limit=&offset= — lista atividades do usuário logado.
+ * GET /activities?limit=&offset=&user_id= — lista atividades.
+ * - Sem `userId`: próprias atividades.
+ * - Com `userId`: do usuário alvo (o backend exige follow; 403 caso contrário).
  * O backend já ordena por started_at desc.
  */
 export async function listActivities(
@@ -25,6 +29,7 @@ export async function listActivities(
     limit: String(limit),
     offset: String(offset),
   });
+  if (params.userId) qs.set("user_id", params.userId);
   return apiFetch<Activity[]>(`/activities?${qs.toString()}`);
 }
 

@@ -6,11 +6,13 @@ import type { LatLngBoundsExpression } from "leaflet";
 import { AppHeader } from "../components/AppHeader";
 import { CommentsSection } from "../components/CommentsSection";
 import { LikeButton } from "../components/LikeButton";
+import { useAuth } from "../hooks/useAuth";
 import {
   useActivity,
   useActivityTrack,
   useDeleteActivity,
 } from "../hooks/useActivities";
+import { useUser } from "../hooks/useProfile";
 import {
   activityEmoji,
   formatActivityType,
@@ -38,9 +40,11 @@ function FitBounds({ bbox }: { bbox: [number, number, number, number] }) {
 export default function ActivityDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const { data: activity, isLoading, error } = useActivity(id);
   const { data: track } = useActivityTrack(id);
+  const { data: author } = useUser(activity?.user_id);
   const deleteMutation = useDeleteActivity();
 
   async function handleDelete() {
@@ -75,6 +79,8 @@ export default function ActivityDetailPage() {
     );
   }
 
+  const isOwner = !!user && user.id === activity.user_id;
+
   // Inverte [lon, lat] (GeoJSON) → [lat, lng] (Leaflet)
   const positions =
     track?.coordinates.map(([lon, lat]) => [lat, lon] as [number, number]) ?? [];
@@ -92,6 +98,19 @@ export default function ActivityDetailPage() {
           >
             ← Voltar
           </Link>
+
+          {author && (
+            <p className="text-sm text-gray-500 mb-1">
+              por{" "}
+              <Link
+                to={`/users/${author.id}`}
+                className="text-rumo-600 hover:underline font-medium"
+              >
+                @{author.username}
+              </Link>
+            </p>
+          )}
+
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <span>{activityEmoji(activity.activity_type)}</span>
             <span>
@@ -172,16 +191,18 @@ export default function ActivityDetailPage() {
           <CommentsSection activityId={activity.id} />
         </div>
 
-        {/* Deletar */}
-        <div className="pt-4 border-t border-gray-200">
-          <button
-            onClick={handleDelete}
-            disabled={deleteMutation.isPending}
-            className="text-sm text-red-600 hover:text-red-800 hover:underline disabled:opacity-50"
-          >
-            {deleteMutation.isPending ? "Apagando…" : "Apagar atividade"}
-          </button>
-        </div>
+        {/* Deletar — só o dono */}
+        {isOwner && (
+          <div className="pt-4 border-t border-gray-200">
+            <button
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+              className="text-sm text-red-600 hover:text-red-800 hover:underline disabled:opacity-50"
+            >
+              {deleteMutation.isPending ? "Apagando…" : "Apagar atividade"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

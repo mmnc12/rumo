@@ -73,3 +73,19 @@ async def list_following(
         return await follow_service.get_following(db, user_id, limit, offset)
     except ServiceError as exc:
         raise _handle_service_error(exc)
+
+
+@router.get("/{user_id}", response_model=UserPublic)
+async def get_user(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Retorna o perfil público de qualquer usuário autenticado."""
+    user = await db.get(User, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuário não encontrado",
+        )
+    return user

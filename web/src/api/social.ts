@@ -79,3 +79,8 @@ export function getFollowing(
   const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   return apiFetch<UserPublic[]>(`/users/${userId}/following?${qs}`);
 }
+
+// ===== Perfil público (13b.7) =====
+export function getUser(userId: string): Promise<UserPublic> {
+  return apiFetch<UserPublic>(`/users/${userId}`);
+}

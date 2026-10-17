@@ -14,7 +14,7 @@ import type { Activity, TrackResponse } from "../types/api";
 export const activitiesKeys = {
   all: ["activities"] as const,
   lists: () => [...activitiesKeys.all, "list"] as const,
-  list: (params?: { limit?: number; offset?: number }) =>
+  list: (params?: { limit?: number; offset?: number; userId?: string }) =>
     [...activitiesKeys.lists(), params] as const,
   details: () => [...activitiesKeys.all, "detail"] as const,
   detail: (id: string) => [...activitiesKeys.details(), id] as const,
@@ -30,10 +30,31 @@ export const activitiesKeys = {
  * staleTime 30s: lista muda com frequência (uploads recentes),
  * mas não precisa refetch a cada focus.
  */
-export function useActivities(params?: { limit?: number; offset?: number }) {
+export function useActivities(params?: {
+  limit?: number;
+  offset?: number;
+  userId?: string;
+}) {
   return useQuery<Activity[]>({
     queryKey: activitiesKeys.list(params),
     queryFn: () => listActivities(params),
+    staleTime: 30_000,
+    retry: 1,
+  });
+}
+
+/**
+ * Lista atividades de um usuário específico (perfil público).
+ *
+ * `enabled: !!userId` evita disparar antes do id resolver.
+ * Retorna 403 do backend se o usuário logado não segue o alvo —
+ * o componente trata esse erro (mostra CTA "siga pra ver").
+ */
+export function useUserActivities(userId: string | undefined) {
+  return useQuery<Activity[]>({
+    queryKey: activitiesKeys.list({ userId }),
+    queryFn: () => listActivities({ userId: userId! }),
+    enabled: !!userId,
     staleTime: 30_000,
     retry: 1,
   });

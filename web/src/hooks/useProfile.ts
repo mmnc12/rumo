@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getFollowers, getFollowing } from "../api/social";
+import { getFollowers, getFollowing, getUser } from "../api/social";
 import { useAuth } from "./useAuth";
 import { socialKeys } from "./useSocial";
 
@@ -45,4 +45,21 @@ export function useIsFollowing(targetUserId: string) {
   const isSelf = !!meId && meId === targetUserId;
 
   return { isFollowing, isSelf, ...rest };
+}
+
+/**
+ * Busca o perfil público de um usuário (username, full_name, is_active).
+ *
+ * staleTime 5 min: perfil público muda pouco (nome/username),
+ * e o cache compartilhado evita refetch ao navegar entre feed→perfil→detalhe.
+ * 404 (id inexistente) propaga como erro — o componente trata.
+ */
+export function useUser(userId: string | undefined) {
+  return useQuery({
+    queryKey: ["users", userId],
+    queryFn: () => getUser(userId!),
+    enabled: !!userId,
+    staleTime: 5 * 60_000,
+    retry: 1,
+  });
 }

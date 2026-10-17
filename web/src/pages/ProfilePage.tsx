@@ -2,19 +2,33 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { AppHeader } from "../components/AppHeader";
-import { useAuth } from "../hooks/useAuth";
+import { ActivityCard } from "../components/ActivityCard";
+import { useUserActivities } from "../hooks/useActivities";
 import {
   useFollowers,
   useFollowing,
   useIsFollowing,
+  useUser,
 } from "../hooks/useProfile";
 import { useFollowUser } from "../hooks/useSocial";
+import { ApiError } from "../api/client";
 import type { UserPublic } from "../types/api";
 
 export default function ProfilePage() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
   const [tab, setTab] = useState<"followers" | "following">("followers");
+
+  const {
+    data: profile,
+    isLoading: loadingProfile,
+    error: errorProfile,
+  } = useUser(id);
+
+  const {
+    data: activities,
+    isLoading: loadingActivities,
+    error: errorActivities,
+  } = useUserActivities(id);
 
   const {
     data: followers,
@@ -45,6 +59,10 @@ export default function ProfilePage() {
   const listLoading = tab === "followers" ? loadingFollowers : loadingFollowing;
   const listError = tab === "followers" ? errorFollowers : errorFollowing;
 
+  // 403 ao listar atividades do alvo = user logado não segue.
+  const activitiesForbidden =
+    errorActivities instanceof ApiError && errorActivities.status === 403;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <AppHeader />
@@ -52,49 +70,96 @@ export default function ProfilePage() {
       <main className="mx-auto max-w-4xl px-4 py-6">
         {/* Cabecalho do perfil */}
         <div className="rounded-lg bg-white p-6 shadow-sm">
-          {isSelf ? (
-            <>
-              <h1 className="text-xl font-semibold text-gray-900">
-                {user?.username ?? "Seu perfil"}
-              </h1>
-              {user?.full_name && (
-                <p className="mt-1 text-sm text-gray-500">{user.full_name}</p>
-              )}
-              <p className="mt-2 text-sm text-gray-400">Este é você.</p>
-            </>
-          ) : (
-            <>
-              {/* Sem GET /users/{id} no backend, nao conseguimos mostrar
-                  username/full_name do dono. So o botao de seguir. */}
-              <h1 className="text-xl font-semibold text-gray-900">
-                Perfil
-              </h1>
-              <p className="mt-1 text-sm text-gray-500">
-                @{id.slice(0, 8)}…
-              </p>
+          {loadingProfile && (
+            <p className="text-sm text-gray-500">Carregando perfil…</p>
+          )}
 
-              <button
-                type="button"
-                onClick={() => toggleFollow.mutate(isFollowing)}
-                disabled={toggleFollow.isPending}
-                className={`mt-4 rounded-lg px-4 py-2 text-sm font-medium transition disabled:opacity-50 ${
-                  isFollowing
-                    ? "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-                    : "bg-rumo-500 text-white hover:bg-rumo-600"
-                }`}
-              >
-                {toggleFollow.isPending
-                  ? "…"
-                  : isFollowing
-                    ? "Deixar de seguir"
-                    : "Seguir"}
-              </button>
+          {errorProfile && !loadingProfile && (
+            <p className="text-sm text-red-600">Perfil não encontrado.</p>
+          )}
+
+          {profile && (
+            <>
+              <h1 className="text-xl font-semibold text-gray-900">
+                @{profile.username}
+              </h1>
+              {profile.full_name && (
+                <p className="mt-1 text-sm text-gray-500">
+                  {profile.full_name}
+                </p>
+              )}
+
+              {isSelf ? (
+                <p className="mt-2 text-sm text-gray-400">Este é você.</p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => toggleFollow.mutate(isFollowing)}
+                  disabled={toggleFollow.isPending}
+                  className={`mt-4 rounded-lg px-4 py-2 text-sm font-medium transition disabled:opacity-50 ${
+                    isFollowing
+                      ? "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                      : "bg-rumo-500 text-white hover:bg-rumo-600"
+                  }`}
+                >
+                  {toggleFollow.isPending
+                    ? "…"
+                    : isFollowing
+                      ? "Deixar de seguir"
+                      : "Seguir"}
+                </button>
+              )}
             </>
           )}
         </div>
 
+        {/* Atividades */}
+        <section className="mt-6">
+          <h2 className="mb-3 text-sm font-semibold text-gray-700">
+            Atividades
+          </h2>
+
+          {loadingActivities && (
+            <p className="text-sm text-gray-500">Carregando atividades…</p>
+          )}
+
+          {activitiesForbidden && (
+            <div className="rounded-lg bg-white p-4 shadow-sm">
+              <p className="text-sm text-gray-600">
+                Siga{" "}
+                <span className="font-medium text-gray-900">
+                  @{profile?.username ?? "este usuário"}
+                </span>{" "}
+                pra ver as atividades dele(a).
+              </p>
+            </div>
+          )}
+
+          {errorActivities && !activitiesForbidden && (
+            <p className="text-sm text-red-600">
+              Erro ao carregar atividades.
+            </p>
+          )}
+
+          {activities && activities.length === 0 && !activitiesForbidden && (
+            <p className="text-sm text-gray-500">
+              Nenhuma atividade registrada ainda.
+            </p>
+          )}
+
+          {activities && activities.length > 0 && (
+            <ul className="space-y-3">
+              {activities.map((a) => (
+                <li key={a.id}>
+                  <ActivityCard activity={a} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
         {/* Abas */}
-        <div className="mt-6 border-b border-gray-200">
+        <div className="mt-8 border-b border-gray-200">
           <nav className="flex gap-4">
             <button
               type="button"
@@ -121,7 +186,7 @@ export default function ProfilePage() {
           </nav>
         </div>
 
-        {/* Lista */}
+        {/* Lista de followers/following */}
         <div className="mt-4">
           {listLoading && (
             <p className="text-sm text-gray-500">Carregando…</p>

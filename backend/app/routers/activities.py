@@ -30,6 +30,7 @@ from app.schemas.stats import (
 )
 from app.services import activity_service, like_service, stats_service
 from app.services.errors import ServiceError
+from app.services.follow_service import is_following
 
 router = APIRouter()
 
@@ -130,11 +131,31 @@ async def upload_activity(
 async def list_activities(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    user_id: UUID | None = Query(
+        default=None,
+        description="Filtra atividades de outro usuário (requer seguir)",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Lista atividades do usuário autenticado (paginado)."""
-    return await activity_service.list_activities(db, current_user.id, limit, offset)
+    """
+    Lista atividades (paginado).
+
+    - Sem `user_id`: lista as do usuário autenticado.
+    - Com `user_id` igual ao próprio: lista as do usuário autenticado.
+    - Com `user_id` de outro: só se o autenticado seguir esse usuário (senão 403).
+    """
+    target_id = user_id or current_user.id
+
+    if target_id != current_user.id:
+        allowed = await is_following(db, current_user.id, target_id)
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Você precisa seguir este usuário pra ver as atividades dele",
+            )
+
+    return await activity_service.list_activities(db, target_id, limit, offset)
 
 
 @router.get("/{activity_id}", response_model=ActivityResponse)
