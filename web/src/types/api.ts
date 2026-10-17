@@ -92,3 +92,37 @@ export interface Comment {
   updated_at: string;
   author: UserPublic;
 }
+
+// ===== Stats (16) =====
+
+/** Totais gerais do usuário (com filtro opcional por tipo). */
+export interface StatsSummary {
+  total_activities: number;
+  total_distance_m: number;
+  total_duration_s: number;
+  total_elevation_gain_m: number;
+  total_calories: number;
+  avg_pace_s_per_km: number | null;
+  avg_speed_mps: number | null;
+}
+
+/** Resumo de um período (semana ou mês). */
+export interface StatsPeriod {
+  period_start: string; // ISO date "YYYY-MM-DD"
+  total_activities: number;
+  total_distance_m: number;
+  total_duration_s: number;
+  total_calories: number;
+}
+
+/** Lista de resumos semanais. */
+export interface StatsWeeklyResponse {
+  weeks: number;
+  items: StatsPeriod[];
+}
+
+/** Lista de resumos mensais. */
+export interface StatsMonthlyResponse {
+  months: number;
+  items: StatsPeriod[];
+}

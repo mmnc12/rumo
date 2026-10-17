@@ -3,6 +3,8 @@ import { Link, useParams } from "react-router-dom";
 
 import { AppHeader } from "../components/AppHeader";
 import { ActivityCard } from "../components/ActivityCard";
+import { StatsCards } from "../components/StatsCards";
+import { WeeklyChart } from "../components/WeeklyChart";
 import { useUserActivities } from "../hooks/useActivities";
 import {
   useFollowers,
@@ -10,13 +12,27 @@ import {
   useIsFollowing,
   useUser,
 } from "../hooks/useProfile";
+import { useStatsSummary, useStatsWeekly } from "../hooks/useStats";
 import { useFollowUser } from "../hooks/useSocial";
 import { ApiError } from "../api/client";
-import type { UserPublic } from "../types/api";
+import type { ActivityType, UserPublic } from "../types/api";
+
+// Filtros de tipo — "Tudo" = undefined (sem filtro no backend)
+const TYPE_FILTERS: { label: string; value: ActivityType | undefined }[] = [
+  { label: "Tudo", value: undefined },
+  { label: "Corrida", value: "run" },
+  { label: "Caminhada", value: "walk" },
+  { label: "Pedal", value: "cycle" },
+  { label: "Trilha", value: "hike" },
+  { label: "Natação", value: "swim" },
+];
 
 export default function ProfilePage() {
   const { id } = useParams<{ id: string }>();
   const [tab, setTab] = useState<"followers" | "following">("followers");
+  const [typeFilter, setTypeFilter] = useState<ActivityType | undefined>(
+    undefined
+  );
 
   const {
     data: profile,
@@ -44,6 +60,10 @@ export default function ProfilePage() {
   const { isFollowing, isSelf } = useIsFollowing(id ?? "");
   const toggleFollow = useFollowUser(id ?? "");
 
+  // Stats só no próprio perfil (endpoints /stats/* são do current_user)
+  const summaryQuery = useStatsSummary(typeFilter, isSelf);
+  const weeklyQuery = useStatsWeekly(8, typeFilter, isSelf);
+
   if (!id) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -59,7 +79,6 @@ export default function ProfilePage() {
   const listLoading = tab === "followers" ? loadingFollowers : loadingFollowing;
   const listError = tab === "followers" ? errorFollowers : errorFollowing;
 
-  // 403 ao listar atividades do alvo = user logado não segue.
   const activitiesForbidden =
     errorActivities instanceof ApiError && errorActivities.status === 403;
 
@@ -112,6 +131,45 @@ export default function ProfilePage() {
             </>
           )}
         </div>
+
+        {/* Stats — só no próprio perfil */}
+        {isSelf && (
+          <section className="mt-6">
+            <div className="mb-3 flex flex-wrap gap-2">
+              {TYPE_FILTERS.map((f) => {
+                const active = typeFilter === f.value;
+                return (
+                  <button
+                    key={f.label}
+                    type="button"
+                    onClick={() => setTypeFilter(f.value)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                      active
+                        ? "bg-rumo-500 text-white"
+                        : "bg-white text-gray-600 hover:bg-gray-100"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <StatsCards
+              data={summaryQuery.data}
+              isLoading={summaryQuery.isLoading}
+              isError={summaryQuery.isError}
+            />
+
+            <div className="mt-4">
+              <WeeklyChart
+                items={weeklyQuery.data?.items}
+                isLoading={weeklyQuery.isLoading}
+                isError={weeklyQuery.isError}
+              />
+            </div>
+          </section>
+        )}
 
         {/* Atividades */}
         <section className="mt-6">
