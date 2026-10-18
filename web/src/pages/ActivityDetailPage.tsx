@@ -6,12 +6,15 @@ import type { LatLngBoundsExpression } from "leaflet";
 import { AppHeader } from "../components/AppHeader";
 import { CommentsSection } from "../components/CommentsSection";
 import { LikeButton } from "../components/LikeButton";
+import { PhotoGallery } from "../components/PhotoGallery";
+import { PhotoUpload } from "../components/PhotoUpload";
 import { useAuth } from "../hooks/useAuth";
 import {
   useActivity,
   useActivityTrack,
   useDeleteActivity,
 } from "../hooks/useActivities";
+import { useActivityPhotos, useDeletePhoto } from "../hooks/usePhotos";
 import { useUser } from "../hooks/useProfile";
 import {
   activityEmoji,
@@ -45,7 +48,9 @@ export default function ActivityDetailPage() {
   const { data: activity, isLoading, error } = useActivity(id);
   const { data: track } = useActivityTrack(id);
   const { data: author } = useUser(activity?.user_id);
+  const { data: photos } = useActivityPhotos(id);
   const deleteMutation = useDeleteActivity();
+  const deletePhoto = useDeletePhoto(id ?? "");
 
   async function handleDelete() {
     if (!id) return;
@@ -152,6 +157,29 @@ export default function ActivityDetailPage() {
           >
             <p className="text-gray-500">Sem rota disponível pra esta atividade.</p>
           </div>
+        )}
+
+        {/* Fotos */}
+        {(isOwner || (photos && photos.length > 0)) && (
+          <section className="mb-6">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-700">Fotos</h2>
+              {isOwner && id && <PhotoUpload activityId={id} />}
+            </div>
+            {photos && photos.length > 0 ? (
+              <PhotoGallery
+                photos={photos}
+                canDelete={isOwner}
+                onDelete={(photoId) => deletePhoto.mutate(photoId)}
+              />
+            ) : (
+              isOwner && (
+                <p className="text-sm text-gray-500">
+                  Nenhuma foto ainda. Adicione a primeira.
+                </p>
+              )
+            )}
+          </section>
         )}
 
         {/* Like */}

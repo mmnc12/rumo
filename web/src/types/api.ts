@@ -126,3 +126,12 @@ export interface StatsMonthlyResponse {
   months: number;
   items: StatsPeriod[];
 }
+
+export interface ActivityPhoto {
+  id: string;
+  activity_id: string;
+  url: string;
+  width: number | null;
+  height: number | null;
+  created_at: string;
+}
