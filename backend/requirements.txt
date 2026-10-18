@@ -38,3 +38,5 @@ httpx==0.28.1
 
 # GPX
 gpxpy==1.6.2
+
+cloudinary>=1.41.0

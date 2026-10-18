@@ -1,639 +1,473 @@
-Visão do produto (NORTE — ler antes de qualquer decisão)
+# HANDOFF — Rumo
+
+Última atualização: 17/10/2026 (pausa após bloco 16)
+
+---
+
+## Visão do produto (NORTE — ler antes de qualquer decisão)
 
 O Rumo é um app de exercício físico ambicioso, semelhante ao Strava. Não é
 um projeto de portfólio nem um CRUD de treinos. O objetivo é produção real,
 com usuários reais usando no dia a dia.
-O que o Rumo DEVE ter (roadmap ambicioso)
 
-Core (essencial pra ser "Strava-like"):
-
-    ☑
-
-    Auth (register/login/JWT)
-    ☑
-
-    CRUD de atividades
-    ☑
-
-    Upload de GPX com cálculo automático (distância, pace, elevação)
-    □
-
-    Upload de FIT (formato cru dos relógios Garmin/Polar)
-    □
-
-    Upload de fotos da atividade (storage S3/Cloudinary/R2)
-    □
-
-    Perfil público com stats agregadas (km totais, PRs, gráficos)
-    □
-
-    Splits por km (pace e elevação por trecho)
-    ☑
-
-    Mapa/visualização da rota no cliente (endpoint dedicado)
-    □
-
-    Mapa com layer switcher OSM/Satélite (Fase 2)
-
-Social (o que faz o app engajar):
-
-    ☑
-
-    Follows (seguir/seguidores) — backend
-    ☑
-
-    Feed (atividades próprias + de quem segue) — backend
-    ☑
-
-    Likes (kudos) — backend
-    ☑
-
-    Comentários — backend
-    ☑
-
-    Feed/likes/comentários no frontend ← 13b concluído
-    □
-
-    Notificações push ("fulano curtiu", "sicrano te seguiu", "novo PR")
-    □
-
-    Feed personalizado com filtros (só corrida, só amigos mútuos)
-    □
-
-    Compartilhamento externo (card/imagem pra Instagram/WhatsApp)
-
-Diferenciais (o que faz o Strava ser Strava):
-
-    □
-
-    Segments (trechos famosos onde compete por tempo contra outros)
-    □
-
-    Leaderboards por segmento
-    □
-
-    Achievements/badges ("primeiro 10K", "recorde pessoal")
-    □
-
-    Análise de treino (zonas de FC, cadência, comparação semana a semana)
-
-Infra/operacional (obrigatório antes de ir pra produção real):
-
-    □
-
-    Rate limiting
-    □
-
-    Cache (Redis — já no docker-compose, não usado ainda)
-    □
-
-    Testes automatizados
-    □
-
-    Background jobs (processar GPX grandes fora do request)
-    □
-
-    Observabilidade (logs estruturados, métricas, tracing)
-    □
-
-    Backup do banco
-
-Como usar essa visão
-
-Quando estiver em dúvida sobre uma decisão técnica, perguntar: isso aproxima
-o Rumo do Strava ou afasta? Exemplos:
-
-    "Devo expor raw_track_points no ActivityResponse?" → Não, porque
-    o cliente (mobile) vai precisar desenhar o mapa — melhor endpoint dedicado
-    que retorna só a geometria, pra não pesar a listagem.
-
-    "Devo fazer upload GPX síncrono ou em background?" → No MVP síncrono;
-    no futuro, background com fila (Celery/RQ/arq) pra aguentar arquivos grandes.
-
-    "Devo usar SQLite pra simplificar?" → Não. PostGIS é obrigatório (Strava
-    é geo-first). Neon já está planejado.
-
-O que o Rumo NÃO é
-
-    ❌ Não é um projeto de portfólio — é um produto de verdade.
-
-    ❌ Não é um "CRUD de exercícios" — é uma rede social de exercícios.
-
-    ❌ Não é um clone literal do Strava — é inspirado, com identidade própria.
-
-Roadmap em fases (vertical slice, não horizontal)
-
-Estratégia: construir features completas atravessando backend + frontend +
-mobile, em vez de terminar o backend inteiro antes de começar o frontend.
-
-Por quê:
-
-    "Backend 100%" é miragem — sempre falta algo.
-
-    Frontend/mobile informam o backend sobre o que ainda falta.
-
-    Ver funcionando na tela recarrega a motivação.
-
-    Deploy cedo é barato depois da primeira vez (Render faz redeploy automático).
-
-    Padrão da indústria é vertical slice, não horizontal.
-
-Fase 1 — Deploy + primeira feature visível ✅ CONCLUÍDA
-
-    ✅ Bloco 11: Deploy backend (Render + Neon)
-
-    ✅ Bloco 13a: Frontend mínimo (React/Vercel)
-
-        ✅ 13a.0: Setup Vite + TS + Tailwind + Router + Query + Leaflet
-
-        ✅ 13a.1: Auth (login, registro, ProtectedRoute, AuthContext)
-
-        ✅ 13a.2: Lista de atividades (cards, formatadores, empty state)
-
-        ✅ 13a.3: Upload GPX (drag & drop + multipart + useMutation)
-
-        ✅ 13a.4: Detalhe + mapa (GET /activities/{id}/track + Leaflet)
-
-        ✅ 13a.5: Deploy Vercel + CORS produção + SPA fallback
-
-    ✅ Bloco 13b: Social no frontend ← CONCLUÍDO NESTA SESSÃO
-
-        ✅ 13b.1: Tipos + API + hooks (social.ts, useSocial.ts, types/api.ts)
-
-        ✅ 13b.2: FeedPage + rota /feed + nav no AppHeader + author no card
-
-        ✅ 13b.3: ProfilePage (/users/:id) + follow/unfollow + abas followers/following
-
-        ✅ 13b.4: Like (kudos) no ActivityCard (otimista, local)
-
-        ✅ 13b.5: Comentários + like real (com contagem) na ActivityDetailPage
-
-        ✅ 13b.6 (fix backend): GET /activities/{id} e /track aceitam dono OU seguidor do dono
-
-Resultado: app funcional de ponta a ponta, público, com login, upload de
-GPX, lista, mapa, feed social, perfil, follow/unfollow, likes e comentários.
-Acessível de qualquer navegador (incluindo celular) via
-https://rumo-wheat.vercel.app
-Fase 2 — Refinar o que existe (médio prazo)
-
-    Bloco 14a: Mobile mínimo (Flutter) — mesma coisa
-
-    Bloco 15: fotos de atividade
-
-    Bloco 16: perfil público completo + stats visuais
-
-    Bloco 17: notificações (in-app primeiro, push depois)
-
-Fase 3 — Diferenciais do Strava (longo prazo)
-
-    Bloco 18+: segments, achievements, análise de treino
-
-O que NÃO fazer: tentar "terminar o backend antes de tudo". Isso atrasa
-meses, mata a motivação, e ignora que o frontend ensina o backend — o 13b
-provou isso (o GET /activities/{id} só existia pro dono até o feed expor a
-necessidade de abrir pra seguidores).
-Stack
-Backend
-
-    Python: 3.13.7 + FastAPI + SQLAlchemy 2.0 async + Alembic + GeoAlchemy2
-
-    Banco dev: PostgreSQL 16.4 + PostGIS 3.4 (Docker, postgis/postgis:16-3.4)
-
-    Banco prod: Neon (PostGIS habilitado, projeto rumo, branch production, região AWS US East 2 Ohio, PG 17.11 + PostGIS 3.5)
-
-    Cache: Redis (Docker, ainda não usado)
-
-    Deploy: Render (Blueprint via render.yaml, free tier)
-
-        URL produção: https://rumo-api-5s0b.onrender.com
-
-        Docs: https://rumo-api-5s0b.onrender.com/docs
-
-Frontend
-
-    Vite 8.3.4 + React 19.2.8 + TypeScript 6.0.2
-
-    React Router DOM 7.18.4 (modo SPA, BrowserRouter)
-
-    TanStack Query 5.104.2 (cache/servidor state)
-
-    react-hook-form 7.90.0 + zod 4.6.6 + @hookform/resolvers 5.9.1
-
-    Tailwind CSS 3.4.19 (paleta rumo custom + Inter)
-
-    Leaflet 1.9.4 + react-leaflet 5.0.0 (mapas — OSM Standard)
-
-    ESLint 10 (config flat do Vite v9, react-hooks/set-state-in-effect desabilitada)
-
-    Deploy: Vercel (produção)
-
-        URL produção: https://rumo-wheat.vercel.app
-
-        Root Directory: web/
-
-        Env var: VITE_API_URL=https://rumo-api-5s0b.onrender.com
-
-        SPA fallback: web/vercel.json com rewrite catch-all → /index.html
-
-    Pasta: web/ na raiz do monorepo
-
-Repo / IDE / OS
-
-    Repo: https://github.com/mmnc12/rumo (privado)
-
-    IDE: VS Code (terminal integrado)
-
-    OS: Windows (PowerShell)
-
-    Pacote: npm
-
-Estrutura de pastas (atualizada após 13b)
-text
+Quando estiver em dúvida sobre uma decisão técnica, perguntar: **isso
+aproxima o Rumo do Strava ou afasta?**
+
+- "Expor raw_track_points no ActivityResponse?" → Não. Endpoint dedicado
+  de geometria (`/track`) pra não pesar a listagem.
+- "Upload GPX síncrono ou background?" → MVP síncrono; futuro fila (arq/Celery).
+- "SQLite pra simplificar?" → Não. PostGIS é obrigatório (Strava é geo-first).
+
+O Rumo **NÃO é**:
+- ❌ Projeto de portfólio.
+- ❌ CRUD de exercícios.
+- ❌ Clone literal do Strava.
+
+O Rumo **É**:
+- ✅ Rede social de exercícios.
+- ✅ Produto real, em produção.
+
+### Roadmap em fases (vertical slice, não horizontal)
+
+Construir features completas atravessando backend + frontend + mobile,
+em vez de terminar o backend inteiro antes de começar o frontend.
+
+**Fase 1 — Deploy + primeira feature visível** ✅ CONCLUÍDA
+- Bloco 11: Deploy backend (Render + Neon)
+- Bloco 13a: Frontend mínimo (React/Vercel)
+- Bloco 13b: Social no frontend completo
+- Bloco 13b.7: Perfil completo (backend + frontend)
+- Fix: menu mobile (hamburger + drawer)
+
+**Fase 2 — Refinar o que existe** (em andamento)
+- ✅ Bloco 16: Perfil + stats visuais (StatsCards + WeeklyChart + filtro)
+- ⏳ Bloco 15: Fotos de atividade (precisa escolher storage)
+- ⏳ Bloco 12b: Upload FIT (opcional, se houver relógio pra testar)
+- ⏳ Bloco 14a: Mobile Flutter mínimo
+- ⏳ Bloco 17: Notificações (in-app primeiro, push depois)
+
+**Fase 3 — Diferenciais do Strava** (longo prazo)
+- Bloco 18+: segments, leaderboards, achievements, análise de treino
+
+**O que NÃO fazer**: tentar "terminar o backend antes de tudo". Atrasa
+meses, mata motivação, ignora que o frontend ensina o backend. O 13b
+provou isso (GET /activities/{id} só existia pro dono até o feed expor
+a necessidade de abrir pra seguidores). O 13b.7 reforçou (perfil só
+mostrava UUID até precisar de username real).
+
+---
+
+## Estado atual do projeto
+
+**Em produção, testado e funcionando:**
+- ✅ Auth (register/login/JWT) + reidratação de sessão
+- ✅ CRUD de atividades (JSON + upload GPX)
+- ✅ Upload GPX com cálculo automático (distância, pace, elevação)
+- ✅ Mapa/rota no detalhe (Leaflet, endpoint dedicado `/track`)
+- ✅ Splits por km (backend)
+- ✅ Follows (seguir/seguidores)
+- ✅ Feed (próprias + de quem segue)
+- ✅ Likes (kudos) com persistência real no detalhe
+- ✅ Comentários (criar, listar, deletar)
+- ✅ Perfil público (username/full_name + atividades de outro user com regra de follow)
+- ✅ Stats visuais no próprio perfil (4 cards + gráfico semanal + filtro por tipo)
+- ✅ Menu mobile (hamburger + drawer) no header
+- ✅ Deploy: Render (backend) + Vercel (frontend) + Neon (banco)
+
+**Pendências conhecidas (dívidas, não bloqueiam):**
+- `useFollowUser` não invalida `activitiesKeys.lists()` — seção de atividades no perfil de outro user só atualiza no reload após seguir.
+- `useUserActivities` fixa `limit=20` — sem paginação visível.
+- Bundle 598 kB (warning do Vite) — code splitting com `React.lazy` planejado.
+- Stats só no próprio perfil (endpoints `/stats/*` são do current_user — não há endpoint de stats de outro).
+- Sem upload de foto — precisa escolher storage (recomendação: Cloudinary free tier).
+- Sem rate limiting.
+- Redis não usado (está no docker-compose, sem consumidor).
+- Sem testes automatizados (`tests/` vazia).
+- `UserResponse` expõe email/birth_date (só em `/auth/me`, revisar antes de prod séria).
+- `GET /activities/{id}/comments` exige auth — se quiser público, remover `Depends(get_current_user)`.
+- Upload GPX síncrono — futuro: fila (arq/Celery/RQ).
+- Cold start do Render free tier (~30-50s). Fase 2: subir pro plano pago (~$7/mês).
+
+---
+
+## Stack
+
+### Backend
+- Python 3.13.7 + FastAPI + SQLAlchemy 2.0 async + Alembic + GeoAlchemy2
+- Banco dev: PostgreSQL 16.4 + PostGIS 3.4 (Docker, `postgis/postgis:16-3.4`)
+- Banco prod: Neon (PostGIS habilitado, projeto `rumo`, branch `production`,
+  região AWS US East 2 Ohio, PG 17.11 + PostGIS 3.5)
+- Cache: Redis (Docker, ainda não usado)
+- Deploy: Render (Blueprint via `render.yaml`, free tier)
+  - URL: https://rumo-api-5s0b.onrender.com
+  - Docs: https://rumo-api-5s0b.onrender.com/docs
+
+### Frontend
+- Vite 8.3.4 + React 19.2.8 + TypeScript 6.0.2
+- React Router DOM 7.18.4 (SPA, BrowserRouter)
+- TanStack Query 5.104.2 (cache/servidor state)
+- react-hook-form 7.90.0 + zod 4.6.6 + @hookform/resolvers 5.9.1
+- Tailwind CSS 3.4.19 (paleta `rumo` custom + Inter)
+- Leaflet 1.9.4 + react-leaflet 5.0.0 (mapas OSM Standard)
+- **Recharts 3.7.x + react-is** (gráfico semanal — instalado no bloco 16)
+- ESLint 10 (flat config do Vite v9, `react-hooks/set-state-in-effect` desabilitada)
+- Deploy: Vercel (Root Directory: `web/`)
+  - URL: https://rumo-wheat.vercel.app
+  - Env var: `VITE_API_URL=https://rumo-api-5s0b.onrender.com`
+  - SPA fallback: `web/vercel.json` com rewrite catch-all
+
+### Repo / IDE / OS
+- Repo: https://github.com/mmnc12/rumo (privado)
+- IDE: VS Code (terminal integrado)
+- OS: Windows (PowerShell)
+- Pacote: npm
+
+---
+
+## Estrutura de pastas (atualizada após bloco 16)
 
 D:\Rumo
 ├── .gitignore, README.md, docker-compose.yml, render.yaml
 ├── docs\HANDOFF.md
 ├── backend
-│   ├── .env (não versionado), .env.example, requirements.txt, alembic.ini
-│   ├── _scratch\ (NÃO versionado)
-│   ├── samples\ (não versionado — GPX de teste)
-│   ├── alembic\env.py + versions
-│   │   └── 19cd7d2f4c3f_full_name_nullable_em_users.py
-│   ├── app
-│   │   ├── main.py, config.py, database.py
-│   │   ├── core\security.py, core\dependencies.py
-│   │   ├── models{user,activity,follow,like,comment,init}.py
-│   │   ├── schemas{user,activity,stats,like,comment,init}.py
-│   │   ├── routers{auth,activities,feed,users,comments,init}.py
-│   │   └── services{activity_service,gpx_service,stats_service,follow_service,like_service,feed_service,comment_service,errors,init}.py
-│   └── tests\
-├── mobile\ (vazio)
+│ ├── .env (não versionado), .env.example, requirements.txt, alembic.ini
+│ ├── _scratch\ (NÃO versionado)
+│ ├── samples\ (não versionado — GPX de teste)
+│ ├── alembic\env.py + versions
+│ ├── app
+│ │ ├── main.py, config.py, database.py
+│ │ ├── core\security.py, core\dependencies.py
+│ │ ├── models{user,activity,follow,like,comment,init}.py
+│ │ ├── schemas{user,activity,stats,like,comment,init}.py
+│ │ ├── routers{auth,activities,feed,users,comments,init}.py
+│ │ └── services{activity_service,gpx_service,stats_service,
+│ │ follow_service,like_service,feed_service,
+│ │ comment_service,errors,init}.py
+│ └── tests
+├── mobile\ (vazio — Flutter entra no 14a)
 └── web
-    ├── .env.local (não versionado), .env.example
-    ├── .gitignore, eslint.config.js, index.html
-    ├── package.json, package-lock.json, postcss.config.js
-    ├── tailwind.config.js (paleta rumo)
-    ├── tsconfig.json, tsconfig.app.json, tsconfig.node.json
-    ├── vercel.json ← SPA fallback (13a.5)
-    ├── vite.config.ts
-    └── src
-        ├── api
-        │   ├── client.ts ← apiFetch + ApiError + token helpers
-        │   ├── auth.ts ← login/register/getMe
-        │   ├── activities.ts ← list/get/delete/uploadGpx/getActivityTrack
-        │   └── social.ts ← feed/likes/comments/follows (13b.1)
-        ├── components
-        │   ├── ProtectedRoute.tsx ← named export
-        │   ├── AppHeader.tsx ← named export + nav (Feed / Minhas atividades) + link pro perfil (13b.2)
-        │   ├── ActivityCard.tsx ← named export + author opcional + botão de like (13b.2/13b.4)
-        │   ├── LikeButton.tsx ← botão de like real com contagem (13b.5)
-        │   └── CommentsSection.tsx ← lista + form + delete (13b.5)
-        ├── contexts
-        │   └── AuthContext.tsx ← AuthProvider (named export)
-        ├── hooks
-        │   ├── useAuth.ts
-        │   ├── useActivities.ts ← queries + useUploadGpx + useActivity + useActivityTrack + useDeleteActivity
-        │   ├── useSocial.ts ← useFeed/useToggleLike/useComments/useFollowUser (13b.1)
-        │   └── useProfile.ts ← useFollowers/useFollowing/useIsFollowing (13b.3)
-        ├── lib
-        │   └── format.ts
-        ├── pages
-        │   ├── LoginPage.tsx ← default export
-        │   ├── RegisterPage.tsx ← default export
-        │   ├── ActivitiesPage.tsx ← default export
-        │   ├── UploadPage.tsx ← default export
-        │   ├── ActivityDetailPage.tsx ← default export + like + comentários (13b.5)
-        │   ├── FeedPage.tsx ← default export (13b.2)
-        │   └── ProfilePage.tsx ← default export (13b.3)
-        ├── types
-        │   └── api.ts ← espelho dos schemas Pydantic (inclui UserPublic/FeedItem/LikeState/LikeList/Comment)
-        ├── App.tsx ← rotas
-        ├── main.tsx ← QueryClient + BrowserRouter + AuthProvider
-        └── index.css
-
-Models existentes (backend)
-User
-
-    id (UUID v7), email (unique), username (unique), full_name (nullable)
-
-    hashed_password, weight_kg, height_cm, birth_date
-
-    is_active, created_at, updated_at (todos DateTime(timezone=True))
-
-Activity
-
-    id (UUID v7), user_id (FK users CASCADE)
-
-    activity_type (enum: run/walk/cycle/hike/swim/other)
-
-    title, description
-
-    started_at (indexed), finished_at, duration_s
-
-    distance_m, elevation_gain_m, calories, avg_pace_s_per_km, avg_speed_mps
-
-    route (Geometry LINESTRING 4326), raw_track_points (JSONB) — formato [[lat, lon, ele, unix_ts], ...]
-
-    created_at, updated_at
-
-    user = relationship("User", backref="activities", lazy="raise")
-
-Follow / Like / Comment
-
-(inalterados desde o Bloco 10)
-Endpoints existentes (backend)
-Auth & Users
-
-    GET / — metadados
-
-    GET /health — status API + banco
-
-    POST /auth/register — cria usuário (201, 409 se duplicado)
-
-    POST /auth/login — form-urlencoded (username=email), retorna JWT
-
-    GET /auth/me — protegido
-
-    POST /users/{user_id}/follow — 204
-
-    DELETE /users/{user_id}/follow — 204
-
-    GET /users/{user_id}/followers?limit&offset — 200, list[UserPublic]
-
-    GET /users/{user_id}/following?limit&offset — 200, list[UserPublic]
-
-Activities
-
-    POST /activities — 201 (JSON pré-calculado)
-
-    POST /activities/upload — 201 (multipart, .gpx)
-
-    GET /activities?limit=20&offset=0 — lista próprias
-
-    GET /activities/{id} — dono OU seguidor do dono (404 caso contrário) ← mudou no 13b.6
-
-    GET /activities/{id}/track — dono OU seguidor do dono ← mudou no 13b.6 — GeoJSON-like:
-    json
-
-    {
-      "activity_id": "uuid",
-      "type": "LineString",
-      "coordinates": [[lon, lat], ...],
-      "bbox": [minLon, minLat, maxLon, maxLat],
-      "n_points": 2345,
-      "simplified": false
-    }
-
-    DELETE /activities/{id} — 204 (só o dono — leitura ≠ escrita)
-
-    GET /activities/stats/summary?activity_type=
-
-    GET /activities/stats/weekly?weeks=8&activity_type=
-
-    GET /activities/stats/monthly?months=6&activity_type=
-
-    POST /activities/{id}/like — 200, LikeStateResponse { count, liked_by_me }
-
-    DELETE /activities/{id}/like — 204
-
-    GET /activities/{id}/likes?limit&offset — 200, LikeListResponse { count, liked_by_me, users: UserPublic[] }
-
-Comments
-
-    POST /activities/{activity_id}/comments — 201, body { "content": "..." } (campo é content, não body/text)
-
-    GET /activities/{activity_id}/comments?limit&offset — 200, list[CommentResponse] (array direto, autor aninhado em author)
-
-    DELETE /comments/{comment_id} — 204 (só o autor)
-
-Feed
-
-    GET /feed?limit=20&offset=0 — 200, list[FeedItemResponse] (array direto, não envelopado)
-
-        FeedItemResponse = ActivityResponse + author: UserPublic (validation_alias="user")
-
-Frontend — Padrões e decisões
-web/ como monorepo
-
-    Vercel aponta pra web/ (Root Directory). Render continua em backend/.
-
-    .env.local NUNCA versionado.
-
-    vercel.json dentro de web/ (não na raiz do monorepo).
-
-Cliente HTTP (src/api/client.ts)
-
-    apiFetch<T>(path, options) — única porta pro backend.
-
-    Injeta JWT do localStorage (rumo.token) automaticamente.
-
-    body (objeto) → JSON. rawBody (FormData/URLSearchParams) → passa cru.
-
-    FormData NÃO deve setar Content-Type manualmente (o browser põe com boundary).
-
-    401 limpa token automaticamente (força novo login).
-
-    Erros viram ApiError(status, detail) — detail é o detail cru do FastAPI.
-
-Auth (AuthContext + useAuth + ProtectedRoute)
-
-    Token em localStorage; user em memória.
-
-    Boot do app chama GET /auth/me se houver token (reidrata sessão).
-
-    register() faz login automático depois do cadastro.
-
-    ProtectedRoute redireciona pra /login guardando state.from.
-
-    <AuthProvider> PRECISA envolver <App> no main.tsx — erro runtime se faltar.
-
-Rotas atuais (App.tsx)
-
-    /login, /register (públicas)
-
-    /activities (protegida) — lista próprias
-
-    /feed (protegida) — feed social (13b.2)
-
-    /upload (protegida)
-
-    /activities/:id (protegida) — detalhe (agora abre também pra seguidor do dono)
-
-    /users/:id (protegida) — perfil (13b.3) — usa UUID (não username) porque não há GET /users/{id}
-
-    / → redireciona pra /activities
-
-    * → 404 simples
-
-Convenção de exports (IMPORTANTE — não misturar)
-
-    Componentes reutilizáveis → named export (export function X)
-
-        AppHeader, ProtectedRoute, ActivityCard, LikeButton, CommentsSection
-
-    Páginas → default export (export default function X)
-
-        ActivitiesPage, UploadPage, LoginPage, RegisterPage, ActivityDetailPage, FeedPage, ProfilePage
-
-    Já custou bug de build no 13a.3 (ProtectedRoute importado como default).
-
-Query keys (TanStack)
-
-    activitiesKeys (useActivities.ts): .all, .lists(), .list(params), .details(), .detail(id), .tracks(), .track(id)
-
-    socialKeys (useSocial.ts): .feed(limit, offset), .likes(activityId), .comments(activityId), .followers(userId), .following(userId)
-
-    staleTime: 30s em listas/feed, 5min em track
-
-    retry: 1, refetchOnWindowFocus: false
-
-Social (13b)
-
-    useFeed → ["feed", { limit, offset }], staleTime 30s.
-
-    useToggleLike → otimista com onMutate/onError/onSettled. NÃO invalida o feed no onSettled (o feed não tem contagem de likes — invalidar causaria refetch de 20 atividades a cada clique). Só invalida ["likes", id].
-
-    useFollowUser → invalida ["feed"] + ["followers", id] + ["following", id].
-
-    useIsFollowing (em useProfile.ts) → busca GET /users/{me.id}/following e checa se o alvo está lá. Não existe GET /users/{id}/is-following no backend — a inferência custa 1 request extra.
-
-    useComments/useCreateComment/useDeleteComment → invalidam ["comments", activityId].
-
-    Botão de like no card (ActivityCard): estado local (não busca GET /likes). O coração reflete só o que o usuário fez na sessão. Reload zera.
-
-    Botão de like no detalhe (LikeButton): busca GET /likes de verdade. Contagem real, persiste no reload.
-
-    Clique no coração dentro do <Link>: usa e.preventDefault() + e.stopPropagation() no onClick pra não navegar.
-
-Formatadores (src/lib/format.ts)
-
-formatDistance(m), formatDuration(s), formatPace(sPerKm), formatSpeed(mps), formatDateTime(iso), formatRelativeDate(iso), formatActivityType("run"), activityEmoji("run")
-Tailwind
-
-    Paleta custom: rumo-50 … rumo-900 (laranja). Primária: rumo-500 = #f97316.
-
-    Fonte: Inter. Body: bg-gray-50 text-gray-900 antialiased.
-
-Tipos (src/types/api.ts)
-
-    ActivityType, UserPublic, UserResponse, Activity, TokenResponse, ValidationErrorDetail, TrackResponse, FeedItem, LikeState, LikeList, Comment.
-
-    UserPublic tem { id, username, full_name, is_active } (espelha o Pydantic).
-
-    Comment tem { id, activity_id, content, created_at, updated_at, author }.
-
-    Interface da atividade se chama Activity (não ActivityResponse) — espelho local do schema Pydantic. Resolvido quando gerar tipos via OpenAPI (Fase 2).
-
-Produção (Render + Neon + Vercel)
-Backend
-
-    API: https://rumo-api-5s0b.onrender.com
-
-    Deploy: git push origin main → Render rebuilda → alembic upgrade head → gunicorn (2 workers uvicorn).
-
-    Free tier dorme após 15 min. Primeira request ~30-50s.
-
-    Env vars no Render: DATABASE_URL, ENVIRONMENT=production, DEBUG=false, SECRET_KEY, ALGORITHM=HS256, ACCESS_TOKEN_EXPIRE_MINUTES=30, PYTHON_VERSION=3.13.7
-
-    ALLOWED_ORIGINS (formato JSON, list[str]):
-    json
-
-    ["http://localhost:5173","https://rumo-wheat.vercel.app"]
+├── .env.local (não versionado), .env.example
+├── .gitignore, eslint.config.js, index.html
+├── package.json, package-lock.json, postcss.config.js
+├── tailwind.config.js (paleta rumo)
+├── tsconfig.json, tsconfig.app.json, tsconfig.node.json
+├── vercel.json ← SPA fallback
+├── vite.config.ts
+└── src
+├── api
+│ ├── client.ts ← apiFetch + ApiError + token helpers
+│ ├── auth.ts ← login/register/getMe
+│ ├── activities.ts ← list/get/delete/uploadGpx/getActivityTrack
+│ ├── social.ts ← feed/likes/comments/follows/getUser
+│ └── stats.ts ← getStatsSummary/getStatsWeekly (bloco 16)
+├── components
+│ ├── ProtectedRoute.tsx ← named export
+│ ├── AppHeader.tsx ← named export + nav desktop + hamburger mobile + drawer
+│ ├── ActivityCard.tsx ← named export + author opcional + like otimista
+│ ├── LikeButton.tsx ← botão de like real com contagem
+│ ├── CommentsSection.tsx ← lista + form + delete
+│ ├── StatsCards.tsx ← 4 cards de totais (bloco 16)
+│ └── WeeklyChart.tsx ← LineChart Recharts (bloco 16)
+├── contexts\AuthContext.tsx ← AuthProvider (named export)
+├── hooks
+│ ├── useAuth.ts
+│ ├── useActivities.ts ← queries + useUploadGpx + useUserActivities + useActivity + useActivityTrack + useDeleteActivity
+│ ├── useSocial.ts ← useFeed/useToggleLike/useComments/useFollowUser
+│ ├── useProfile.ts ← useFollowers/useFollowing/useIsFollowing/useUser
+│ └── useStats.ts ← useStatsSummary/useStatsWeekly (bloco 16)
+├── lib\format.ts
+├── pages
+│ ├── LoginPage.tsx, RegisterPage.tsx ← default export
+│ ├── ActivitiesPage.tsx, UploadPage.tsx ← default export
+│ ├── ActivityDetailPage.tsx ← + autor + delete só pro dono
+│ ├── FeedPage.tsx ← default export
+│ └── ProfilePage.tsx ← + username real + atividades + stats (só no próprio)
+├── types\api.ts ← espelho dos schemas Pydantic (inclui StatsSummary/StatsPeriod/StatsWeeklyResponse)
+├── App.tsx ← rotas
+├── main.tsx ← QueryClient + BrowserRouter + AuthProvider
+└── index.css
+
+
+---
+
+## Models existentes (backend)
+
+### User
+- id (UUID v7), email (unique), username (unique), full_name (nullable)
+- hashed_password, weight_kg, height_cm, birth_date
+- is_active, created_at, updated_at (todos DateTime(timezone=True))
+
+### Activity
+- id (UUID v7), user_id (FK users CASCADE)
+- activity_type (enum: run/walk/cycle/hike/swim/other)
+- title, description, started_at (indexed), finished_at, duration_s
+- distance_m, elevation_gain_m, calories, avg_pace_s_per_km, avg_speed_mps
+- route (Geometry LINESTRING 4326), raw_track_points (JSONB)
+  - formato `[[lat, lon, ele, unix_ts], ...]`
+- created_at, updated_at
+- `user = relationship("User", backref="activities", lazy="raise")`
+
+### Follow / Like / Comment
+- Inalterados desde o Bloco 10.
+
+---
+
+## Endpoints existentes (backend)
+
+### Auth & Users
+- GET / — metadados
+- GET /health — status API + banco
+- POST /auth/register — cria (201, 409 se duplicado)
+- POST /auth/login — form-urlencoded (username=email), retorna JWT
+- GET /auth/me — protegido
+- POST /users/{user_id}/follow — 204
+- DELETE /users/{user_id}/follow — 204
+- GET /users/{user_id}/followers?limit&offset — 200, list[UserPublic]
+- GET /users/{user_id}/following?limit&offset — 200, list[UserPublic]
+- **GET /users/{user_id} — 200, UserPublic (qualquer autenticado) ← 13b.7**
+
+### Activities
+- POST /activities — 201 (JSON pré-calculado)
+- POST /activities/upload — 201 (multipart, .gpx)
+- GET /activities?limit=20&offset=0 — lista próprias
+- **GET /activities?user_id= — lista de outro (requer follow; 403 caso contrário) ← 13b.7**
+- GET /activities/{id} — dono OU seguidor do dono (404 caso contrário)
+- GET /activities/{id}/track — dono OU seguidor do dono
+  - GeoJSON-like: `{ activity_id, type: "LineString", coordinates: [[lon,lat],...], bbox: [minLon,minLat,maxLon,maxLat], n_points, simplified }`
+- DELETE /activities/{id} — 204 (só o dono — leitura ≠ escrita)
+- GET /activities/stats/summary?activity_type=
+- GET /activities/stats/weekly?weeks=8&activity_type=
+- GET /activities/stats/monthly?months=6&activity_type=
+- POST /activities/{id}/like — 200, `{ count, liked_by_me }`
+- DELETE /activities/{id}/like — 204
+- GET /activities/{id}/likes?limit&offset — 200, `{ count, liked_by_me, users: UserPublic[] }`
+
+### Comments
+- POST /activities/{activity_id}/comments — 201, body `{ "content": "..." }` (campo é `content`)
+- GET /activities/{activity_id}/comments?limit&offset — 200, `list[CommentResponse]` (array direto, autor aninhado em `author`)
+- DELETE /comments/{comment_id} — 204 (só o autor)
+
+### Feed
+- GET /feed?limit=20&offset=0 — 200, `list[FeedItemResponse]` (array direto)
+  - `FeedItemResponse = ActivityResponse + author: UserPublic` (`validation_alias="user"`)
+
+---
+
+## Frontend — padrões e decisões
+
+### `web/` como monorepo
+- Vercel aponta pra `web/` (Root Directory). Render continua em `backend/`.
+- `.env.local` NUNCA versionado.
+- `vercel.json` dentro de `web/` (não na raiz do monorepo).
+
+### Cliente HTTP (`src/api/client.ts`)
+- `apiFetch<T>(path, options)` — única porta pro backend.
+- Injeta JWT do `localStorage` (`rumo.token`) automaticamente.
+- `body` (objeto) → JSON. `rawBody` (FormData/URLSearchParams) → passa cru.
+- FormData NÃO seta `Content-Type` manualmente (browser põe com boundary).
+- 401 limpa token automaticamente (força novo login).
+- Erros viram `ApiError(status, detail)` — `detail` é o cru do FastAPI.
+
+### Auth (`AuthContext` + `useAuth` + `ProtectedRoute`)
+- Token em `localStorage`; user em memória.
+- Boot do app chama `GET /auth/me` se houver token (reidrata sessão).
+- `register()` faz login automático depois do cadastro.
+- `ProtectedRoute` redireciona pra `/login` guardando `state.from`.
+- `<AuthProvider>` PRECISA envolver `<App>` no `main.tsx` — erro runtime se faltar.
+
+### Rotas atuais (`App.tsx`)
+- `/login`, `/register` (públicas)
+- `/activities` (protegida) — lista próprias
+- `/feed` (protegida) — feed social
+- `/upload` (protegida)
+- `/activities/:id` (protegida) — detalhe (dono ou seguidor)
+- `/users/:id` (protegida) — perfil (UUID; não há slug por username)
+- `/` → redireciona pra `/activities`
+- `*` → 404 simples
+
+### Convenção de exports (IMPORTANTE — não misturar)
+- **Componentes reutilizáveis** → named export (`export function X`)
+  - `AppHeader`, `ProtectedRoute`, `ActivityCard`, `LikeButton`,
+    `CommentsSection`, `StatsCards`, `WeeklyChart`
+- **Páginas** → default export (`export default function X`)
+  - `ActivitiesPage`, `UploadPage`, `LoginPage`, `RegisterPage`,
+    `ActivityDetailPage`, `FeedPage`, `ProfilePage`
+
+Já custou bug de build no 13a.3 (ProtectedRoute importado como default).
+
+### Query keys (TanStack)
+- `activitiesKeys` (`useActivities.ts`):
+  - `.all`, `.lists()`, `.list({ limit?, offset?, userId? })`, `.details()`,
+    `.detail(id)`, `.tracks()`, `.track(id)`
+- `socialKeys` (`useSocial.ts`):
+  - `.feed(limit, offset)`, `.likes(activityId)`, `.comments(activityId)`,
+    `.followers(userId)`, `.following(userId)`
+- **`statsKeys` (`useStats.ts`)**:
+  - `.all`, `.summary(activityType?)`, `.weekly(weeks, activityType?)`
+- `["users", userId]` (inline em `useUser`) — perfil público.
+- `staleTime`:
+  - 30s em listas/feed/atividades
+  - 5min em track e `useUser`
+  - **60s em stats**
+- `retry: 1`, `refetchOnWindowFocus: false`.
+
+### Social (13b + 13b.7)
+- `useFeed` → `["feed", { limit, offset }]`, `staleTime` 30s.
+- `useToggleLike` → otimista com `onMutate/onError/onSettled`. **NÃO invalida o feed** no `onSettled` (feed não tem contagem — invalidar causaria refetch de 20 atividades por clique). Só invalida `["likes", id]`.
+- `useFollowUser` → invalida `["feed"]` + `["followers", id]` + `["following", id]`. **NÃO invalida `activitiesKeys.lists()`** (dívida).
+- `useIsFollowing` → busca `GET /users/{me.id}/following` e checa se o alvo está lá (1 request extra; não existe `GET /users/{id}/is-following`).
+- Botão de like no card (`ActivityCard`): estado local, não persiste no reload.
+- Botão de like no detalhe (`LikeButton`): busca `GET /likes` real, persiste.
+- Clique no coração dentro do `<Link>`: `e.preventDefault()` + `e.stopPropagation()`.
+
+### Perfil (13b.7 + 16)
+- `ProfilePage` usa `useUser(id)` (username/full_name reais) + `useUserActivities(id)` (lista) + `useIsFollowing` + `useFollowUser`.
+- **Stats só aparecem se `isSelf === true`** (`useStatsSummary`/`useStatsWeekly` recebem `enabled = isSelf`).
+- Filtro por tipo (`TYPE_FILTERS`): `undefined` (Tudo), `run`, `walk`, `cycle`, `hike`, `swim`.
+- 403 de `useUserActivities` → CTA "Siga @username pra ver as atividades dele(a)".
+- Stats: 4 cards (atividades, distância, tempo, elevação) + `WeeklyChart` (LineChart em km, últimas 8 semanas).
+
+### Formatters (`src/lib/format.ts`)
+- `formatDistance(m)`, `formatDuration(s)`, `formatPace(sPerKm)`,
+  `formatSpeed(mps)`, `formatDateTime(iso)`, `formatRelativeDate(iso)`,
+  `formatActivityType("run")`, `activityEmoji("run")`
+
+### Tailwind
+- Paleta custom: `rumo-50 … rumo-900` (laranja). Primária: `rumo-500 = #f97316`.
+- Fonte: Inter. Body: `bg-gray-50 text-gray-900 antialiased`.
+- **Cor hardcoded no Recharts**: `#f97316` (mesma laranja) — se mudar a paleta, atualizar em `WeeklyChart.tsx`.
+
+### Tipos (`src/types/api.ts`)
+- `ActivityType`, `UserPublic`, `UserResponse`, `Activity`, `TokenResponse`,
+  `ValidationErrorDetail`, `TrackResponse`, `FeedItem`, `LikeState`, `LikeList`,
+  `Comment`, **`StatsSummary`, `StatsPeriod`, `StatsWeeklyResponse`, `StatsMonthlyResponse`**
+- `UserPublic` tem `{ id, username, full_name, is_active }`.
+- `Comment` tem `{ id, activity_id, content, created_at, updated_at, author }`.
+- Interface da atividade se chama `Activity` (não `ActivityResponse`) — espelho local do Pydantic. Fase 2: gerar via OpenAPI.
+- **`StatsPeriod` tem `period_start: string` (ISO "YYYY-MM-DD")**, `total_distance_m`, `total_duration_s`, `total_activities`, `total_calories`. Não tem campo de data completa.
+
+---
+
+## Produção (Render + Neon + Vercel)
+
+### Backend
+- API: https://rumo-api-5s0b.onrender.com
+- Deploy: `git push origin main` → Render rebuilda → `alembic upgrade head` → gunicorn (2 workers uvicorn).
+- Free tier dorme após 15 min. Primeira request ~30-50s.
+- Env vars no Render: `DATABASE_URL`, `ENVIRONMENT=production`,
+  `DEBUG=false`, `SECRET_KEY`, `ALGORITHM=HS256`,
+  `ACCESS_TOKEN_EXPIRE_MINUTES=30`, `PYTHON_VERSION=3.13.7`
+- `ALLOWED_ORIGINS` (JSON, `list[str]`):
+  ```json
+  ["http://localhost:5173","https://rumo-wheat.vercel.app"]
 
 Frontend
 
     App: https://rumo-wheat.vercel.app
 
-    Deploy: git push origin main → Vercel rebuilda (~1 min).
+    Deploy: git push origin main → Vercel rebuilda (~1min).
 
-    Root Directory: web/
+    Root Directory: web/.
 
-    Env var: VITE_API_URL=https://rumo-api-5s0b.onrender.com
+    Env var: VITE_API_URL=https://rumo-api-5s0b.onrender.com.
 
-    SPA fallback: web/vercel.json com { "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
+    SPA fallback: web/vercel.json com { "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }.
 
+Workflow de teste (padrão atual)
+
+Testar direto em produção, não local. Build local (npm run build) só
+pra garantir TS/ESLint limpos antes do push. Motivo: o sistema já está no ar,
+subir Docker + uvicorn + vite local é overhead sem ganho proporcional.
 Blocos concluídos
 
-    ✅ 1 a 9 (ver histórico)
+    ✅ 1 a 9 (auth, CRUD, GPX, stats backend)
 
-    ✅ 10a Follows / 10b Feed / 10c Likes / 10d Comentários
-
-    ✅ 12 Upload GPX backend
+    ✅ 10a Follows / 10b Feed / 10c Likes / 10d Comentários (backend)
 
     ✅ 11 Deploy Render + Neon
 
+    ✅ 12 Upload GPX backend
+
     ✅ 13a.0 a 13a.5 (frontend mínimo completo, deploy Vercel)
 
-    ✅ 13b.1 Tipos + API + hooks (social.ts, useSocial.ts)
+    ✅ 13b.1 a 13b.6 (social no frontend)
 
-    ✅ 13b.2 FeedPage + rota /feed + nav no AppHeader + author no card
+    ✅ 13b.7 Perfil completo:
 
-    ✅ 13b.3 ProfilePage (/users/:id) + follow/unfollow + abas
+        GET /users/{user_id} (UserPublic, qualquer autenticado)
 
-    ✅ 13b.4 Like (kudos) no ActivityCard (otimista, local)
+        GET /activities?user_id= (requer follow; 403 caso contrário)
 
-    ✅ 13b.5 Comentários + like real (com contagem) na ActivityDetailPage
+        ProfilePage com username/full_name reais + lista de atividades + CTA 403
 
-    ✅ 13b.6 Fix backend: GET /activities/{id} e /track aceitam dono OU seguidor do dono (reusa follow_service.is_following recém-criado)
+        ActivityDetailPage com bloco "por @autor" + delete só pro dono
+
+    ✅ Fix: menu mobile (hamburger + drawer, fecha em link/backdrop/Esc)
+
+    ✅ 16 Perfil + stats visuais:
+
+        StatsCards: 4 cards (atividades, distância, tempo, elevação)
+
+        WeeklyChart: LineChart Recharts (km por semana, últimas 8)
+
+        Filtro por tipo (run/walk/cycle/hike/swim) — só no próprio perfil
+
+        Deps: recharts@3.7 + react-is (peer)
 
 Blocos pendentes
 
-    ⏳ 13b.7 (recomendado): perfil completo — exige GET /users/{id} no backend
+    ⏳ 15 Fotos de atividade — Fase 2, próxima recomendação. Escolher storage (Cloudinary free tier é o mais simples).
 
-    ⏳ 14a Mobile Flutter mínimo — Fase 1 restante
+    ⏳ 12b Upload FIT — opcional, se houver relógio Garmin/Polar pra testar.
 
-    ⏳ 12b Upload FIT (opcional, se houver relógio real pra testar)
+    ⏳ 14a Mobile Flutter — Fase 2, mas teste mobile do site atual já passou (menu funciona, fluxos OK). Flutter fica pra quando o site no celular não bastar.
 
-    ⏳ 15 Fotos de atividade — Fase 2
+    ⏳ 17 Notificações — Fase 3.
 
-    ⏳ 16 Perfil público completo + stats visuais — Fase 2 (endpoints /stats/* prontos)
+    ⏳ 18+ Segments, leaderboards, achievements, análise de treino — Fase 3.
 
-    ⏳ 17 Notificações — Fase 3
+Recomendação de ordem (retomada)
 
-    ⏳ 18+ Segments, achievements, análise de treino — Fase 3
+Bloco 15 (fotos de atividade) — próximo grande passo.
 
-Recomendação de ordem (após este handoff)
+Escopo:
 
-    13b.7 — Perfil completo (backend + frontend). Adiciona GET /users/{id} e GET /activities?user_id=. Destrava:
+    Backend: novo model ActivityPhoto (activity_id FK, url, created_at). Endpoint POST /activities/{id}/photos (upload multipart) + GET /activities/{id}/photos + DELETE /photos/{id}.
 
-        ProfilePage mostra username/full_name do dono (hoje mostra @uuid-curto).
+    Storage: Cloudinary free tier (25 GB/mês) — upload direto do backend, sem configurar bucket AWS. Alternativa: Cloudflare R2 (S3-compatible, free tier generoso).
 
-        ProfilePage lista as atividades do usuário (hoje não lista).
+    Frontend: upload no ActivityDetailPage (dono), grid/carrossel no detalhe, foto principal no ActivityCard do feed.
 
-        ActivityDetailPage mostra o autor (hoje não mostra, porque GET /activities/{id} não aninha author).
+    DB: migração Alembic (tabela nova, sem alterar existentes).
 
-        Abre caminho pro 16 (perfil + stats).
+Depois do 15:
 
-    14a — Flutter (quando o site no celular já não bastar). Precisa do teste manual mobile primeiro pra decidir urgência.
+    12b FIT só se tiver relógio pra testar.
 
-    16 — Perfil + stats visuais (endpoints /stats/* já prontos).
+    14a Flutter quando o site no celular não bastar (teste mobile atual passou sem queixas).
 
-    15 — Fotos (precisa escolher storage: S3/Cloudinary/R2).
+    17 Notificações (in-app primeiro).
 
-    12b — FIT (quando houver relógio pra testar).
+    18+ Segments — o que mais aproxima o Rumo do Strava.
 
 Pendências técnicas (dívida para limpar)
 Backend
 
-    GET /users/{id} não existe → ProfilePage não mostra username/full_name do dono.
+    GET /activities/{id} agora aceita dono OU seguidor. Decisão de produto em aberto: permitir "qualquer autenticado" (atividade pública)? Introduzir is_public no model?
 
-    GET /activities?user_id= não existe → ProfilePage não lista atividades do usuário.
+    GET /activities/{id} não aninha author — o detalhe busca via useUser(user_id) no frontend (2 requests). Se virar gargalo, aninhar no backend.
 
-    GET /activities/{id} agora aceita dono OU seguidor. Decisão de produto em aberto: permitir "qualquer autenticado" (atividade pública)? Ou introduzir is_public no model?
+    calories fica NULL no upload GPX (precisa peso + FC + tipo).
 
-    GET /activities/{id} não aninha author — o detalhe não mostra quem fez (só os comentários mostram).
-
-    calories fica NULL no upload GPX — precisa de peso + FC + tipo.
-
-    Sem upload de foto — precisa de storage (S3/Cloudinary/R2).
+    Sem upload de foto (bloco 15).
 
     Sem rate limiting.
 
     Redis não usado (está no docker-compose).
 
-    Sem testes automatizados — tests/ vazia.
+    Sem testes automatizados (tests/ vazia).
 
-    UserResponse expõe email e birth_date (só em /auth/me, ok, revisar antes de prod real).
+    UserResponse expõe email e birth_date (só em /auth/me, ok, revisar antes de prod séria).
 
     GET /activities/{id}/comments exige auth — se quiser público, remover Depends(get_current_user).
 
@@ -643,23 +477,25 @@ Backend
 
     SECRET_KEY local e prod diferentes — JWTs não intercambiáveis (correto por design).
 
+    GET /activities/stats/* só funciona pro current_user — não há endpoint de stats de outro usuário. Perfil de outro user não mostra stats (design atual do 16).
+
 Frontend
 
-    ProfilePage mostra @<uuid-truncado> em vez de username (depende de GET /users/{id}).
+    useFollowUser não invalida activitiesKeys.lists() — seção de atividades do perfil só atualiza no reload após seguir. Fix de 1 linha em useSocial.ts (adicionar queryClient.invalidateQueries({ queryKey: activitiesKeys.lists() }) no onSuccess).
 
-    ProfilePage não lista atividades do usuário (depende de GET /activities?user_id=).
+    useUserActivities fixa limit=20 — sem paginação visível.
 
     Contagem de likes no card do feed é local (não persiste no reload). Só o detalhe tem contagem real.
 
-    Menu mobile: links de nav (Feed, Minhas atividades) somem em telas pequenas (hidden sm:flex). Adicionar hamburger na Fase 2.
+    Menu mobile resolvido (hamburger + drawer). Desktop sem regressão.
 
-    Perfil no mobile: o link do username no AppHeader também é hidden sm:inline. No mobile, só se chega ao perfil via link do feed ou URL direta.
+    Perfil no mobile: link do username no header é hidden sm:inline — no mobile, acesso ao perfil via drawer agora funciona.
 
-    Mapa sem layer switcher — só OSM Standard. Adicionar toggle Standard/Satélite (Esri World Imagery) na Fase 2.
+    Mapa sem layer switcher (só OSM Standard). Adicionar toggle Standard/Satélite (Esri World Imagery) na Fase 2.
 
     Tipos em src/types/api.ts não são gerados do OpenAPI — sincronizados manualmente. Fase 2: openapi-typescript.
 
-    react-hooks/set-state-in-effect desabilitada no eslint.config.js — falso positivo em reidratação. Revisar quando o plugin amadurecer.
+    react-hooks/set-state-in-effect desabilitada no ESLint — falso positivo em reidratação. Revisar quando o plugin amadurecer.
 
     Sem tratamento global de 401 pós-login — hoje apiFetch limpa token mas não redireciona. Fase 2: interceptor global.
 
@@ -667,90 +503,86 @@ Frontend
 
     ActivityCard mostra title ou cai pra formatActivityType — se ambos vazios, mostrar "Atividade" genérico.
 
-    Lista sem paginação visível — useActivities só busca limit=20. Fase 2.
-
-    Upload sem gestão de "rascunho" — permite navegar pra fora no meio do upload; sem AbortController. Polimento na Fase 2.
+    Upload sem gestão de "rascunho" — permite navegar pra fora no meio do upload; sem AbortController.
 
     Erro de rede no upload cai em mutation.error.message ("Failed to fetch") — sem tratamento amigável.
 
-    Fallback "sem rota" do ActivityDetailPage implementado mas não testado (não há atividade sem rota no banco).
-
-    useSocial.useToggleLike não usa o LikeState retornado pelo POST (só o otimista). Se quiser, dá pra ramificar (POST usa o body; DELETE confia no otimista).
+    Bundle 598 kB (warning do Vite) — code splitting com React.lazy nas rotas pesadas (Leaflet só em /activities/:id) é o próximo passo natural de otimização. Ganho real: primeiro load pra ~250 kB.
 
 Infra / deploy
 
-    vercel.json PRECISA estar em web/ (não na raiz do monorepo) porque o Root Directory do Vercel é web/. Colocar na raiz faz o Vercel ignorar silenciosamente.
+    vercel.json PRECISA estar em web/ (Root Directory do Vercel é web/). Na raiz do monorepo o Vercel ignora silenciosamente.
 
     Preview deploys do Vercel (cada PR gera URL) vão precisar de CORS. Hoje só Production está em ALLOWED_ORIGINS.
 
 Armadilhas conhecidas (CRÍTICO)
 Backend / Python
 
-    bcrypt==4.0.1 obrigatório (4.1+ quebra passlib)
+    bcrypt==4.0.1 obrigatório (4.1+ quebra passlib).
 
-    greenlet==3.1.1 explícito no requirements (Python 3.13)
+    greenlet==3.1.1 explícito no requirements (Python 3.13).
 
-    uuid.uuid7 NÃO existe no Python 3.13 — usar from uuid6 import uuid7
+    uuid.uuid7 NÃO existe no Python 3.13 — usar from uuid6 import uuid7.
 
-    DateTime sem timezone=True — bug silencioso
+    DateTime sem timezone=True — bug silencioso.
 
-    include_router sem prefix + @router.post("") = FastAPIError
+    include_router sem prefix + @router.post("") = FastAPIError.
 
-    ResponseValidationError mascara erro do Pydantic — debugar com TypeAdapter
+    ResponseValidationError mascara erro do Pydantic — debugar com TypeAdapter.
 
-    selectinload obrigatório quando schema acessa relação em async
+    selectinload obrigatório quando schema acessa relação em async.
 
-    validation_alias no Pydantic pra ORM→JSON com nome diferente (ex: author: UserPublic = Field(validation_alias="user"))
+    validation_alias no Pydantic pra ORM→JSON com nome diferente (ex: author: UserPublic = Field(validation_alias="user")).
 
-    TYPE_CHECKING pra relationship cross-model sem import circular
+    TYPE_CHECKING pra relationship cross-model sem import circular.
 
-    Swagger pré-preenche Form() com "string" literal — validação defensiva no service
+    Swagger pré-preenche Form() com "string" literal — validação defensiva no service.
 
-    pip install fora da venv cai no Python global
+    pip install fora da venv cai no Python global.
 
-    Ativar a venv antes de rodar uvicorn: .\venv\Scripts\Activate.ps1 (ou python -m uvicorn se o PATH já resolver). O prompt muda pra (venv) PS ...
+    Ativar venv antes de rodar uvicorn: .\venv\Scripts\Activate.ps1 (ou python -m uvicorn se o PATH já resolver). Prompt muda pra (venv) PS ....
 
     Pydantic v2: campo str obrigatório rejeita null com "Field required". Pra aceitar null, precisa str | None = Field(default=None, ...).
 
     Model vs banco: editar nullable=True no model sem migração NÃO altera a coluna.
 
-    Pydantic Settings + list[str]: o valor da env var é parseado via json.loads. Aspas tipográficas (" ") em vez de retas (" ") quebram com SettingsError: error parsing value for field "ALLOWED_ORIGINS". Fix: digitar as aspas manualmente.
+    Pydantic Settings + list[str]: valor da env var é parseado via json.loads. Aspas tipográficas (" ") em vez de retas (" ") quebram com SettingsError: error parsing value for field "ALLOWED_ORIGINS". Fix: digitar as aspas manualmente.
 
 Banco / PostGIS
 
-    Alembic + PostGIS: filtro include_object no env.py
+    Alembic + PostGIS: filtro include_object no env.py.
 
-    Migração com Geometry: adicionar import geoalchemy2 no topo E remover op.create_index do GIST
+    Migração com Geometry: adicionar import geoalchemy2 no topo E remover op.create_index do GIST.
 
-    WKT LINESTRING: ordem é (lon lat). Ex: LINESTRING(-46.63 -23.55, -46.64 -23.56)
+    WKT LINESTRING: ordem é (lon lat). Ex: LINESTRING(-46.63 -23.55, -46.64 -23.56).
 
-    PostGIS + JSONB redundantes — sempre conferir ST_NPoints(route) == jsonb_array_length(raw_track_points)
+    PostGIS + JSONB redundantes — sempre conferir ST_NPoints(route) == jsonb_array_length(raw_track_points).
 
-    Diferença dev/prod: Docker PG 16.4 + PostGIS 3.4; Neon PG 17.11 + PostGIS 3.5
+    Diferença dev/prod: Docker PG 16.4 + PostGIS 3.4; Neon PG 17.11 + PostGIS 3.5.
 
-    ST_AsGeoJSON() retorna string JSON — fazer json.loads() no service. Em alguns casos o driver asyncpg devolve dict direto — defensivamente, checar isinstance(x, dict).
+    ST_AsGeoJSON() retorna string JSON — json.loads() no service. Em alguns casos o driver asyncpg devolve dict direto — defensivamente, checar isinstance(x, dict).
 
 Neon
 
-    PostGIS NÃO vem habilitado por padrão — CREATE EXTENSION IF NOT EXISTS postgis;
+    PostGIS NÃO vem habilitado por padrão — CREATE EXTENSION IF NOT EXISTS postgis;.
 
-    Postgres 18 NÃO tem PostGIS ainda no Neon — usar 17
+    Postgres 18 NÃO tem PostGIS ainda no Neon — usar 17.
 
     Duas connection strings: Pooled (host com -pooler) vs Direct (sem -pooler). Usar Direct com asyncpg.
 
-    Formato: postgresql+asyncpg:// (não postgresql://), ssl=require, sem channel_binding
+    Formato: postgresql+asyncpg:// (não postgresql://), ssl=require, sem channel_binding.
 
 Render
 
-    Blueprint (lê render.yaml), não Website
+    Blueprint (lê render.yaml), não Website.
 
-    Free tier dorme após 15 min — primeira request ~30-50s
+    Free tier dorme após 15 min — primeira request ~30-50s.
 
-    rootDir: backend no render.yaml
+    rootDir: backend no render.yaml.
 
-    startCommand com alembic upgrade head && — idempotente
+    startCommand com alembic upgrade head && — idempotente.
 
-    SECRET_KEY com generateValue: true — diferente da local
+    SECRET_KEY com generateValue: true — diferente da local.
 
 Vercel
 
@@ -764,7 +596,7 @@ Vercel
 
 Frontend / Vite 8 / React 19 / Tailwind 3
 
-    Vite 8 + TS 6: vite-env.d.ts não existe mais — types via tsconfig.app.json → "types": ["vite/client"]
+    Vite 8 + TS 6: vite-env.d.ts não existe mais — types via tsconfig.app.json → "types": ["vite/client"].
 
     erasableSyntaxOnly: true — proíbe enum, namespace, parameter properties. Usar as const.
 
@@ -788,15 +620,23 @@ Frontend / Vite 8 / React 19 / Tailwind 3
 
     FormData no apiFetch: NÃO setar Content-Type: multipart/form-data manualmente. Deixar o browser setar (com boundary).
 
-    npm run dev vs npm run lint vs npm run build: só build roda o ESLint + TS. Dev server sobe mesmo com erro de linter.
+    npm run dev vs npm run lint vs npm run build: só build roda ESLint + TS. Dev server sobe mesmo com erro de linter.
 
     <AuthProvider> no main.tsx — se faltar, useAuth explode em runtime. Não pega no build.
 
     Convenção de exports: componentes = named, páginas = default. Não misturar.
 
-    Link dentro de <Link>: HTML inválido. Solução usada no ActivityCard: o <Link> que navega fica dentro de um <div> wrapper; o autor (<Link>) fica fora do <Link> principal (acima). Quando precisa aninhar (like no card), o botão fica dentro do <Link> mas usa e.preventDefault() + e.stopPropagation() no onClick.
+    Link dentro de <Link>: HTML inválido. Solução no ActivityCard: o <Link> que navega fica dentro de um <div> wrapper; o autor (<Link>) fica fora do <Link> principal (acima). Quando precisa aninhar (like no card), o botão fica dentro do <Link> mas usa e.preventDefault() + e.stopPropagation() no onClick.
 
     NavLink em vez de Link no header: pra rota ativa ter destaque (isActive no className).
+
+    Recharts 3.x: react-is virou peerDependency — precisa instalar (npm install recharts react-is). Sem isso, build quebra com Cannot find module 'react-is'.
+
+    Recharts ResponsiveContainer: precisa de pai com height explícita (style={{ height: "16rem" }}). Sem isso, colapsa a 0px.
+
+    Recharts LineChart com 1 ponto: desenha só o dot (a linha some). Não é bug.
+
+    StatsCards / WeeklyChart: cuidado ao importar formatPace/formatDistance — se não usar, TS quebra o build. Remover import órfão.
 
 Ambiente / tooling
 
@@ -812,9 +652,9 @@ Ambiente / tooling
 
     _scratch/ no .gitignore.
 
-    PowerShell mostra UTF-8 como Latin-1 — dado íntegro pode parecer corrompido (Ã¡, Ã§, Гўв‚¬В¦). O arquivo no disco provavelmente está OK. Se reescrever pra "corrigir", garanta que o editor salva em UTF-8 (VS Code: canto inferior direito).
+    PowerShell mostra UTF-8 como Latin-1 — dado íntegro pode parecer corrompido (Ã¡, Ã§, Гўв‚¬В¦). O arquivo no disco provavelmente está OK. Se reescrever pra "corrigir", garantir que o editor salva em UTF-8 (VS Code: canto inferior direito).
 
-    uvicorn não reconhecido no PowerShell: a venv não está ativada. Ativar com .\venv\Scripts\Activate.ps1 (ou python -m uvicorn app.main:app --reload). Se der erro de execution policy, Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass antes.
+    uvicorn não reconhecido no PowerShell: venv não ativada. .\venv\Scripts\Activate.ps1 (ou python -m uvicorn app.main:app --reload). Se der erro de execution policy, Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass antes.
 
     PowerShell curl é alias de Invoke-WebRequest. Usar curl.exe ou Invoke-RestMethod.
 
@@ -826,6 +666,16 @@ Ambiente / tooling
 
     VS Code desatualizado: erro ts(2307) (módulo não encontrado) com arquivo existente → Ctrl+Shift+P → "TypeScript: Restart TS Server". O npm run build no terminal resolve se for real.
 
+Workflow preferido pelo usuário (NOVO)
+
+    Testar direto em produção (Render + Vercel) — o sistema já está no ar. Build local só pra garantir TS/ESLint limpos antes do push. Subir Docker + uvicorn + vite local é overhead sem ganho proporcional.
+
+    Sempre seguir a recomendação do chat — não oferecer A/B/C, escolher o padrão de mercado, justificar em 1 linha, seguir.
+
+    Avisar quando o contexto estiver perto do limite e gerar handoff completo.
+
+    Handoff completo só quando o contexto apertar — não interromper o fluxo de trabalho pra gerar handoff parcial.
+
 Convenções
 
     Comentários/docstrings em português; nomes em inglês.
@@ -836,37 +686,17 @@ Convenções
 
     Commits em português, padrão feat:, fix:, chore:, docs:.
 
-    Blocos incrementais: implementar → testar → commitar.
+    Blocos incrementais: implementar → testar (em prod) → commitar.
 
     Usuário prefere explicações didáticas com o "porquê".
 
-    Chat decide o caminho quando há ambiguidade (não fica perguntando "qual prefere?"). Escolher o padrão de mercado, justificar em 1 linha, seguir. Isso agora é regra explícita: sempre seguir a recomendação do chat, sem oferecer A/B/C.
-
-    Sempre avisar quando estiver perto do limite de contexto e gerar handoff.
+    Chat decide o caminho quando há ambiguidade (não fica perguntando "qual prefere?"). Escolher o padrão de mercado, justificar em 1 linha, seguir.
 
 Estilo de comunicação preferido
 
 Direto ao ponto, blocos de código prontos para copiar/colar, explicações concisas. Sempre avisar quando estiver perto do limite de contexto.
 Usuários de teste
-Local (Docker)
-
-    teste@rumo.com / senha12345 (id: 01a0f49c-8e6d-7506-a1c1-1c8c72c50523, username: testuser)
-
-    teste2@rumo.com / senha12345 (id: 01a0f9c4-0552-721d-90ea-e7b0ff9af1e1, username: teste2)
-
-    User1 segue User2
-
-    User2 tem 2 atividades "Corrida do user2" (7000m, 2400s, 450 kcal)
-
-    User1 tem 1 atividade "Corrida matinal" (5000m, 1800s, 320 kcal)
-
-    Activity do user2 para testes de comments: 01a0f9d8-8431-7d78-a943-bc832533454c
-
-    GPX de teste: backend/samples/sample_run.gpx (2345 pontos, ~7.3km caminhada)
-
-    Usuários criados no 13a.1: novo1@rumo.com, novo2@rumo.com (sem full_name)
-
-Produção (Neon)
+Produção (Neon) — usados agora
 
     prod@rumo.com / senha12345 (username: produser)
 
@@ -874,22 +704,102 @@ Produção (Neon)
 
     (Se prod2 não existir mais, registrar de novo ou criar prod3@rumo.com)
 
+Local (Docker) — não usados no workflow atual
+
+    teste@rumo.com / senha12345 (id: 01a0f49c-8e6d-7506-a1c1-1c8c72c50523, username: testuser)
+
+    teste2@rumo.com / senha12345 (id: 01a0f9c4-0552-721d-90ea-e7b0ff9af1e1, username: teste2)
+
+    User1 segue User2.
+
+    User2 tem 2 atividades "Corrida do user2" (7000m, 2400s, 450 kcal).
+
+    User1 tem 1 atividade "Corrida matinal" (5000m, 1800s, 320 kcal).
+
+    GPX de teste: backend/samples/sample_run.gpx (2345 pontos, ~7.3km caminhada).
+
 Próximo passo (recomendado)
 
-Bloco 13b.7 — Perfil completo. Backend + frontend, ~1 sessão.
+Bloco 15 — Fotos de atividade.
 
 Escopo:
 
-    Backend: adicionar GET /users/{user_id} retornando UserPublic. Sem restrição (qualquer autenticado pode ver o perfil público de outro).
+    Storage: Cloudinary free tier (25 GB/mês) — upload direto do backend, sem configurar bucket AWS. Alternativa: Cloudflare R2 (S3-compatible, free tier generoso).
 
-    Backend: adicionar GET /activities?user_id=... (opcional, pra listar atividades de outro). Precisa decidir visibilidade (dono, seguidor, público) — recomendar seguidor do dono, coerente com o GET /activities/{id} do 13b.6.
+        Env vars no Render: CLOUDINARY_URL (formato cloudinary://API_KEY:API_SECRET@CLOUD_NAME).
 
-    Frontend: ProfilePage usa GET /users/{id} → mostra username/full_name de verdade.
+        SDK: cloudinary (Python) no backend.
 
-    Frontend: ProfilePage lista as atividades do usuário (se o item 2 for feito).
+    Backend:
 
-    Frontend: ActivityDetailPage mostra o autor (via GET /users/{user_id} + o user_id que já vem no ActivityResponse).
+        Model ActivityPhoto (id UUID v7, activity_id FK CASCADE, url, public_id (pra deletar), created_at).
 
-Depois do 13b.7, o próximo grande passo é o 14a (Flutter) — mas antes vale um teste mobile do site atual pra decidir se o Flutter é urgente ou se pode esperar.
+        Migração Alembic.
 
-Teste mobile pendente (do handoff anterior, ainda não feito): abrir https://rumo-wheat.vercel.app no celular, validar navegação (o menu some — pendência conhecida), mapa com toque, upload de GPX. O resultado informa a urgência do 14a.
+        Endpoints:
+
+            POST /activities/{id}/photos — upload multipart (só o dono). Retorna ActivityPhotoResponse.
+
+            GET /activities/{id}/photos — lista (qualquer autenticado que possa ver a atividade).
+
+            DELETE /photos/{photo_id} — só o dono.
+
+        Validação: tipo (jpeg/png/webp), tamanho (limite 10 MB).
+
+    Frontend:
+
+        api/photos.ts — upload/get/delete.
+
+        hooks/usePhotos.ts — useActivityPhotos, useUploadPhoto, useDeletePhoto.
+
+        ActivityDetailPage: grid de fotos abaixo do mapa (com botão de upload pro dono).
+
+        ActivityCard: primeira foto como thumbnail (se existir).
+
+        Componente PhotoGallery (grid responsivo, modal/lightbox simples no clique).
+
+Antes de começar o 15: criar conta no Cloudinary e pegar CLOUDINARY_URL. Configurar env var no Render.
+
+Alternativa se preferir backend-first: 12b (FIT) — só se tiver relógio Garmin/Polar pra testar. Sem hardware, é desenvolvimento no escuro. Não recomendado.
+
+Não recomendado agora: 14a (Flutter) — o site no celular está funcional (menu mobile OK, fluxos testados). Flutter fica pra quando o site no celular não bastar.
+Fixes rápidos pendentes (se bater vontade)
+
+    Invalidar activitiesKeys.lists() no useFollowUser (1 linha em useSocial.ts):
+    ts
+
+    queryClient.invalidateQueries({ queryKey: activitiesKeys.lists() });
+
+    No onSuccess do useFollowUser. Faz a seção de atividades do perfil de outro user atualizar após seguir (sem reload).
+
+    Silenciar warning do Vite (1 linha em vite.config.ts):
+    ts
+
+    build: { chunkSizeWarningLimit: 800 }
+
+    Só esconde o aviso. Não resolve o problema real (bundle 598 kB).
+
+    Code splitting real (~30 min, Fase 2):
+    React.lazy() + Suspense nas rotas. Leaflet só carrega em /activities/:id. Ganho: primeiro load pra ~250 kB.
+
+Teste mobile — resultado
+
+Feito. Menu mobile funcionando (hamburger + drawer). Navegação OK, feed OK, perfil OK, detalhe OK, mapa com pinch-to-zoom OK. Decisão 14a vs 16 resolvida: Flutter fica pra depois, site no celular é usável como MVP mobile.
+
+
+---
+
+## Como retomar (para o próximo chat)
+
+Cola o conteúdo de `docs/HANDOFF.md` (o bloco acima) e diga:
+
+> "Retomando o Rumo. Handoff anexo. Vamos começar o bloco 15 (fotos de atividade)."
+
+O próximo chat já sabe:
+
+- Onde paramos (bloco 16 concluído em produção).
+- Próximo passo recomendado (15 fotos, com Cloudinary).
+- Todas as armadilhas e padrões do projeto.
+- Que **testar em produção** é o workflow atual.
+- Que **sempre seguir a recomendação do chat** (não oferecer A/B/C).
+

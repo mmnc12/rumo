@@ -1,6 +1,7 @@
 import enum
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from geoalchemy2 import Geometry
 from sqlalchemy import (
@@ -21,6 +22,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from uuid6 import uuid7
 
 from app.database import Base
+
+if TYPE_CHECKING:
+    from app.models.activity_photo import ActivityPhoto
 
 
 class ActivityType(str, enum.Enum):
@@ -101,6 +105,15 @@ class Activity(Base):
 
     # Relacionamento com User (opcional, útil para queries futuras)
     user = relationship("User", backref="activities", lazy="raise")
+
+    # Relacionamento com ActivityPhoto (bloco 15)
+    photos: Mapped[list["ActivityPhoto"]] = relationship(
+        "ActivityPhoto",
+        back_populates="activity",
+        cascade="all, delete-orphan",
+        lazy="raise",
+        order_by="ActivityPhoto.created_at",
+    )
 
     # Constraints de sanidade
     __table_args__ = (
