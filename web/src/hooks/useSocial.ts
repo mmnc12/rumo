@@ -10,6 +10,7 @@ import {
   unfollowUser,
   unlikeActivity,
 } from "../api/social";
+import { activitiesKeys } from "./useActivities";
 import type { LikeList } from "../types/api";
 
 export const socialKeys = {
@@ -125,6 +126,10 @@ export function useFollowUser(targetUserId: string) {
       qc.invalidateQueries({ queryKey: ["feed"] });
       qc.invalidateQueries({ queryKey: socialKeys.followers(targetUserId) });
       qc.invalidateQueries({ queryKey: socialKeys.following(targetUserId) });
+      // Atualiza a lista de atividades no perfil do alvo logo apos
+      // seguir/deixar de seguir — sem isso, a secao "Atividades"
+      // so refletia a mudanca de permissao (403 -> 200) no reload.
+      qc.invalidateQueries({ queryKey: activitiesKeys.lists() });
     },
   });
 }

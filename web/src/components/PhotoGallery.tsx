@@ -25,12 +25,12 @@ export function PhotoGallery({
             <button
               type="button"
               onClick={() => setLightbox(photo)}
-              className="block w-full overflow-hidden rounded-lg bg-gray-100"
+              className="block aspect-square w-full overflow-hidden rounded-lg bg-gray-100"
             >
               <img
                 src={photo.url}
                 alt="Foto da atividade"
-                className="h-32 w-full object-cover transition group-hover:scale-105"
+                className="h-full w-full object-cover transition group-hover:scale-105"
                 loading="lazy"
               />
             </button>
