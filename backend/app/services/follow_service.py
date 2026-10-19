@@ -7,7 +7,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.follow import Follow
+from app.models.notification import NotificationType
 from app.models.user import User
+from app.services import notification_service
 from app.services.errors import BadRequestError, ConflictError, NotFoundError
 
 
@@ -23,7 +25,10 @@ async def _get_user_or_404(db: AsyncSession, user_id: UUID) -> User:
 async def follow_user(
     db: AsyncSession, follower_id: UUID, following_id: UUID
 ) -> None:
-    """Cria relação de follow. Levanta ServiceError em caso de conflito."""
+    """Cria relação de follow. Levanta ServiceError em caso de conflito.
+
+    Notifica o alvo só no primeiro follow (replay idempotente via IntegrityError).
+    """
     if follower_id == following_id:
         raise BadRequestError("Cannot follow yourself")
 
@@ -32,10 +37,19 @@ async def follow_user(
     follow = Follow(follower_id=follower_id, following_id=following_id)
     db.add(follow)
     try:
-        await db.commit()
+        # flush força o INSERT — duplicado estoura antes de criarmos a notificação
+        await db.flush()
     except IntegrityError:
         await db.rollback()
         raise ConflictError("Already following this user")
+
+    await notification_service.create_notification(
+        db,
+        recipient_id=following_id,
+        actor_id=follower_id,
+        type=NotificationType.FOLLOW,
+    )
+    await db.commit()
 
 
 async def unfollow_user(

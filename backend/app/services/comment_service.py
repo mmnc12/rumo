@@ -8,24 +8,42 @@ from sqlalchemy.orm import selectinload
 
 from app.models.activity import Activity
 from app.models.comment import Comment
+from app.models.notification import NotificationType
+from app.services import notification_service
 from app.services.errors import ForbiddenError, NotFoundError
 
 
-async def _ensure_activity_exists(db: AsyncSession, activity_id: UUID) -> None:
+async def _get_activity_owner(db: AsyncSession, activity_id: UUID) -> UUID:
+    """Retorna o user_id do dono da atividade. Levanta NotFoundError se não existe."""
     result = await db.execute(
-        select(Activity.id).where(Activity.id == activity_id)
+        select(Activity.user_id).where(Activity.id == activity_id)
     )
-    if result.scalar_one_or_none() is None:
+    owner_id = result.scalar_one_or_none()
+    if owner_id is None:
         raise NotFoundError("Atividade não encontrada")
+    return owner_id
 
 
 async def create_comment(
     db: AsyncSession, user_id: UUID, activity_id: UUID, content: str
 ) -> Comment:
-    await _ensure_activity_exists(db, activity_id)
+    owner_id = await _get_activity_owner(db, activity_id)
 
     comment = Comment(user_id=user_id, activity_id=activity_id, content=content)
     db.add(comment)
+
+    # flush pra garantir que o INSERT do comment aconteceu (e o id, se server-side)
+    # e pra que a notificação referencie um comment_id válido no mesmo commit.
+    await db.flush()
+
+    await notification_service.create_notification(
+        db,
+        recipient_id=owner_id,
+        actor_id=user_id,
+        type=NotificationType.COMMENT,
+        activity_id=activity_id,
+        comment_id=comment.id,
+    )
     await db.commit()
 
     # recarrega com o user carregado (evita MissingGreenlet no schema)
@@ -40,7 +58,7 @@ async def create_comment(
 async def list_comments(
     db: AsyncSession, activity_id: UUID, limit: int, offset: int
 ) -> list[Comment]:
-    await _ensure_activity_exists(db, activity_id)
+    await _get_activity_owner(db, activity_id)  # só valida existência
 
     result = await db.execute(
         select(Comment)
