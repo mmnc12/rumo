@@ -1,9 +1,9 @@
-"""Service de atividades: CRUD + upload de GPX + track (geometria)."""
+"""Service de atividades: CRUD + upload de GPX + track (geometria) + busca."""
 
 import json
 
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -13,6 +13,7 @@ from app.schemas import ActivityCreate
 from app.schemas.activity import TrackResponse
 from app.services import follow_service
 from app.services.errors import NotFoundError
+from app.services.follow_service import following_ids_subquery
 from app.services.gpx_service import map_gpx_type, parse_gpx
 
 
@@ -160,6 +161,57 @@ async def list_activities(
         .limit(limit)
         .offset(offset)
     )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def search_activities(
+    db: AsyncSession,
+    user_id,
+    q: str,
+    limit: int = 20,
+    offset: int = 0,
+) -> list[Activity]:
+    """
+    Busca atividades por texto em title/description, filtrando por visibilidade.
+
+    Regra de visibilidade: dono OU seguido — mesma do feed. Usa o helper
+    `following_ids_subquery` pra não duplicar SQL (fonte de verdade única).
+
+    `ILIKE %q%` NÃO usa índice B-tree — full scan é o que roda hoje.
+    Aceitável até ~5k atividades; criar índice GIN gin_trgm_ops quando crescer
+    (dívida já registrada no handoff).
+
+    Carrega `user` com selectinload porque o router serializa com
+    FeedItemResponse (author aninhado) — async quebra lazy load.
+    """
+    clean_q = q.strip()
+    if not clean_q:
+        # Defensivo: se o router deixar passar, não varre o banco à toa.
+        return []
+
+    pattern = f"%{clean_q}%"
+
+    stmt = (
+        select(Activity)
+        .where(
+            or_(
+                Activity.title.ilike(pattern),
+                Activity.description.ilike(pattern),
+            )
+        )
+        .where(
+            or_(
+                Activity.user_id == user_id,
+                Activity.user_id.in_(following_ids_subquery(user_id)),
+            )
+        )
+        .options(selectinload(Activity.user))
+        .order_by(Activity.started_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+
     result = await db.execute(stmt)
     return list(result.scalars().all())
 

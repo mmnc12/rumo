@@ -1,4 +1,4 @@
-"""Endpoints de atividades (CRUD, estatísticas, curtidas, upload, track)."""
+"""Endpoints de atividades (CRUD, estatísticas, curtidas, upload, track, busca)."""
 
 from uuid import UUID
 
@@ -23,6 +23,7 @@ from app.schemas.activity import (
     ActivityCreate,
     ActivityDetailResponse,
     ActivityResponse,
+    FeedItemResponse,
     TrackResponse,
 )
 from app.schemas.like import LikeListResponse, LikeStateResponse
@@ -76,6 +77,33 @@ async def stats_monthly(
         db, current_user.id, "month", months, activity_type
     )
     return {"months": months, "items": items}
+
+
+# ===== Busca (estática — precisa vir ANTES de /{activity_id}) =====
+
+@router.get("/search", response_model=list[FeedItemResponse])
+@limiter.limit("20/minute")
+async def search_activities(
+    request: Request,
+    q: str = Query(..., min_length=2, max_length=100, description="Texto a buscar em title/description"),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Busca atividades por texto em title/description.
+
+    Visibilidade: dono + seguidos (mesma regra do feed). Retorna
+    `FeedItemResponse` (com author aninhado) pra o frontend renderizar
+    o ActivityCard sem request extra.
+
+    Rate limit: 20/min por IP — mesmo padrão do /users/search (busca
+    textual é full scan, não pode virar vetor de DoS acidental).
+    """
+    return await activity_service.search_activities(
+        db, current_user.id, q, limit, offset
+    )
 
 
 # ===== CRUD =====

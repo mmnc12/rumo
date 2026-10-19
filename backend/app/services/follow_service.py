@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import Select, delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +11,20 @@ from app.models.notification import NotificationType
 from app.models.user import User
 from app.services import notification_service
 from app.services.errors import BadRequestError, ConflictError, NotFoundError
+
+
+def following_ids_subquery(user_id: UUID) -> Select:
+    """
+    Subquery reutilizável: ids dos usuários que `user_id` segue.
+
+    Fonte de verdade da regra de visibilidade "dono + seguidos" — usada
+    no feed e na busca de atividades. Extraída para cá pra não duplicar
+    SQL em dois services (se a regra mudar um dia, muda num lugar só).
+
+    Retorna um `Select` (não executado) — o caller decide onde compor
+    com `.in_(...)` ou `.scalar_subquery()`.
+    """
+    return select(Follow.following_id).where(Follow.follower_id == user_id)
 
 
 async def _get_user_or_404(db: AsyncSession, user_id: UUID) -> User:

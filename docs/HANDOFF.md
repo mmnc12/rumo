@@ -1,168 +1,165 @@
-Produção funcionando (Render + Vercel + Neon + Cloudinary). Cinco blocos concluídos e testados em prod nesta sessão:
+HANDOFF — Rumo (backend + frontend + infra)
+Resumo da sessão
 
-    17 BACKEND (notificações)
+Quatro blocos concluídos e testados em produção nesta sessão, além de duas decisões de produto registradas. O app está estável em prod: rate limiting cirúrgico com slowapi, paginação com "Carregar mais" em feed/activities/profile, author aninhado no GET /activities/{id} (economiza 1 request), e a decisão consciente de não tornar o upload de foto assíncrono agora.
 
-    17 FRONTEND (sino + página + polling 30s)
+Produção:
 
-    17b BACKEND (cover_photo_url + photo_count denormalizados, migração 517496af416f aplicada no Neon)
+    Backend: https://rumo-api-5s0b.onrender.com (Render free tier)
 
-    17b FRONTEND (thumbnail lateral + badge no ActivityCard)
+    Docs: https://rumo-api-5s0b.onrender.com/docs
 
-    Busca de usuários (GET /users/search + página /search + input no header + item no drawer)
+    Frontend: https://rumo-wheat.vercel.app (Vercel)
 
-Todos commitados e pushados. Render e Vercel no head. npm run build limpo (chunk principal 367.26 kB / gzip 112.30 kB, SearchPage em chunk próprio 2.57 kB, @tanstack/react-query compartilhado em client-HjIwgQok.js).
-O que foi feito neste chat
-1. Bloco 17 FRONTEND — Notificações ✅ CONCLUÍDO E TESTADO EM PROD
+Últimos commits no main (origin/main = HEAD):
 
-(Do handoff anterior — resumo: types/api.ts com tipos de notificação, api/notifications.ts, hooks/useNotifications.ts com polling 30s, NotificationBell.tsx, NotificationsPage.tsx, rota protegida em App.tsx com lazy + Suspense, sino no desktop + drawer mobile. Code splitting via rolldownOptions.output.codeSplitting.groups — leaflet e recharts isolados. Testado com prod@rumo.com / prod2@rumo.com.)
-2. Bloco 17b BACKEND — cover_photo_url + photo_count ✅ CONCLUÍDO
+    c55501f — feat: paginacao com carregar mais em feed, activities e profile
 
-Decisão arquitetural: Opção A — denormalização no model Activity (não subquery, não endpoint separado). Justificativa: Strava-faithful, query de feed barata, from_attributes=True mantido nos schemas, fonte da verdade continua em activity_photos mas só photo_service escreve os denormalizados.
+    d6e0d1a — feat: paginacao com carregar mais em feed, activities e profile
 
-Arquivos:
+    1195183 — feat: rate limiting cirúrgico com slowapi em auth, search e uploads
 
-    backend/app/models/activity.py — cover_photo_url: Mapped[str | None] = mapped_column(Text, nullable=True), photo_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0") + CheckConstraint("photo_count >= 0", name="ck_photo_count_non_negative")
+    c16ba61 — feat: busca de usuários (página /search + input no header + drawer)
 
-    backend/app/schemas/activity.py — cover_photo_url: str | None e photo_count: int em ActivityResponse (herda em FeedItemResponse)
+    2198497 — feat: GET /users/search (busca por username/full_name)
 
-    backend/app/services/photo_service.py — upload: se photo_count == 0 seta cover_photo_url = photo.url, sempre incrementa. Delete: await db.flush() no DELETE, depois _recalc_cover_and_count(db, activity) (SELECT ordenado por created_at ASC, seta photo_count = len(photos) e cover_photo_url = photos[0].url if photos else None)
+    (commit do author aninhado foi feito após esta lista — está em main, HEAD atual)
 
-    backend/alembic/versions/517496af416f_add_cover_photo_url_and_photo_count_to.py — ADD COLUMN + backfill (UPDATE ... FROM (subquery com ARRAY_AGG(url ORDER BY created_at ASC))[1]) + CHECK CONSTRAINT
-
-    activity_service.py e feed_service.py — inalterados
-
-Migração aplicada: alembic current → 517496af416f (head). Backfill rodou. Commit + push feitos.
-3. Bloco 17b FRONTEND — Thumbnail no ActivityCard ✅ CONCLUÍDO E TESTADO EM PROD
-
-Arquivos:
-
-    web/src/types/api.ts — cover_photo_url: string | null e photo_count: number em Activity (herda em FeedItem)
-
-    web/src/components/ActivityCard.tsx — thumbnail lateral h-24 w-24 shrink-0 overflow-hidden rounded-lg object-cover à esquerda, <img loading="lazy" decoding="async"> dentro do <Link> existente (sem <Link> aninhado), badge com photo_count total sobreposto no canto inferior direito quando > 1, fallback = layout atual sem placeholder
-
-Testado em prod nos 3 contextos (/feed, /activities, /users/{id}): foto → thumb, sem foto → layout atual, 2+ fotos → badge, clique → /activities/{id}, LikeButton preservado.
-4. Busca de usuários — backend ✅ CONCLUÍDO E TESTADO EM PROD
-
-Arquivos:
-
-    backend/app/services/user_service.py (novo) — search_users(db, q, current_user_id, limit) com ILIKE em username e full_name via or_, User.is_active.is_(True), User.id != current_user_id, ordenação por case de relevância (prefixo username → prefixo full_name → contém), desempate por username ASC. ServiceError(400) se termo < 2 chars.
-
-    backend/app/api/routes/users.py — GET /search antes de GET /{user_id} (armadilha: senão FastAPI tenta UUID("search") → 422). q: Query(min_length=2, max_length=100), limit: Query(default=20, ge=1, le=50), response_model=list[UserPublic], Depends(get_current_user).
-
-    backend/app/schemas/user.py — inalterado (reusa UserPublic com from_attributes=True, mesmo padrão de list_followers/list_following).
-
-Sem índice pg_trgm — decisão consciente: full scan OK até ~5k usuários; dívida registrada. Testado em /docs em prod: q=prod logado como produser → prod2; q=PROD → case-insensitive; q=p → 422; q=zzz → []; sem token → 401.
-5. Busca de usuários — frontend ✅ CONCLUÍDO E TESTADO EM PROD
+1. Bloco — Rate limiting (slowapi) ✅ CONCLUÍDO E TESTADO EM PROD
 
 Arquivos novos:
 
-    web/src/hooks/useDebounce.ts — useDebounce<T>(value, delay=300)
-
-    web/src/hooks/useUserSearch.ts — React Query, queryKey: ["users", "search", trimmed], enabled: trimmed.length >= 2, staleTime: 30_000, encodeURIComponent
-
-    web/src/pages/SearchPage.tsx — default export, input controlado + debounce 300ms, lê q da URL via useSearchParams (deep-linkable: /search?q=prod inicializa input), sincroniza debounced de volta pra URL com replace: true, estados separados (tooShort / isPending / isError / empty / results), avatar circular com inicial do username, link inteiro → /users/{id}
+    backend/app/core/rate_limit.py — limiter = Limiter(key_func=get_remote_address) + rate_limit_handler retornando 429 com {"detail": "Muitas requisições. Tente novamente em instantes."}
 
 Arquivos modificados:
 
-    web/src/App.tsx — rota /search protegida, SearchPage em React.lazy
+    backend/app/main.py — app.state.limiter = limiter + app.add_exception_handler(RateLimitExceeded, rate_limit_handler). Sem SlowAPIMiddleware (limite cirúrgico, não global)
 
-    web/src/components/AppHeader.tsx — <form role="search" onSubmit={goToSearch}> com input type="search" no desktop (uncontrolled, só navega), useNavigate pra /search?q=... ou /search; DrawerLink to="/search" no drawer mobile após "Minhas atividades"
+    backend/app/routers/auth.py — @limiter.limit("5/minute") em POST /login; @limiter.limit("3/hour") em POST /register; request: Request como primeiro parâmetro dos dois
 
-Testado em prod: busca funciona nos 2 sentidos (prod→prod2, prod2→prod), 2 chars mínimo, q=PROD case-insensitive, click → /users/{id}, header Enter → /search?q=... com input preenchido, refresh mantém, drawer mobile navega, deslogado → /login.
-⏳ PRÓXIMO PASSO: Bloco — Rate limiting (slowapi)
+    backend/app/routers/users.py — @limiter.limit("20/minute") em GET /search; request: Request no signature
 
-Contexto do porquê (para o próximo chat): superfície de ataque aumentou com a busca (GET /users/search?q=aa = full scan ILIKE em username + full_name). Free tier frágil: Render dorme, Neon tem limite de conexão, Cloudinary 25 créditos/mês. Um scraper derruba o app pros usuários reais.
-Estado atual relevante (que o próximo chat precisa saber)
+    backend/app/routers/activities.py — @limiter.limit("10/hour") em POST "" (JSON) e em POST /upload (GPX); request: Request nos dois
 
-slowapi NÃO está instalado. backend/requirements.txt atual tem FastAPI 0.115.6, Starlette implícito (compatível com slowapi ≥0.1.9), sem slowapi. Adicionar do zero: pip install slowapi + linha no requirements.txt.
+    backend/app/routers/photos.py — @limiter.limit("20/hour") em POST /activities/{id}/photos; request: Request
 
-backend/app/main.py atual (completo no anexo do usuário):
+    backend/requirements.txt — slowapi>=0.1.10 (na seção Segurança, após python-multipart==0.0.20)
 
-    app = FastAPI(...) module-level com lifespan
+Validado em prod:
 
-    CORS middleware
+    /users/search: requisições 1–20 → 200; 21–25 → 429 ✅
 
-    include_router de auth, activities (/activities), users (/users), feed (/feed), comments, photos, notifications
+    /feed: 200 (não afetado — isolamento cirúrgico confirmado) ✅
 
-    Rotas GET / e GET /health
+    /health: {"status":"ok","database":"ok","ambiente":"production"} ✅
 
-    Não tem app.state.limiter nem exception_handler de 429
+Decisão de design: limite por endpoint, não global. "Não punir usuário legítimo scrollando feed é mais importante que a ameaça." Memory storage do slowapi é por processo — Render free tier roda 1 worker, então funciona. Se escalar para múltiplos workers/instâncias, migrar para Redis (já no requirements.txt, ainda não usado).
+2. Bloco — Paginação em feed/activities/profile ✅ CONCLUÍDO (backend validado; botão espera dados)
 
-backend/app/core/dependencies.py atual (completo no anexo):
+Arquivos modificados:
 
-    oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+    web/src/hooks/useActivities.ts — useActivities e useUserActivities viraram useInfiniteQuery<Activity[]>. getNextPageParam: lastPage.length < limit → undefined; senão allPages.reduce((acc, p) => acc + p.length, 0). initialPageParam: 0
 
-    get_current_user(token, db) -> User — valida JWT, busca User, checa is_active, retorna 403 se inativo
+    web/src/hooks/useSocial.ts — useFeed virou useInfiniteQuery<FeedItem[]>. socialKeys.feed perdeu offset (agora (limit = 20) => ["feed", { limit }]). Resto (useActivityLikes, useToggleLike, useComments, useCreateComment, useDeleteComment, useFollowUser) intacto
 
-    Não tem Request no signature — slowapi exige que o endpoint decorado tenha request: Request no signature (não no dep), então adicionar @limiter.limit(...) em endpoints existentes exige adicionar request: Request como primeiro param em cada endpoint decorado. Isso é invasivo em auth.py, users.py (só POST /activities e POST /photos são críticos), então mapear antes de sair editando.
+    web/src/pages/ActivitiesPage.tsx — activities = data?.pages.flat() ?? []; botão "Carregar mais" com fetchNextPage/hasNextPage/isFetchingNextPage
 
-Escopo proposto
+    web/src/pages/FeedPage.tsx — mesmo padrão
+
+    web/src/pages/ProfilePage.tsx — activitiesData?.pages.flat() ?? []; botão "Carregar mais" na seção Atividades; CTA de 403 intacto
+
+Validação: backend confirmado via curl em prod — GET /activities?limit=2&offset=0 → 1 item; offset=2 → [] (correto). Frontend com lógica correta. Botão não validado visualmente em prod por falta de >20 itens (produser tem 1 atividade hoje). Comportamento esperado quando o volume crescer.
+
+Decisão de design: botão "Carregar mais" (não scroll infinito). Mais simples, testável, sem IntersectionObserver. refetchOnWindowFocus: false no useFeed é crítico — sem isso, trocar de aba descarta as páginas seguintes.
+3. Bloco — author aninhado no GET /activities/{id} ✅ CONCLUÍDO E TESTADO EM PROD
+
+Arquivos modificados:
+
+    backend/app/schemas/activity.py — novo ActivityDetailResponse(ActivityResponse) com author: UserPublic = Field(validation_alias="user"). FeedItemResponse intacto. ActivityResponse não ganhou author (listagem continua leve)
+
+    backend/app/services/activity_service.py — get_activity ganhou .options(selectinload(Activity.user)) na stmt
+
+    backend/app/routers/activities.py — GET /activities/{id} com response_model=ActivityDetailResponse
+
+    web/src/types/api.ts — novo ActivityDetail extends Activity { author: UserPublic }
+
+    web/src/api/activities.ts — getActivity retorna Promise<ActivityDetail>
+
+    web/src/hooks/useActivities.ts — useActivity com useQuery<ActivityDetail> (era useQuery<Activity>)
+
+    web/src/pages/ActivityDetailPage.tsx — removido useUser e a linha const { data: author } = useUser(...); lê activity.author.id/activity.author.username direto
+
+Ganho: 1 request a menos por abertura de atividade (antes eram 2: /activities/{id} + /users/{id}).
+
+Validado em prod: build limpo (chunk ActivityDetailPage 10.58 kB / gzip 3.70 kB), "por @username" aparece no topo, sem request extra de /users/{id}.
+4. Decisões de produto registradas
+
+is_public no GET /activities/{id} — PULADO (decisão A). Mantém a regra atual (dono OU seguidor recebe 200; resto 404). Justificativa: é feature nova com custo de migração + UI + decisão de produto, não é "refinar o que existe". Fila tem dívidas mais baratas e mais impactantes. Reavaliar quando houver necessidade real (ex: compartilhar link público de atividade).
+
+Upload de foto assíncrono — PULADO (dívida consciente). cloudinary.uploader.upload() é síncrono e bloqueia o event loop ~1–3s. Tornar assíncrono exigiria: BackgroundTasks + retorno 202 sem a foto + polling no frontend + estado de "processando" na UI + tratamento de falha tardia. Custo (~1h, muda contrato, piora UX com estado de processamento) > benefício (economizar 1–3s em ação rara). Rate limit de 20/hora já mitiga abuso. Reavaliar se o volume de uploads crescer ou se o Cloudinary começar a demorar >5s.
+Estado atual dos arquivos-chave
 
 Backend:
 
-    pip install slowapi + slowapi no requirements.txt
+    main.py — rate limit registrado; routers com prefixos; lifespan testa Postgres + PostGIS
 
-    backend/app/core/rate_limit.py (novo) — Limiter(key_func=get_remote_address), handler 429 retornando JSON {"detail": "Muitas requisições. Tente novamente em instantes."}
+    core/rate_limit.py — limiter + rate_limit_handler
 
-    main.py — app.state.limiter = limiter, app.add_exception_handler(RateLimitExceeded, handler), app.add_middleware(SlowAPIMiddleware) (ou usar SlowAPIMiddleware se o handler for exception-based — conferir doc do slowapi na hora)
+    core/dependencies.py — get_current_user (JWT, 403 se inativo)
 
-    Decorators cirúrgicos (não globais — rate limit global pune usuário legítimo scrollando feed):
+    routers/auth.py — login 5/min, register 3/hour, me sem limite
 
-        POST /auth/login — 5/minute (brute force)
+    routers/users.py — /search 20/min; follow/unfollow/followers/following/get_user sem limite
 
-        POST /auth/register — 3/hour por IP (spam)
+    routers/activities.py — POST "" e POST /upload 10/hour; GET /{id} retorna ActivityDetailResponse; stats/likes sem limite
 
-        GET /users/search — 20/minute (scraper)
+    routers/photos.py — POST /activities/{id}/photos 20/hour; GET/DELETE sem limite
 
-        POST /activities (upload GPX) — 10/hour (síncrono pesado)
+    routers/feed.py — GET "" aceita limit/offset (default 20, max 100)
 
-        POST /activities/{id}/photos — 20/hour
+    schemas/activity.py — ActivityResponse, ActivityDetailResponse (com author), FeedItemResponse (com author), ActivityListResponse, TrackResponse
 
-        Resto: sem limit neste bloco
+    services/activity_service.py — get_activity com selectinload(Activity.user)
 
-    Cada endpoint decorado ganha request: Request no signature (não quebra chamadas do frontend — request é injetado pelo FastAPI)
+    services/photo_service.py — upload síncrono; _recalc_cover_and_count no delete (fonte da verdade = tabela)
 
-Frontend: nada a fazer — apiFetch já recebe 429, React Query mostra erro. Só testar que a UX de erro é decente (não travar).
+Frontend:
 
-Testar em prod: martelar /users/search com curl.exe até 429, confirmar /feed não afetado, confirmar reset após janela.
+    hooks/useActivities.ts — useActivities/useUserActivities com useInfiniteQuery; useActivity com useQuery<ActivityDetail>; useActivityTrack, useUploadGpx, useDeleteActivity intactos
 
-Estimativa: ~40min backend + ~15min teste.
-Ordem de recomendação pós-rate-limiting
+    hooks/useSocial.ts — useFeed com useInfiniteQuery<FeedItem[]>; useToggleLike otimista; useFollowUser invalida ["feed"] + activitiesKeys.lists()
 
-    Rate limiting (slowapi) ← próximo
+    hooks/useUserSearch.ts — React Query, queryKey: ["users", "search", trimmed], enabled: trimmed.length >= 2, staleTime: 30_000
 
-    is_public no GET /activities/{id} (decisão de produto pendente)
+    hooks/useDebounce.ts — useDebounce<T>(value, delay = 300)
 
-    Paginação em useUserActivities / feed
+    pages/ActivitiesPage.tsx, FeedPage.tsx, ProfilePage.tsx — botão "Carregar mais"
 
-    Upload de foto assíncrono (BackgroundTasks)
+    pages/ActivityDetailPage.tsx — lê activity.author direto
 
-    GET /activities/{id} aninhar author (economiza 2 requests)
+    pages/SearchPage.tsx — busca de usuários com useSearchParams, deep-linkable /search?q=...
 
-    Busca de atividades (feature nova, expande /search pra atividades)
+    types/api.ts — ActivityDetail adicionado
 
-    Bloco 12b: Upload FIT (opcional, se tiver relógio)
-
-    Bloco 14a: Mobile Flutter mínimo
+    api/activities.ts — getActivity retorna ActivityDetail
 
 Dívidas conhecidas (atualizadas)
-Backend
 
-    GET /activities/{id}/photos não valida permissão de visualização
+Backend:
 
-    Upload de foto síncrono (bloqueia event loop ~1–3s)
+    GET /activities/{id}/photos não valida permissão de visualização (qualquer autenticado lista fotos de qualquer atividade)
+
+    Upload de foto síncrono (bloqueia event loop ~1–3s) — decisão consciente de não tornar assíncrono agora
 
     Delete de foto no Cloudinary silencia exceção (foto órfã possível)
 
-    GET /activities/{id} aceita dono OU seguidor. Decisão em aberto: is_public?
+    GET /activities/{id} aceita dono OU seguidor. Decisão is_public em aberto (pulada nesta sessão)
 
-    GET /activities/{id} não aninha author (2 requests no frontend)
+    ~~GET /activities/{id} não aninha author~~ ← RESOLVIDO
 
     calories NULL no upload GPX
 
-    Sem rate limiting ← próximo bloco
-
-    Redis não usado
+    ~~Sem rate limiting~~ ← RESOLVIDO (memory storage; migrar para Redis se escalar workers)
 
     Sem testes automatizados
 
@@ -176,11 +173,9 @@ Backend
 
     Stats só do current_user
 
-    Sem índice pg_trgm pra busca (nova — full scan OK até ~5k users; criar GIN gin_trgm_ops quando crescer)
+    Sem índice pg_trgm para busca (full scan OK até ~5k users; criar GIN gin_trgm_ops quando crescer)
 
-Frontend
-
-    useUserActivities fixa limit=20 — sem paginação
+Frontend:
 
     Contagem de likes no card do feed é local (não persiste)
 
@@ -198,23 +193,21 @@ Frontend
 
     Upload sem rascunho / AbortController
 
-    ~~Sem busca de usuários~~ ← RESOLVIDO
+    SearchPage sincroniza q na URL com replace: true — revisar se histórico precisar ser preservado
 
-    Bundle: resolvido via code splitting (leaflet + recharts separados)
+    Paginação: botão "Carregar mais" não validado visualmente em prod por falta de >20 itens (comportamento esperado quando o volume crescer)
 
-    SearchPage sincroniza q na URL com replace: true — se o histórico precisar ser preservado (ex: voltar pra busca anterior), revisar
+Infra:
 
-Infra
+    Docker Desktop precisa estar aberto para docker compose local
 
-    Docker Desktop precisa estar aberto pra docker compose local
-
-    .env local aponta pra Neon (prod) ou Docker — conferir antes de qualquer alembic comando pra não aplicar migração no banco errado
+    .env local aponta para Neon (prod) ou Docker — conferir antes de qualquer alembic comando
 
     Cloudinary free tier: 25 créditos/mês
 
     vercel.json precisa estar em web/
 
-    Slowapi não instalado no venv (verificar pip show slowapi antes de commitar — se o Render falhar com ImportError, é porque o requirements.txt não foi pushado junto)
+    Slowapi instalado no venv — se Render falhar com ImportError, é porque requirements.txt não foi pushado junto
 
 Roadmap atualizado
 
@@ -238,15 +231,19 @@ Fase 2 — Refinar o que existe (em andamento):
 
     ✅ Busca de usuários (backend + frontend)
 
-    ⏳ Rate limiting (slowapi) ← PRÓXIMO
+    ✅ Rate limiting (slowapi)
 
-    ⏳ is_public no GET /activities/{id}
+    ✅ Paginação em feed/activities/profile
 
-    ⏳ Paginação em feed/activities
+    ✅ author aninhado no GET /activities/{id}
 
-    ⏳ Upload de foto assíncrono
+    ⏳ Busca de atividades (feature nova) ← PRÓXIMO
 
-    ⏳ Bloco 12b: Upload FIT (opcional)
+    ⏳ Upload de foto assíncrono — pulado, dívida consciente
+
+    ⏳ is_public no GET /activities/{id} — pulado, decisão A
+
+    ⏳ Bloco 12b: Upload FIT (opcional, se tiver relógio)
 
     ⏳ Bloco 14a: Mobile Flutter mínimo
 
@@ -255,11 +252,11 @@ Preferências do usuário (CRÍTICO — seguir sempre)
 
     Sempre seguir a recomendação do chat — não oferecer A/B/C. O usuário confia na recomendação e quer ser direcionado.
 
-    Avisar quando o contexto estiver perto do limite e gerar handoff completo.
+    Avisar quando o contexto estiver perto do limite e gerar handoff completo. Não interromper o fluxo sem aviso.
 
-    Handoff completo só quando o contexto apertar — não interromper o fluxo.
+    Handoff completo só quando o contexto apertar.
 
-    Preferência por arquivos completos — quando um arquivo existente muda, entregar o arquivo inteiro (não diff, não "adicione estas linhas").
+    Preferência por arquivos completos — quando um arquivo existente muda, entregar o arquivo inteiro (não diff, não "adicione estas linhas"). Reforçado nesta sessão: sempre arquivo completo, sem exceção.
 
     Explicações didáticas com o "porquê" — concisas mas com justificativa técnica.
 
@@ -267,12 +264,15 @@ Preferências do usuário (CRÍTICO — seguir sempre)
 
     Commits em português: feat:, fix:, chore:, docs:.
 
-    Testar direto em produção. Build local só pra garantir TS/ESLint limpos antes do push.
+    Sempre incluir os comandos de commit (PowerShell) quando for commitar.
+
+    Testar direto em produção. Build local só para garantir TS/ESLint limpos antes do push.
 
     Blocos incrementais: implementar → testar (em prod) → commitar.
 
-Armadilhas conhecidas (CRÍTICO — não repetir)
-Backend / Python
+Armadilhas conhecidas (atualizadas nesta sessão)
+
+Backend / Python:
 
     bcrypt==4.0.1 obrigatório (4.1+ quebra passlib)
 
@@ -286,33 +286,31 @@ Backend / Python
 
     Alembic autogenerate só detecta model se importado em app/models/__init__.py
 
-    Rodar alembic revision --autogenerate duas vezes gera dois arquivos; deletar o errado
-
     alembic revision cria o arquivo; alembic upgrade head aplica
 
     venv é D:\Rumo\backend\.venv (com ponto): .\.venv\Scripts\Activate.ps1
-
-    pip install fora da venv cai no Python global
 
     cloudinary.uploader.upload é síncrono; aceita bytes; destroy(public_id) retorna {result: "not found"} sem exception se errado
 
     Pydantic v2: campo str obrigatório rejeita null
 
-    Model vs banco: editar nullable=True sem migração não altera coluna
+    include_router COM prefix + router que já declara prefix = /prefix/prefix
 
-    include_router COM prefix + router que já declara prefix = /prefix/prefix (aconteceu no bloco 17)
+    IntegrityError no flush → rollback → só então criar notificação
 
-    IntegrityError no flush → rollback → só então criar notificação (padrão bloco 17: flush antes de create_notification)
+    Rotas estáticas ANTES das dinâmicas — /users/search antes de /users/{user_id}
 
-    Rotas estáticas ANTES das dinâmicas — /users/search antes de /users/{user_id} (aconteceu neste bloco: sem isso, FastAPI tenta UUID("search") → 422)
+    slowapi: exige request: Request no signature do endpoint decorado. Sem ele, falha silenciosamente (todas retornam 200). Decorator @limiter.limit(...) fica entre @router.get/post(...) e async def. Ordem invertida = não intercepta.
 
-    slowapi exige request: Request no signature do endpoint decorado — não no dep. Adicionar em cada endpoint com @limiter.limit, não em dependencies.py. Request é injetado pelo FastAPI, não quebra frontend.
+    slowapi + FastAPI module-level app: app.state.limiter = limiter + app.add_exception_handler(RateLimitExceeded, handler) após criar o app. Sem SlowAPIMiddleware se for limite cirúrgico.
 
-    slowapi + FastAPI module-level app: app.state.limiter = limiter + app.add_exception_handler(RateLimitExceeded, handler) após criar o app. Se usar SlowAPIMiddleware, app.add_middleware(SlowAPIMiddleware).
+    get_remote_address lê X-Forwarded-For quando presente — funciona atrás do proxy do Render. Memory storage é por processo (1 worker no free tier = ok).
 
-    Não aplicar rate limit global — punir usuário legítimo scrollando feed é pior que a ameaça. Cirúrgico por endpoint.
+    selectinload em get_activity: como get_activity é chamado por get_activity_track e delete_activity também, o selectinload faz uma query extra nesses casos. Custo desprezível (1 linha indexada por id). Não otimizar prematuramente.
 
-Banco / PostGIS
+    Import de ActivityDetail no useActivities.ts: se useActivity ficar useQuery<Activity>, o activity.author no ActivityDetailPage dá erro TS Property 'author' does not exist on type 'Activity'. Tem que ser useQuery<ActivityDetail>.
+
+Banco / PostGIS:
 
     Alembic + PostGIS: filtro include_object no env.py
 
@@ -324,9 +322,9 @@ Banco / PostGIS
 
     Neon: connection string Direct com asyncpg, ssl=require, sem channel_binding
 
-    ILIKE com %termo% NÃO usa índice B-tree — full scan é o que roda hoje em /users/search. Aceitável até ~5k users; depois, índice GIN com gin_trgm_ops.
+    ILIKE com %termo% NÃO usa índice B-tree — full scan é o que roda hoje em /users/search
 
-Render
+Render:
 
     Free tier dorme após 15 min
 
@@ -338,21 +336,19 @@ Render
 
     Deploy Failed com ImportError: conferir git ls-files + nome exato do símbolo
 
-    Deploy pode ficar velho se requirements.txt não for pushado junto — slowapi novo: adicionar ao requirements.txt E pushar, senão Render falha no pip install no deploy.
+    Deploy pode ficar velho se requirements.txt não for pushado junto — slowapi novo: adicionar ao requirements.txt E pushar junto
 
-Cloudinary
+Cloudinary:
 
     Formato: cloudinary://API_KEY:API_SECRET@CLOUD_NAME
 
-    CLOUDINARY_URL no Render: só o valor
-
     SDK Python lê do ambiente
 
-    secure_url é a URL HTTPS; public_id é pra deletar
+    secure_url é a URL HTTPS; public_id é para deletar
 
     URL original sem transform — thumb do ActivityCard usa secure_url direto (cada transformação consome crédito do free tier: 25/mês)
 
-Vercel
+Vercel:
 
     vercel.json em web/ (Root Directory)
 
@@ -360,13 +356,9 @@ Vercel
 
     Env vars VITE_* só client-side
 
-Frontend / Vite 8 / React 19 / Tailwind 3
+Frontend / Vite 8 / React 19 / Tailwind 3:
 
-    Vite 8 usa Rolldown — build.manualChunks objeto quebrou TS (ManualChunksFunction não aceita chaves); usar build.rolldownOptions.output.codeSplitting.groups com { name, test: /regex/ }
-
-    rollupOptions ainda funciona como alias/compat, mas rolldownOptions é o nome novo — preferir rolldownOptions
-
-    Vite 8 + TS 6: vite-env.d.ts não existe — types via tsconfig.app.json
+    Vite 8 usa Rolldown — build.manualChunks objeto quebrou TS; usar build.rolldownOptions.output.codeSplitting.groups com { name, test: /regex/ }
 
     erasableSyntaxOnly: true — proíbe enum, namespace, parameter properties
 
@@ -390,25 +382,25 @@ Frontend / Vite 8 / React 19 / Tailwind 3
 
     Convenção: componentes = named export, páginas = default export
 
-    <Link> dentro de <Link>: HTML inválido — thumb do ActivityCard é <img> + <span> dentro do <Link> pai, sem <Link> aninhado
-
-    NavLink no header pra rota ativa
+    <Link> dentro de <Link>: HTML inválido — thumb do ActivityCard é <img> + <span> dentro do <Link> pai
 
     Recharts 3.x: react-is peerDependency
 
-    <img> com object-cover + h-32 corta fotos — usar aspect-square + object-cover (grid uniforme) ou object-contain (foto inteira). Aplicado no thumb do ActivityCard (h-24 w-24 + object-cover)
+    <img> com object-cover + h-32 corta fotos — usar aspect-square + object-cover ou object-contain
 
-    Debounce de input é padrão recorrente — useDebounce já existe em web/src/hooks/useDebounce.ts; reusar em vez de duplicar
+    useInfiniteQuery: data é { pages: T[][], pageParams: number[] }, não T[]. Acessar via data?.pages.flat() ?? []. getNextPageParam assume list[T] puro (sem envelope): lastPage.length < limit → undefined. isLoading só no primeiro fetch; isFetchingNextPage para os seguintes. refetchOnWindowFocus: false é crítico — sem isso, trocar de aba descarta as páginas seguintes
 
-    useSearchParams + replace: true — sincronizar input debounced com URL sem encher histórico. Guard if (next === current) return evita loop de setSearchParams → useEffect.
+    React.lazy exige export default no módulo. Se o arquivo colado não tem export default, TS reclama Property 'default' is missing. Sempre confirmar com Select-String -Path <arquivo> -Pattern "export default" depois de colar
 
-    @tanstack/react-query: verificar import (@tanstack/react-query vs react-query v3). staleTime e enabled são iguais, import muda.
+    Colagem errada de arquivo: nesta sessão, o useActivities.ts foi colado dentro do ActivityDetailPage.tsx. Sintoma: Select-String "export default" não retorna nada, e o Get-Content | Select-Object -First 5 mostra imports do hook em vez da página. Sempre validar o conteúdo no disco antes de buildar
 
-Ambiente / tooling
+    @tanstack/react-query: verificar import (@tanstack/react-query vs react-query v3). useInfiniteQuery exige initialPageParam (v5) — sem ele, TS quebra
+
+Ambiente / tooling:
 
     .env nunca commitado; .env.local (web) também não
 
-    Docker Desktop PRECISA estar aberto pra docker compose
+    Docker Desktop PRECISA estar aberto para docker compose
 
     docker compose down -v NUNCA
 
@@ -420,34 +412,28 @@ Ambiente / tooling
 
     VS Code desatualizado: erro ts(2307) com arquivo existente → "TypeScript: Restart TS Server"
 
+    git status antes de commitar é obrigatório — confirmar o número exato de arquivos. Nesta sessão, um commit saiu com 1 arquivo quando deveriam ser 5 (arquivos não salvos no disco ou colados no lugar errado)
+
+    Token no localStorage: a chave do Rumo é rumo.token (com ponto). Usar localStorage.getItem("rumo.token") em testes de console
+
 Usuários de teste
 
     Prod (Neon): prod@rumo.com / senha12345 (username produser); prod2@rumo.com / senha12345
 
     Local (Docker, não usado atualmente): teste@rumo.com / senha12345 (username testuser); teste2@rumo.com / senha12345
 
-URLs de produção
+Próximo bloco recomendado: Busca de atividades (feature nova)
 
-    Backend: https://rumo-api-5s0b.onrender.com
+Por que esse: é o próximo item da fila após os pulos conscientes (upload assíncrono, is_public). É feature nova, sem mudança de contrato existente, valor direto pro usuário (expande a busca de usuários para atividades). ~40–50min.
 
-    Docs: https://rumo-api-5s0b.onrender.com/docs
+Escopo provável:
 
-    Frontend: https://rumo-wheat.vercel.app
+    Backend: GET /activities/search?q=&limit=&offset= com ILIKE em title/description (e talvez activity_type), filtrando por visibilidade (dono + seguidos — mesma regra do feed), rota estática antes de /{activity_id}. Schema de resposta provavelmente FeedItemResponse (com author aninhado) para o frontend renderizar ActivityCard com autor
 
-Comando de retomada para o próximo chat
+    Frontend: expandir SearchPage.tsx com abas "Usuários" / "Atividades"; hook useActivitySearch com React Query + debounce; renderizar ActivityCard nos resultados
 
-    "Retomando o Rumo. Handoff anexo. Cinco blocos concluídos e testados em prod: 17 BACKEND (notificações), 17 FRONTEND, 17b BACKEND (cover_photo_url + photo_count, migração 517496af416f), 17b FRONTEND (thumbnail no ActivityCard), e busca de usuários (backend + frontend). Vamos começar o Bloco — Rate limiting (slowapi)."
+    Rate limit: adicionar @limiter.limit("20/minute") no novo endpoint (mesmo padrão do /users/search)
 
-Primeira ação no próximo chat
+Primeira ação no próximo chat: pedir ao usuário os arquivos backend/app/routers/activities.py, backend/app/services/activity_service.py, backend/app/schemas/activity.py, web/src/pages/SearchPage.tsx, web/src/hooks/useUserSearch.ts (ou useActivitySearch se já existir) para montar o plano com base no estado real, não no handoff.
 
-    Confirmar slowapi instalado no venv: cd D:\Rumo\backend; .\.venv\Scripts\Activate.ps1; pip show slowapi. Se não estiver, pip install slowapi e adicionar ao requirements.txt antes de qualquer outra coisa — senão o deploy no Render falha com ImportError.
-
-    Pedir backend/app/routers/auth.py completo — pra adicionar @limiter.limit("5/minute") em POST /auth/login e 3/hour em POST /auth/register, e adicionar request: Request no signature dos dois.
-
-    Pedir backend/app/routers/activities.py completo (ou ao menos as partes de POST /activities e POST /activities/{id}/photos) — pra decorar 10/hour e 20/hour respectivamente, e adicionar request: Request.
-
-    Pedir backend/app/routers/users.py — já temos o conteúdo completo neste handoff (bloco 4 acima), mas confirmar que o POST /activities/{id}/photos real está em photos.py (não em activities.py), e que o search já está com @limiter.limit("20/minute").
-
-    Entregar: core/rate_limit.py (novo), main.py completo (com app.state.limiter, exception handler, e middleware se necessário), requirements.txt completo com slowapi na seção de segurança, e os arquivos de router completos com decorators + request: Request.
-
-    pip freeze no venv pra confirmar versão do slowapi (esperado 0.1.9+) e compatibilidade com starlette do FastAPI 0.115.6.
+Alternativa se o usuário quiser algo menor: Bloco 12b (Upload FIT, opcional) ou Bloco 14a (Mobile Flutter mínimo). Mas busca de atividades é a recomendação.
