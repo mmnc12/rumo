@@ -57,6 +57,17 @@ class ActivityResponse(BaseModel):
     created_at: datetime
 
 
+class ActivityDetailResponse(ActivityResponse):
+    """Detalhe de uma atividade, com autor aninhado.
+
+    Usado APENAS no GET /activities/{id} — evita um segundo request
+    do frontend pra buscar o autor. A listagem usa ActivityResponse
+    (sem author) pra não inflar o payload do feed/lista.
+    """
+
+    author: UserPublic = Field(validation_alias="user")
+
+
 class ActivityListResponse(BaseModel):
     """Lista paginada de atividades."""
 
@@ -65,10 +76,12 @@ class ActivityListResponse(BaseModel):
     limit: int
     offset: int
 
+
 class FeedItemResponse(ActivityResponse):
     """Atividade no feed, com dados do autor."""
 
     author: UserPublic = Field(validation_alias="user")
+
 
 # ===== Track (geometria pro mapa) =====
 

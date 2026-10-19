@@ -4,7 +4,7 @@
  */
 
 import { apiFetch } from "./client";
-import type { Activity } from "../types/api";
+import type { Activity, ActivityDetail } from "../types/api";
 import type { TrackResponse } from "../types/api";
 
 export interface ListActivitiesParams {
@@ -34,11 +34,13 @@ export async function listActivities(
 }
 
 /**
- * GET /activities/{id} — detalhe de uma atividade.
- * (Vai ser usado no 13a.4, mas já deixo aqui pra não criar arquivo novo.)
+ * GET /activities/{id} — detalhe de uma atividade (com autor aninhado).
+ *
+ * O backend retorna ActivityDetail (Activity + author). Não precisa
+ * de um segundo request pra buscar o perfil do dono.
  */
-export async function getActivity(id: string): Promise<Activity> {
-  return apiFetch<Activity>(`/activities/${id}`);
+export async function getActivity(id: string): Promise<ActivityDetail> {
+  return apiFetch<ActivityDetail>(`/activities/${id}`);
 }
 
 /**

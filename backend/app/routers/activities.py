@@ -21,6 +21,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.activity import (
     ActivityCreate,
+    ActivityDetailResponse,
     ActivityResponse,
     TrackResponse,
 )
@@ -172,17 +173,20 @@ async def list_activities(
     return await activity_service.list_activities(db, target_id, limit, offset)
 
 
-@router.get("/{activity_id}", response_model=ActivityResponse)
+@router.get("/{activity_id}", response_model=ActivityDetailResponse)
 async def get_activity(
     activity_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Retorna detalhes de uma atividade.
+    Retorna detalhes de uma atividade (com autor aninhado).
 
     Acessível pelo dono OU por quem segue o dono (mesma regra do feed).
     Quem não é dono nem seguidor recebe 404 (não vaza existência).
+
+    `author` vem aninhado — o frontend não precisa de um segundo request
+    pra buscar o perfil do dono.
     """
     try:
         return await activity_service.get_activity(

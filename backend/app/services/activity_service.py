@@ -5,6 +5,7 @@ import json
 from geoalchemy2.elements import WKTElement
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models import Activity
 from app.models.activity import ActivityType
@@ -177,8 +178,15 @@ async def get_activity(
     - allow_following=True: dono OU quem segue o dono.
 
     Levanta NotFoundError em ambos os casos (não vaza existência).
+
+    Carrega `user` com selectinload para que ActivityDetailResponse
+    consiga serializar `author` sem lazy load (async quebra lazy load).
     """
-    stmt = select(Activity).where(Activity.id == activity_id)
+    stmt = (
+        select(Activity)
+        .options(selectinload(Activity.user))
+        .where(Activity.id == activity_id)
+    )
     result = await db.execute(stmt)
     activity = result.scalar_one_or_none()
 

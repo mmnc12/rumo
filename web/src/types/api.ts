@@ -42,6 +42,16 @@ export interface Activity {
   photo_count: number;
 }
 
+/**
+ * Detalhe de uma atividade, com autor aninhado.
+ *
+ * Só o GET /activities/{id} retorna este shape — listagem e feed usam
+ * Activity (sem author) e FeedItem (com author) respectivamente.
+ */
+export interface ActivityDetail extends Activity {
+  author: UserPublic;
+}
+
 export interface TokenResponse {
   access_token: string;
   token_type: string;

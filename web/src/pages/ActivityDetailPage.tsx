@@ -1,246 +1,155 @@
-import { useEffect } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { MapContainer, Polyline, TileLayer, useMap } from "react-leaflet";
-import type { LatLngBoundsExpression } from "leaflet";
-
-import { AppHeader } from "../components/AppHeader";
-import { CommentsSection } from "../components/CommentsSection";
-import { LikeButton } from "../components/LikeButton";
-import { PhotoGallery } from "../components/PhotoGallery";
-import { PhotoUpload } from "../components/PhotoUpload";
-import { useAuth } from "../hooks/useAuth";
 import {
-  useActivity,
-  useActivityTrack,
-  useDeleteActivity,
-} from "../hooks/useActivities";
-import { useActivityPhotos, useDeletePhoto } from "../hooks/usePhotos";
-import { useUser } from "../hooks/useProfile";
-import {
-  activityEmoji,
-  formatActivityType,
-  formatDateTime,
-  formatDistance,
-  formatDuration,
-  formatPace,
-} from "../lib/format";
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
-/** Ajusta o zoom do mapa pra enquadrar a rota inteira. */
-function FitBounds({ bbox }: { bbox: [number, number, number, number] }) {
-  const map = useMap();
-  useEffect(() => {
-    // bbox vem [minLon, minLat, maxLon, maxLat] do backend.
-    // Leaflet espera [[lat, lng], [lat, lng]] → [[minLat, minLon], [maxLat, maxLon]]
-    const bounds: LatLngBoundsExpression = [
-      [bbox[1], bbox[0]],
-      [bbox[3], bbox[2]],
-    ];
-    map.fitBounds(bounds, { padding: [24, 24] });
-  }, [bbox, map]);
-  return null;
+import {
+  deleteActivity,
+  getActivity,
+  getActivityTrack,
+  listActivities,
+  uploadGpx,
+} from "../api/activities";
+import type { Activity, ActivityDetail, TrackResponse } from "../types/api";
+
+// ===== Query keys =====
+
+export const activitiesKeys = {
+  all: ["activities"] as const,
+  lists: () => [...activitiesKeys.all, "list"] as const,
+  // Lista infinita: a key não inclui offset (o offset é pageParam).
+  // Inclui o userId para diferenciar "minhas" de "de outro usuário".
+  list: (params?: { limit?: number; userId?: string }) =>
+    [...activitiesKeys.lists(), params] as const,
+  details: () => [...activitiesKeys.all, "detail"] as const,
+  detail: (id: string) => [...activitiesKeys.details(), id] as const,
+  tracks: () => [...activitiesKeys.all, "track"] as const,
+  track: (id: string) => [...activitiesKeys.tracks(), id] as const,
+};
+
+// ===== Lista =====
+
+/**
+ * Lista atividades do usuário autenticado (paginado com "Carregar mais").
+ *
+ * useInfiniteQuery mantém as páginas já carregadas em cache e permite
+ * fetchNextPage sem refazer as anteriores. getNextPageParam assume que
+ * a API retorna list[T] puro (sem envelope): se a última página veio
+ * cheia (=== limit), pode haver mais; se veio menor, é o fim.
+ */
+export function useActivities(params?: { limit?: number }) {
+  const limit = params?.limit ?? 20;
+  return useInfiniteQuery<Activity[]>({
+    queryKey: activitiesKeys.list({ limit }),
+    queryFn: ({ pageParam = 0 }) =>
+      listActivities({ limit, offset: pageParam as number }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (lastPage.length < limit) return undefined;
+      return allPages.reduce((acc, p) => acc + p.length, 0);
+    },
+    staleTime: 30_000,
+    retry: 1,
+  });
 }
 
-export default function ActivityDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const { user } = useAuth();
-
-  const { data: activity, isLoading, error } = useActivity(id);
-  const { data: track } = useActivityTrack(id);
-  const { data: author } = useUser(activity?.user_id);
-  const { data: photos } = useActivityPhotos(id);
-  const deleteMutation = useDeleteActivity();
-  const deletePhoto = useDeletePhoto(id ?? "");
-
-  async function handleDelete() {
-    if (!id) return;
-    if (!confirm("Tem certeza que quer apagar esta atividade?")) return;
-    await deleteMutation.mutateAsync(id);
-    navigate("/activities");
-  }
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <AppHeader />
-        <div className="max-w-4xl mx-auto px-4 py-8">
-          <p className="text-gray-500">Carregando atividade…</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !activity) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <AppHeader />
-        <div className="max-w-4xl mx-auto px-4 py-8">
-          <p className="text-red-600 mb-4">Atividade não encontrada.</p>
-          <Link to="/activities" className="text-rumo-600 hover:underline">
-            ← Voltar
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  const isOwner = !!user && user.id === activity.user_id;
-
-  // Inverte [lon, lat] (GeoJSON) → [lat, lng] (Leaflet)
-  const positions =
-    track?.coordinates.map(([lon, lat]) => [lat, lon] as [number, number]) ?? [];
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <AppHeader />
-
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Cabeçalho */}
-        <div className="mb-6">
-          <Link
-            to="/activities"
-            className="text-sm text-rumo-600 hover:underline mb-2 inline-block"
-          >
-            ← Voltar
-          </Link>
-
-          {author && (
-            <p className="text-sm text-gray-500 mb-1">
-              por{" "}
-              <Link
-                to={`/users/${author.id}`}
-                className="text-rumo-600 hover:underline font-medium"
-              >
-                @{author.username}
-              </Link>
-            </p>
-          )}
-
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <span>{activityEmoji(activity.activity_type)}</span>
-            <span>
-              {activity.title || formatActivityType(activity.activity_type)}
-            </span>
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {formatDateTime(activity.started_at)}
-          </p>
-        </div>
-
-        {/* Mapa */}
-        {positions.length > 0 && track ? (
-          <div
-            className="rounded-lg overflow-hidden shadow-sm mb-6"
-            style={{ height: "24rem" }}
-          >
-            <MapContainer
-              style={{ height: "100%", width: "100%" }}
-              center={[positions[0][0], positions[0][1]]}
-              zoom={13}
-              scrollWheelZoom
-            >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-              <Polyline
-                positions={positions}
-                pathOptions={{ color: "#f97316", weight: 4 }}
-              />
-              <FitBounds bbox={track.bbox} />
-            </MapContainer>
-          </div>
-        ) : (
-          <div
-            className="rounded-lg bg-gray-100 mb-6 flex items-center justify-center"
-            style={{ height: "24rem" }}
-          >
-            <p className="text-gray-500">Sem rota disponível pra esta atividade.</p>
-          </div>
-        )}
-
-        {/* Fotos */}
-        {(isOwner || (photos && photos.length > 0)) && (
-          <section className="mb-6">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-700">Fotos</h2>
-              {isOwner && id && <PhotoUpload activityId={id} />}
-            </div>
-            {photos && photos.length > 0 ? (
-              <PhotoGallery
-                photos={photos}
-                canDelete={isOwner}
-                onDelete={(photoId) => deletePhoto.mutate(photoId)}
-              />
-            ) : (
-              isOwner && (
-                <p className="text-sm text-gray-500">
-                  Nenhuma foto ainda. Adicione a primeira.
-                </p>
-              )
-            )}
-          </section>
-        )}
-
-        {/* Like */}
-        <div className="mb-6">
-          <LikeButton activityId={activity.id} />
-        </div>
-
-        {/* Métricas */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <Metric label="Distância" value={formatDistance(activity.distance_m)} />
-          <Metric label="Duração" value={formatDuration(activity.duration_s)} />
-          <Metric label="Pace médio" value={formatPace(activity.avg_pace_s_per_km)} />
-          <Metric
-            label="Elevação"
-            value={
-              activity.elevation_gain_m
-                ? `${Math.round(activity.elevation_gain_m)} m`
-                : "—"
-            }
-          />
-        </div>
-
-        {/* Descrição */}
-        {activity.description && (
-          <div className="mb-6">
-            <h2 className="text-sm font-semibold text-gray-700 mb-1">
-              Descrição
-            </h2>
-            <p className="text-gray-700 whitespace-pre-wrap">
-              {activity.description}
-            </p>
-          </div>
-        )}
-
-        {/* Comentários */}
-        <div className="mb-6">
-          <CommentsSection activityId={activity.id} />
-        </div>
-
-        {/* Deletar — só o dono */}
-        {isOwner && (
-          <div className="pt-4 border-t border-gray-200">
-            <button
-              onClick={handleDelete}
-              disabled={deleteMutation.isPending}
-              className="text-sm text-red-600 hover:text-red-800 hover:underline disabled:opacity-50"
-            >
-              {deleteMutation.isPending ? "Apagando…" : "Apagar atividade"}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+/**
+ * Lista atividades de um usuário específico (perfil público).
+ *
+ * `enabled: !!userId` evita disparar antes do id resolver.
+ * Retorna 403 do backend se o usuário logado não segue o alvo —
+ * o componente trata esse erro (mostra CTA "siga pra ver").
+ */
+export function useUserActivities(userId: string | undefined) {
+  const limit = 20;
+  return useInfiniteQuery<Activity[]>({
+    queryKey: activitiesKeys.list({ userId, limit }),
+    queryFn: ({ pageParam = 0 }) =>
+      listActivities({ userId: userId!, limit, offset: pageParam as number }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (lastPage.length < limit) return undefined;
+      return allPages.reduce((acc, p) => acc + p.length, 0);
+    },
+    enabled: !!userId,
+    staleTime: 30_000,
+    retry: 1,
+  });
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg bg-white shadow-sm p-4">
-      <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
-      <p className="text-lg font-semibold text-gray-900 mt-1">{value}</p>
-    </div>
-  );
+// ===== Detalhe =====
+
+/**
+ * Busca uma atividade específica do usuário.
+ *
+ * Retorna ActivityDetail (Activity + author aninhado) — o backend
+ * já manda o autor junto, então não precisa de segundo request.
+ * `enabled: !!id` evita disparar a query quando o id ainda não resolveu.
+ */
+export function useActivity(id: string | undefined) {
+  return useQuery<ActivityDetail>({
+    queryKey: activitiesKeys.detail(id!),
+    queryFn: () => getActivity(id!),
+    enabled: !!id,
+    staleTime: 30_000,
+    retry: 1,
+  });
+}
+
+// ===== Track (geometria pro mapa) =====
+
+/**
+ * Busca a geometria da rota de uma atividade.
+ *
+ * staleTime 5 min: a geometria de uma atividade nunca muda depois de criada
+ * (não há edição de rota), então cache agressivo é seguro.
+ */
+export function useActivityTrack(id: string | undefined) {
+  return useQuery<TrackResponse>({
+    queryKey: activitiesKeys.track(id!),
+    queryFn: () => getActivityTrack(id!),
+    enabled: !!id,
+    staleTime: 5 * 60_000,
+    retry: 1,
+  });
+}
+
+// ===== Upload =====
+
+/**
+ * Faz upload de um GPX e invalida a lista pra refletir a nova atividade.
+ */
+export function useUploadGpx() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      file,
+      meta,
+    }: {
+      file: File;
+      meta?: { title?: string; activity_type?: string; description?: string };
+    }) => uploadGpx(file, meta),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: activitiesKeys.all });
+    },
+  });
+}
+
+// ===== Delete =====
+
+/**
+ * Remove uma atividade e invalida listas + caches de detalhe/track.
+ */
+export function useDeleteActivity() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteActivity(id),
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: activitiesKeys.all });
+      queryClient.removeQueries({ queryKey: activitiesKeys.detail(id) });
+      queryClient.removeQueries({ queryKey: activitiesKeys.track(id) });
+    },
+  });
 }
