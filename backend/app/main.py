@@ -1,5 +1,4 @@
 from contextlib import asynccontextmanager
-from app.routers import activities, auth, comments, feed, photos, users
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +6,15 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database import engine
+from app.routers import (
+    activities,
+    auth,
+    comments,
+    feed,
+    notifications,
+    photos,
+    users,
+)
 
 
 @asynccontextmanager
@@ -51,6 +59,7 @@ app.include_router(users.router, prefix="/users", tags=["users"])
 app.include_router(feed.router, prefix="/feed", tags=["feed"])
 app.include_router(comments.router, tags=["comments"])
 app.include_router(photos.router, tags=["photos"])
+app.include_router(notifications.router)
 
 
 @app.get("/", tags=["Root"])
