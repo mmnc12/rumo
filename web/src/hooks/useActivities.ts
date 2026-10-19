@@ -12,7 +12,7 @@ import {
   listActivities,
   uploadGpx,
 } from "../api/activities";
-import type { Activity, TrackResponse } from "../types/api";
+import type { Activity, ActivityDetail, TrackResponse } from "../types/api";
 
 // ===== Query keys =====
 
@@ -84,10 +84,12 @@ export function useUserActivities(userId: string | undefined) {
 /**
  * Busca uma atividade específica do usuário.
  *
+ * Retorna ActivityDetail (Activity + author aninhado) — o backend
+ * já manda o autor junto, então não precisa de segundo request.
  * `enabled: !!id` evita disparar a query quando o id ainda não resolveu.
  */
 export function useActivity(id: string | undefined) {
-  return useQuery<Activity>({
+  return useQuery<ActivityDetail>({
     queryKey: activitiesKeys.detail(id!),
     queryFn: () => getActivity(id!),
     enabled: !!id,
