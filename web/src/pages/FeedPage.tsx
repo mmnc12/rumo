@@ -17,6 +17,8 @@ export default function FeedPage() {
     isFetchingNextPage,
   } = useFeed();
 
+  // useInfiniteQuery entrega { pages: FeedItem[][], pageParams } — achatamos
+  // para renderizar numa lista só. Cada página já vem com author aninhado.
   const items = data?.pages.flat() ?? [];
 
   return (
