@@ -135,3 +135,32 @@ export interface ActivityPhoto {
   height: number | null;
   created_at: string;
 }
+
+// ===== Notificações (17) =====
+
+export type NotificationType = "like" | "comment" | "follow";
+
+/** Preview da atividade aninhado na notificação (evita carregar a atividade inteira). */
+export interface NotificationActivityPreview {
+  id: string;
+  title: string | null;
+  activity_type: ActivityType;
+}
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  is_read: boolean;
+  created_at: string;
+  actor: UserPublic;
+  activity: NotificationActivityPreview | null;
+  comment_id: string | null;
+}
+
+export interface UnreadCountResponse {
+  count: number;
+}
+
+export interface MarkAllReadResponse {
+  updated: number;
+}
