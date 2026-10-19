@@ -1,4 +1,4 @@
-"""Endpoints de usuários (perfil público, follows)."""
+"""Endpoints de usuários (perfil público, follows, busca)."""
 
 from uuid import UUID
 
@@ -9,7 +9,7 @@ from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import UserPublic
-from app.services import follow_service
+from app.services import follow_service, user_service
 from app.services.errors import ServiceError
 
 router = APIRouter()
@@ -17,6 +17,24 @@ router = APIRouter()
 
 def _handle_service_error(exc: ServiceError) -> HTTPException:
     return HTTPException(status_code=exc.status_code, detail=exc.message)
+
+
+@router.get("/search", response_model=list[UserPublic])
+async def search_users(
+    q: str = Query(..., min_length=2, max_length=100),
+    limit: int = Query(default=20, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Busca usuários por username ou nome (case-insensitive).
+
+    IMPORTANTE: rota estática `/search` declarada ANTES de `/{user_id}`,
+    senão o FastAPI tenta parsear "search" como UUID e retorna 422.
+    """
+    try:
+        return await user_service.search_users(db, q, current_user.id, limit)
+    except ServiceError as exc:
+        raise _handle_service_error(exc)
 
 
 @router.post("/{user_id}/follow", status_code=status.HTTP_204_NO_CONTENT)
