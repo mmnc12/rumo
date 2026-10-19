@@ -58,6 +58,25 @@ export function ActivityCard({ activity, author }: ActivityCardProps) {
         className="block rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow p-4"
       >
         <div className="flex items-start gap-3">
+          {/* Thumbnail lateral (bloco 17b frontend). Dentro do <Link> do card —
+              sem <Link> aninhado, o clique herda a navegacao do pai. */}
+          {activity.cover_photo_url && (
+            <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg">
+              <img
+                src={activity.cover_photo_url}
+                alt={title}
+                loading="lazy"
+                decoding="async"
+                className="h-full w-full object-cover"
+              />
+              {activity.photo_count > 1 && (
+                <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                  {activity.photo_count}
+                </span>
+              )}
+            </div>
+          )}
+
           <span className="text-2xl">
             {activityEmoji(activity.activity_type)}
           </span>

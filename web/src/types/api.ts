@@ -36,6 +36,10 @@ export interface Activity {
   avg_speed_mps: number | null;
   created_at: string;
   updated_at: string;
+  /** URL Cloudinary da primeira foto (denormalizado, bloco 17b backend). */
+  cover_photo_url: string | null;
+  /** Quantidade total de fotos (denormalizado, bloco 17b backend). */
+  photo_count: number;
 }
 
 export interface TokenResponse {
