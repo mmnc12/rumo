@@ -52,6 +52,8 @@ class ActivityResponse(BaseModel):
     calories: int | None
     avg_pace_s_per_km: int | None
     avg_speed_mps: float | None
+    cover_photo_url: str | None
+    photo_count: int
     created_at: datetime
 
 

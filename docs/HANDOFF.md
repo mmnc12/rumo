@@ -1,74 +1,39 @@
-Visão do produto (NORTE — ler antes de qualquer decisão)
+O Rumo é um app de exercício físico ambicioso, semelhante ao Strava. Não é um projeto de portfólio nem um CRUD de treinos. O objetivo é produção real, com usuários reais usando no dia a dia.
 
-O Rumo é um app de exercício físico ambicioso, semelhante ao Strava. Não é
-um projeto de portfólio nem um CRUD de treinos. O objetivo é produção real,
-com usuários reais usando no dia a dia.
+Quando estiver em dúvida sobre uma decisão técnica, perguntar: isso aproxima o Rumo do Strava ou afasta?
 
-Quando estiver em dúvida sobre uma decisão técnica, perguntar: isso
-aproxima o Rumo do Strava ou afasta?
-
-    "Expor raw_track_points no ActivityResponse?" → Não. Endpoint dedicado
-    de geometria (/track) pra não pesar a listagem.
+    "Expor raw_track_points no ActivityResponse?" → Não. Endpoint dedicado de geometria (/track) pra não pesar a listagem.
 
     "Upload GPX síncrono ou background?" → MVP síncrono; futuro fila (arq/Celery).
 
     "SQLite pra simplificar?" → Não. PostGIS é obrigatório (Strava é geo-first).
 
-O Rumo NÃO é:
+O Rumo NÃO é: ❌ projeto de portfólio, ❌ CRUD de exercícios, ❌ clone literal do Strava.
+O Rumo É: ✅ rede social de exercícios, ✅ produto real em produção.
 
-    ❌ Projeto de portfólio.
+Roadmap em fases (vertical slice, não horizontal):
 
-    ❌ CRUD de exercícios.
+    Fase 1 — Deploy + primeira feature visível ✅ CONCLUÍDA (blocos 11, 13a, 13b, 13b.7, fix menu mobile)
 
-    ❌ Clone literal do Strava.
+    Fase 2 — Refinar o que existe (em andamento):
 
-O Rumo É:
+        ✅ Bloco 16: Perfil + stats visuais
 
-    ✅ Rede social de exercícios.
+        ✅ Bloco 15: Fotos de atividade (Cloudinary)
 
-    ✅ Produto real, em produção.
+        ✅ Fixes pós-15: enquadramento + invalidação no follow
 
-Roadmap em fases (vertical slice, não horizontal)
+        ✅ Bloco 17 BACKEND: Notificações in-app (model + triggers + endpoints) ← concluído agora
 
-Construir features completas atravessando backend + frontend + mobile,
-em vez de terminar o backend inteiro antes de começar o frontend.
+        ⏳ Bloco 17 FRONTEND: Notificações in-app ← PRÓXIMO
 
-Fase 1 — Deploy + primeira feature visível ✅ CONCLUÍDA
+        ⏳ Bloco 12b: Upload FIT (opcional, se houver relógio)
 
-    Bloco 11: Deploy backend (Render + Neon)
+        ⏳ Bloco 14a: Mobile Flutter mínimo
 
-    Bloco 13a: Frontend mínimo (React/Vercel)
+    Fase 3 — Diferenciais do Strava (longo prazo): segments, leaderboards, achievements, análise de treino
 
-    Bloco 13b: Social no frontend completo
-
-    Bloco 13b.7: Perfil completo (backend + frontend)
-
-    Fix: menu mobile (hamburger + drawer)
-
-Fase 2 — Refinar o que existe (em andamento)
-
-    ✅ Bloco 16: Perfil + stats visuais (StatsCards + WeeklyChart + filtro)
-
-    ✅ Bloco 15: Fotos de atividade (backend + frontend + Cloudinary)
-
-    ✅ Fixes rápidos: enquadramento das fotos + invalidação no follow
-
-    ⏳ Bloco 17: Notificações (in-app primeiro, push depois) ← próximo recomendado
-
-    ⏳ Bloco 12b: Upload FIT (opcional, se houver relógio pra testar)
-
-    ⏳ Bloco 14a: Mobile Flutter mínimo
-
-Fase 3 — Diferenciais do Strava (longo prazo)
-
-    Bloco 18+: segments, leaderboards, achievements, análise de treino
-
-O que NÃO fazer: tentar "terminar o backend antes de tudo". Atrasa
-meses, mata motivação, ignora que o frontend ensina o backend. O 13b
-provou isso (GET /activities/{id} só existia pro dono até o feed expor
-a necessidade de abrir pra seguidores). O 13b.7 reforçou (perfil só
-mostrava UUID até precisar de username real). O 15 reforçou de novo
-(fotos só entraram quando o detalhe pediu).
+O que NÃO fazer: tentar "terminar o backend antes de tudo". Atrasa meses, mata motivação, ignora que o frontend ensina o backend.
 Estado atual do projeto
 
 Em produção, testado e funcionando:
@@ -97,51 +62,60 @@ Em produção, testado e funcionando:
 
     ✅ Menu mobile (hamburger + drawer) no header
 
-    ✅ Fotos de atividade (bloco 15):
+    ✅ Fotos de atividade (Cloudinary: upload multipart, galeria grid, lightbox, delete pro dono)
 
-        Upload multipart via Cloudinary (backend)
+    ✅ Fixes pós-15 (enquadramento aspect-square + object-cover, invalidação activitiesKeys.lists() no follow)
 
-        Galeria no detalhe (grid uniforme aspect-square + lightbox + delete pro dono)
+    ✅ Bloco 17 BACKEND — Notificações in-app:
 
-        Storage: Cloudinary free tier (cloud name bmmu9a3y)
+        Model Notification (UUID v7, recipient/actor/type/activity/comment/is_read/created_at)
 
-    ✅ Fixes rápidos pós-15:
+        Migração Alembic aplicada
 
-        Enquadramento das fotos na galeria (aspect-square + object-cover — grid uniforme, sem cortes desproporcionais)
+        notification_service.py (create/list/count_unread/mark_read/mark_all_read)
 
-        useFollowUser invalida activitiesKeys.lists() — seção de atividades no perfil de outro user atualiza sem reload após seguir
+        Triggers nos 3 fluxos existentes: like (só no primeiro, idempotente), comment (com comment_id), follow (só no primeiro)
 
-    ✅ Deploy: Render (backend) + Vercel (frontend) + Neon (banco) + Cloudinary (imagens)
+        Auto-ação skip: recipient_id == actor_id → não cria notificação
 
-Pendências conhecidas (dívidas, não bloqueiam):
+        Endpoints: GET /notifications, GET /notifications/unread-count, POST /notifications/{id}/read, POST /notifications/read-all
 
-    Thumbnail de foto no ActivityCard do feed — não implementado. Recomendação: só fazer quando o backend expuser cover_photo_url ou photo_count no ActivityResponse (evita 20 requests por feed).
+        Todos testados em produção e funcionando
 
-    useUserActivities fixa limit=20 — sem paginação visível.
+Deploy: Render (backend) + Vercel (frontend) + Neon (banco) + Cloudinary (imagens)
+Pendências conhecidas (dívidas, não bloqueiam)
 
-    Bundle 598 kB (warning do Vite) — code splitting com React.lazy planejado.
+    Thumbnail de foto no ActivityCard do feed — só quando o backend expuser cover_photo_url ou photo_count no ActivityResponse
 
-    Stats só no próprio perfil (endpoints /stats/* são do current_user).
+    useUserActivities fixa limit=20 — sem paginação visível
 
-    GET /activities/{id}/photos não valida se o usuário pode ver a atividade — qualquer autenticado que saiba o UUID lista fotos. Dívida consciente (mesma linha do "decisão de produto em aberto").
+    Bundle 598 kB (warning do Vite) — code splitting com React.lazy planejado
 
-    Upload de foto é síncrono — cloudinary.uploader.upload bloqueia o event loop ~1–3s. Aceitável no MVP; Fase 3: run_in_threadpool ou fila.
+    Stats só no próprio perfil (endpoints /stats/* são do current_user)
 
-    Delete de foto no Cloudinary silencia exceção — se o Cloudinary falhar, a foto some do banco mas fica órfã no Cloudinary. Fase 3: job de limpeza.
+    GET /activities/{id}/photos não valida se o usuário pode ver a atividade — dívida consciente
 
-    Sem rate limiting.
+    Upload de foto é síncrono (bloqueia event loop ~1–3s)
 
-    Redis não usado (está no docker-compose, sem consumidor).
+    Delete de foto no Cloudinary silencia exceção (foto órfã possível)
 
-    Sem testes automatizados (tests/ vazia).
+    Sem rate limiting
 
-    UserResponse expõe email/birth_date (só em /auth/me, revisar antes de prod séria).
+    Redis não usado (está no docker-compose, sem consumidor)
 
-    GET /activities/{id}/comments exige auth — se quiser público, remover Depends(get_current_user).
+    Sem testes automatizados (tests/ vazia)
 
-    Upload GPX síncrono — futuro: fila (arq/Celery/RQ).
+    UserResponse expõe email/birth_date (só em /auth/me, revisar antes de prod séria)
 
-    Cold start do Render free tier (~30-50s). Fase 2: subir pro plano pago (~$7/mês).
+    GET /activities/{id}/comments exige auth
+
+    Upload GPX síncrono — futuro: fila
+
+    Cold start do Render free tier (~30-50s)
+
+    Notificações: sem WebSocket/SSE (polling 30s no frontend), sem push, sem agrupamento ("X e mais 3 curtiram"), sem preferências
+
+    Notificações: unfollow/unlike/delete_comment NÃO desfazem a notificação (decisão de produto — Strava também não desfaz)
 
 Stack
 Backend
@@ -150,18 +124,11 @@ Backend
 
     Banco dev: PostgreSQL 16.4 + PostGIS 3.4 (Docker, postgis/postgis:16-3.4)
 
-    Banco prod: Neon (PostGIS habilitado, projeto rumo, branch production,
-    região AWS US East 2 Ohio, PG 17.11 + PostGIS 3.5)
+    Banco prod: Neon (PostGIS habilitado, projeto rumo, branch production, região AWS US East 2 Ohio, PG 17.11 + PostGIS 3.5)
 
     Cache: Redis (Docker, ainda não usado)
 
-    Storage de imagens: Cloudinary (free tier, cloud name bmmu9a3y)
-
-        Env var no Render: CLOUDINARY_URL (formato cloudinary://API_KEY:API_SECRET@CLOUD_NAME)
-
-        SDK Python: cloudinary>=1.41.0 (instalado na venv: 1.46.3)
-
-        Pasta de upload: rumo/activities/{activity_id}
+    Storage: Cloudinary (free tier, cloud name bmmu9a3y, pasta rumo/activities/{activity_id})
 
     Deploy: Render (Blueprint via render.yaml, free tier)
 
@@ -169,13 +136,15 @@ Backend
 
         Docs: https://rumo-api-5s0b.onrender.com/docs
 
+        startCommand: alembic upgrade head && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 2 --timeout 60
+
 Frontend
 
     Vite 8.3.4 + React 19.2.8 + TypeScript 6.0.2
 
     React Router DOM 7.18.4 (SPA, BrowserRouter)
 
-    TanStack Query 5.104.2 (cache/servidor state)
+    TanStack Query 5.104.2
 
     react-hook-form 7.90.0 + zod 4.6.6 + @hookform/resolvers 5.9.1
 
@@ -205,9 +174,10 @@ Repo / IDE / OS
 
     Pacote: npm
 
-    Atenção: a venv do backend é D:\Rumo\backend\.venv (com ponto), não venv.
+    ⚠️ venv do backend é D:\Rumo\backend\.venv (com ponto)
 
-Estrutura de pastas (atualizada após bloco 15 + fixes)
+Estrutura de pastas (atualizada após Bloco 17 backend)
+text
 
 D:\Rumo
 ├── .gitignore, README.md, docker-compose.yml, render.yaml
@@ -218,17 +188,35 @@ D:\Rumo
 │ ├── _scratch\ (NÃO versionado)
 │ ├── samples\ (não versionado — GPX de teste)
 │ ├── alembic\env.py + versions
-│ │ └── 3735c1f73cc7_add_activity_photos.py ← bloco 15
+│ │ ├── 3735c1f73cc7_add_activity_photos.py        ← bloco 15
+│ │ └── <hash>_add_notifications.py                ← bloco 17
 │ ├── app
 │ │ ├── main.py, config.py, database.py
 │ │ ├── core\security.py, core\dependencies.py
-│ │ ├── models{user,activity,activity_photo,follow,like,comment,init}.py
-│ │ ├── schemas{user,activity,stats,like,comment,photo,init}.py
-│ │ ├── routers{auth,activities,feed,users,comments,photos,init}.py
-│ │ └── services{activity_service,gpx_service,stats_service,
-│ │ follow_service,like_service,feed_service,comment_service,
-│ │ photo_service,errors,init}.py
-│ └── tests
+│ │ ├── models\
+│ │ │ ├── user.py, activity.py, activity_photo.py
+│ │ │ ├── follow.py, like.py, comment.py
+│ │ │ ├── notification.py                         ← bloco 17 (NOVO)
+│ │ │ └── __init__.py  (importa TODOS os models)
+│ │ ├── schemas\
+│ │ │ ├── user.py, activity.py, stats.py
+│ │ │ ├── like.py, comment.py, photo.py
+│ │ │ ├── notification.py                         ← bloco 17 (NOVO)
+│ │ │ └── __init__.py
+│ │ ├── routers\
+│ │ │ ├── auth.py, activities.py, feed.py
+│ │ │ ├── users.py, comments.py, photos.py
+│ │ │ ├── notifications.py                        ← bloco 17 (NOVO)
+│ │ │ └── __init__.py
+│ │ └── services\
+│ │   ├── activity_service.py, gpx_service.py
+│ │   ├── stats_service.py, follow_service.py
+│ │   ├── like_service.py, feed_service.py
+│ │   ├── comment_service.py, photo_service.py
+│ │   ├── notification_service.py                 ← bloco 17 (NOVO)
+│ │   ├── errors.py
+│ │   └── __init__.py
+│ └── tests\
 ├── mobile\ (vazio — Flutter entra no 14a)
 └── web
 ├── .env.local (não versionado), .env.example
@@ -254,74 +242,51 @@ D:\Rumo
 │ ├── CommentsSection.tsx ← lista + form + delete
 │ ├── StatsCards.tsx ← 4 cards de totais
 │ ├── WeeklyChart.tsx ← LineChart Recharts
-│ ├── PhotoGallery.tsx ← grid aspect-square + lightbox + delete (bloco 15)
-│ └── PhotoUpload.tsx ← input file + mutation (bloco 15)
+│ ├── PhotoGallery.tsx ← grid aspect-square + lightbox + delete
+│ └── PhotoUpload.tsx ← input file + mutation
 ├── contexts\AuthContext.tsx ← AuthProvider (named export)
 ├── hooks
 │ ├── useAuth.ts
 │ ├── useActivities.ts ← queries + useUploadGpx + useUserActivities + useActivity + useActivityTrack + useDeleteActivity
-│ ├── useSocial.ts ← useFeed/useToggleLike/useComments/useFollowUser (invalida activitiesKeys.lists() no follow)
+│ ├── useSocial.ts ← useFeed/useToggleLike/useComments/useFollowUser
 │ ├── useProfile.ts ← useFollowers/useFollowing/useIsFollowing/useUser
 │ ├── useStats.ts ← useStatsSummary/useStatsWeekly
-│ └── usePhotos.ts ← useActivityPhotos/useUploadPhoto/useDeletePhoto (bloco 15)
+│ └── usePhotos.ts ← useActivityPhotos/useUploadPhoto/useDeletePhoto
 ├── lib\format.ts
 ├── pages
 │ ├── LoginPage.tsx, RegisterPage.tsx ← default export
 │ ├── ActivitiesPage.tsx, UploadPage.tsx ← default export
-│ ├── ActivityDetailPage.tsx ← + autor + delete só pro dono + galeria de fotos
+│ ├── ActivityDetailPage.tsx ← + autor + delete + galeria de fotos
 │ ├── FeedPage.tsx ← default export
 │ └── ProfilePage.tsx ← + username real + atividades + stats (só no próprio)
-├── types\api.ts ← espelho dos schemas Pydantic (inclui ActivityPhoto)
+├── types\api.ts ← espelho dos schemas Pydantic
 ├── App.tsx ← rotas
 ├── main.tsx ← QueryClient + BrowserRouter + AuthProvider
 └── index.css
+
 Models existentes (backend)
-User
 
-    id (UUID v7), email (unique), username (unique), full_name (nullable)
+User: id (UUID v7), email (unique), username (unique), full_name (nullable), hashed_password, weight_kg, height_cm, birth_date, is_active, created_at, updated_at (todos DateTime(timezone=True))
 
-    hashed_password, weight_kg, height_cm, birth_date
+Activity: id (UUID v7), user_id (FK users CASCADE), activity_type (enum: run/walk/cycle/hike/swim/other), title, description, started_at (indexed), finished_at, duration_s, distance_m, elevation_gain_m, calories, avg_pace_s_per_km, avg_speed_mps, route (Geometry LINESTRING 4326), raw_track_points (JSONB), created_at, updated_at. Relacionamentos: user (backref activities, lazy="raise"), photos (lazy="raise")
 
-    is_active, created_at, updated_at (todos DateTime(timezone=True))
+ActivityPhoto: id (UUID v7), activity_id (FK CASCADE, indexed), url (Text, secure_url), public_id (String 255, unique), width, height, created_at. Relacionamentos: activity (lazy="raise")
 
-Activity
+Follow / Like / Comment: inalterados desde o Bloco 10
 
-    id (UUID v7), user_id (FK users CASCADE)
+Notification (bloco 17 — NOVO):
+text
 
-    activity_type (enum: run/walk/cycle/hike/swim/other)
+id: UUID v7
+recipient_id: FK users CASCADE, indexed  ← quem recebe
+actor_id: FK users CASCADE               ← quem causou
+type: String(20)                         ← "like" | "comment" | "follow"
+activity_id: FK activities CASCADE, nullable
+comment_id: FK comments CASCADE, nullable
+is_read: Boolean, default False, indexed
+created_at: DateTime(timezone=True), server_default=now()
 
-    title, description, started_at (indexed), finished_at, duration_s
-
-    distance_m, elevation_gain_m, calories, avg_pace_s_per_km, avg_speed_mps
-
-    route (Geometry LINESTRING 4326), raw_track_points (JSONB)
-
-    created_at, updated_at
-
-    user = relationship("User", backref="activities", lazy="raise")
-
-    photos = relationship("ActivityPhoto", back_populates="activity", cascade="all, delete-orphan", lazy="raise", order_by="ActivityPhoto.created_at")
-
-ActivityPhoto (bloco 15)
-
-    id (UUID v7)
-
-    activity_id (FK activities CASCADE, indexed)
-
-    url (Text) — URL segura do Cloudinary (secure_url)
-
-    public_id (String 255, unique) — usado pra deletar no Cloudinary
-
-    width (int nullable), height (int nullable)
-
-    created_at (DateTime timezone=True)
-
-    activity = relationship("Activity", back_populates="photos", lazy="raise")
-
-Follow / Like / Comment
-
-    Inalterados desde o Bloco 10.
-
+Relacionamentos: recipient, actor, activity, comment (todos lazy="raise" — selectinload obrigatório no service)
 Endpoints existentes (backend)
 Auth & Users
 
@@ -329,7 +294,7 @@ Auth & Users
 
     GET /health — status API + banco
 
-    POST /auth/register — cria (201, 409 se duplicado)
+    POST /auth/register — 201, 409 se duplicado
 
     POST /auth/login — form-urlencoded (username=email), retorna JWT
 
@@ -343,7 +308,7 @@ Auth & Users
 
     GET /users/{user_id}/following?limit&offset — 200, list[UserPublic]
 
-    GET /users/{user_id} — 200, UserPublic (qualquer autenticado)
+    GET /users/{user_id} — 200, UserPublic
 
 Activities
 
@@ -385,54 +350,83 @@ Feed
 
     GET /feed?limit=20&offset=0 — 200, list[FeedItemResponse]
 
-Photos (bloco 15)
+Photos
 
     POST /activities/{activity_id}/photos — 201, multipart file (só o dono)
 
         Validação: image/jpeg, image/png, image/webp; máx 10 MB
 
-        Upload no Cloudinary em rumo/activities/{activity_id}
+    GET /activities/{activity_id}/photos — 200
 
-    GET /activities/{activity_id}/photos — 200, list[ActivityPhotoResponse]
+    DELETE /photos/{photo_id} — 204 (só o dono)
 
-        Não valida permissão de visualização (dívida consciente)
+Notifications (bloco 17 — NOVO)
 
-    DELETE /photos/{photo_id} — 204 (só o dono da atividade)
+    GET /notifications?limit=20&offset=0 — 200, list[NotificationResponse] (do current_user, ordenado por created_at desc)
 
+    GET /notifications/unread-count — 200, { count: int }
+
+    POST /notifications/{notification_id}/read — 204 (404 se não é do recipient)
+
+    POST /notifications/read-all — 200, { updated: int }
+
+Schemas novos (bloco 17):
+python
+
+# app/schemas/notification.py
+class ActivityPreview(BaseModel):
+    id: UUID
+    title: str | None
+    activity_type: str
+
+class NotificationResponse(BaseModel):
+    id: UUID
+    type: str
+    is_read: bool
+    created_at: datetime
+    actor: UserPublic              # aninhado
+    activity: ActivityPreview | None
+    comment_id: UUID | None
+
+class UnreadCountResponse(BaseModel):
+    count: int
+
+class MarkAllReadResponse(BaseModel):
+    updated: int
+
+Nota sobre main.py: o notifications.router é incluído sem prefix/tags no include_router porque o próprio router declara prefix="/notifications", tags=["notifications"]. Passar prefix de novo causaria /notifications/notifications.
 Frontend — padrões e decisões
 web/ como monorepo
 
-    Vercel aponta pra web/ (Root Directory). Render continua em backend/.
+    Vercel aponta para web/ (Root Directory). Render continua em backend/
 
-    .env.local NUNCA versionado.
-
-    vercel.json dentro de web/.
+    .env.local NUNCA versionado. vercel.json dentro de web/
 
 Cliente HTTP (src/api/client.ts)
 
-    apiFetch<T>(path, options) — única porta pro backend.
+    apiFetch<T>(path, options) — única porta pro backend
 
-    Injeta JWT do localStorage (rumo.token) automaticamente.
+    Injeta JWT do localStorage (rumo.token) automaticamente
 
-    body (objeto) → JSON. rawBody (FormData/URLSearchParams) → passa cru.
+    body (objeto) → JSON. rawBody (FormData/URLSearchParams) → passa cru
 
-    FormData NÃO seta Content-Type manualmente.
+    FormData NÃO seta Content-Type manualmente
 
-    401 limpa token automaticamente.
+    401 limpa token automaticamente
 
-    Erros viram ApiError(status, detail).
+    Erros viram ApiError(status, detail)
 
 Auth (AuthContext + useAuth + ProtectedRoute)
 
-    Token em localStorage; user em memória.
+    Token em localStorage; user em memória
 
-    Boot do app chama GET /auth/me se houver token.
+    Boot do app chama GET /auth/me se houver token
 
-    register() faz login automático.
+    register() faz login automático
 
-    ProtectedRoute redireciona pra /login guardando state.from.
+    ProtectedRoute redireciona pra /login guardando state.from
 
-    <AuthProvider> PRECISA envolver <App> no main.tsx.
+    <AuthProvider> PRECISA envolver <App> no main.tsx
 
 Rotas atuais (App.tsx)
 
@@ -454,15 +448,9 @@ Rotas atuais (App.tsx)
 
 Convenção de exports (IMPORTANTE)
 
-    Componentes reutilizáveis → named export
+    Componentes reutilizáveis → named export: AppHeader, ProtectedRoute, ActivityCard, LikeButton, CommentsSection, StatsCards, WeeklyChart, PhotoGallery, PhotoUpload
 
-        AppHeader, ProtectedRoute, ActivityCard, LikeButton,
-        CommentsSection, StatsCards, WeeklyChart, PhotoGallery, PhotoUpload
-
-    Páginas → default export
-
-        ActivitiesPage, UploadPage, LoginPage, RegisterPage,
-        ActivityDetailPage, FeedPage, ProfilePage
+    Páginas → default export: ActivitiesPage, UploadPage, LoginPage, RegisterPage, ActivityDetailPage, FeedPage, ProfilePage
 
 Query keys (TanStack)
 
@@ -482,103 +470,98 @@ Query keys (TanStack)
 
 Social
 
-    useFeed → ["feed", { limit, offset }], staleTime 30s.
+    useFeed → ["feed", { limit, offset }], staleTime 30s
 
-    useToggleLike → otimista com rollback. NÃO invalida feed.
+    useToggleLike → otimista com rollback. NÃO invalida feed
 
-    useFollowUser → invalida ["feed"] + ["followers", id] + ["following", id] + activitiesKeys.lists() (fix pós-15).
+    useFollowUser → invalida ["feed"] + ["followers", id] + ["following", id] + activitiesKeys.lists()
 
-    useIsFollowing → busca following do próprio user e checa se alvo está lá.
+    useIsFollowing → busca following do próprio user e checa se alvo está lá
 
-    Like no card: estado local. Like no detalhe: persistido (GET /likes).
+    Like no card: estado local. Like no detalhe: persistido (GET /likes)
 
-    Clique no coração dentro de <Link>: e.preventDefault() + e.stopPropagation().
+    Clique no coração dentro de <Link>: e.preventDefault() + e.stopPropagation()
 
 Perfil
 
-    ProfilePage usa useUser + useUserActivities + useIsFollowing + useFollowUser.
+    ProfilePage usa useUser + useUserActivities + useIsFollowing + useFollowUser
 
-    Stats só se isSelf === true.
+    Stats só se isSelf === true
 
-    Filtro por tipo: Tudo/run/walk/cycle/hike/swim.
+    Filtro por tipo: Tudo/run/walk/cycle/hike/swim
 
-    403 → CTA "Siga @username...".
+    403 → CTA "Siga @username..."
 
-    Stats: 4 cards + WeeklyChart.
+    Stats: 4 cards + WeeklyChart
 
 Fotos
 
-    useActivityPhotos(id) — query, enabled: !!id, staleTime 30s.
+    useActivityPhotos(id) — query, enabled: !!id, staleTime 30s
 
-    useUploadPhoto / useDeletePhoto — mutations, invalidam photosKeys.list(activityId).
+    useUploadPhoto / useDeletePhoto — mutations, invalidam photosKeys.list(activityId)
 
-    PhotoUpload — input escondido + botão "+ Adicionar foto"; aceita jpeg/png/webp.
+    PhotoUpload — input escondido + botão "+ Adicionar foto"; aceita jpeg/png/webp
 
-    PhotoGallery — grid aspect-square + object-cover (uniforme), lightbox, ✕ no hover (só dono).
+    PhotoGallery — grid aspect-square + object-cover (uniforme), lightbox, ✕ no hover (só dono)
 
 Formatters (src/lib/format.ts)
 
-    formatDistance, formatDuration, formatPace, formatSpeed,
-    formatDateTime, formatRelativeDate, formatActivityType, activityEmoji
+    formatDistance, formatDuration, formatPace, formatSpeed, formatDateTime, formatRelativeDate, formatActivityType, activityEmoji
 
 Tailwind
 
-    Paleta rumo-50 … rumo-900 (laranja). Primária: rumo-500 = #f97316.
+    Paleta rumo-50 … rumo-900 (laranja). Primária: rumo-500 = #f97316
 
-    Cor hardcoded no Recharts (#f97316) — se mudar a paleta, atualizar WeeklyChart.tsx.
+    Cor hardcoded no Recharts (#f97316) — se mudar a paleta, atualizar WeeklyChart.tsx
 
 Tipos (src/types/api.ts)
 
-    ActivityType, UserPublic, UserResponse, Activity, TokenResponse,
-    ValidationErrorDetail, TrackResponse, FeedItem, LikeState, LikeList,
-    Comment, StatsSummary, StatsPeriod, StatsWeeklyResponse, StatsMonthlyResponse,
-    ActivityPhoto
+    ActivityType, UserPublic, UserResponse, Activity, TokenResponse, ValidationErrorDetail, TrackResponse, FeedItem, LikeState, LikeList, Comment, StatsSummary, StatsPeriod, StatsWeeklyResponse, StatsMonthlyResponse, ActivityPhoto
 
-    Interface da atividade se chama Activity (não ActivityResponse).
+    Interface da atividade se chama Activity (não ActivityResponse)
 
-    Tipos não são gerados do OpenAPI — sincronizados manualmente.
+    Tipos não são gerados do OpenAPI — sincronizados manualmente
+
+    ⚠️ Próximo turno precisa adicionar: NotificationType, Notification, NotificationActor (ou reusar UserPublic), NotificationActivityPreview, UnreadCountResponse, MarkAllReadResponse
 
 Produção (Render + Neon + Vercel + Cloudinary)
 Backend
 
     API: https://rumo-api-5s0b.onrender.com
 
-    Deploy: git push origin main → Render rebuilda → alembic upgrade head → gunicorn.
+    Docs: https://rumo-api-5s0b.onrender.com/docs
 
-    Free tier dorme após 15 min. Primeira request ~30-50s.
+    Deploy: git push origin main → Render rebuilda → alembic upgrade head → gunicorn
 
-    Env vars: DATABASE_URL, ENVIRONMENT=production, DEBUG=false, SECRET_KEY,
-    ALGORITHM=HS256, ACCESS_TOKEN_EXPIRE_MINUTES=30, PYTHON_VERSION=3.13.7,
-    CLOUDINARY_URL (cloudinary://API_KEY:API_SECRET@bmmu9a3y), ALLOWED_ORIGINS
-    json
+    Free tier dorme após 15 min. Primeira request ~30-50s
 
-    ["http://localhost:5173","https://rumo-wheat.vercel.app"]
+    Env vars: DATABASE_URL, ENVIRONMENT=production, DEBUG=false, SECRET_KEY, ALGORITHM=HS256, ACCESS_TOKEN_EXPIRE_MINUTES=30, PYTHON_VERSION=3.13.7, CLOUDINARY_URL (cloudinary://API_KEY:API_SECRET@bmmu9a3y), ALLOWED_ORIGINS (JSON: ["http://localhost:5173","https://rumo-wheat.vercel.app"])
 
 Cloudinary
 
-    Free tier: 25 créditos/mês (janela móvel de 30 dias).
+    Free tier: 25 créditos/mês (janela móvel de 30 dias)
 
     Cloud name: bmmu9a3y
 
     Pasta: rumo/activities/{activity_id}
 
-    CLOUDINARY_URL no Render (sem prefixo CLOUDINARY_URL=, sem aspas).
+    CLOUDINARY_URL no Render: só o valor, sem prefixo, sem aspas
 
-    SDK lê automaticamente do ambiente.
+    SDK lê automaticamente do ambiente
 
-    Secret nunca no frontend/GitHub/chat.
+    Secret nunca no frontend/GitHub/chat
 
 Frontend
 
     App: https://rumo-wheat.vercel.app
 
-    Deploy: git push origin main → Vercel rebuilda.
+    Deploy: git push origin main → Vercel rebuilda
 
-    Root Directory: web/.
+    Root Directory: web/
 
-    Env var: VITE_API_URL=https://rumo-api-5s0b.onrender.com.
+    Env var: VITE_API_URL=https://rumo-api-5s0b.onrender.com
 
-    SPA fallback: web/vercel.json.
+    SPA fallback: web/vercel.json
 
 Workflow de teste
 
@@ -609,74 +592,92 @@ Blocos concluídos
 
     ✅ Fix pós-15: enquadramento das fotos + invalidação no follow
 
+    ✅ 17 BACKEND: Notificações in-app (model + triggers + endpoints + testado em prod)
+
 Blocos pendentes
 
-    ⏳ 17 Notificações — in-app primeiro, push depois. Próximo recomendado.
+    ⏳ 17 FRONTEND: Notificações in-app ← PRÓXIMO (ver escopo abaixo)
 
-    ⏳ 12b Upload FIT — opcional, se houver relógio Garmin/Polar.
+    ⏳ 12b Upload FIT — opcional, se houver relógio Garmin/Polar
 
-    ⏳ 14a Mobile Flutter — quando o site no celular não bastar.
+    ⏳ 14a Mobile Flutter — quando o site no celular não bastar
 
-    ⏳ 18+ Segments, leaderboards, achievements — Fase 3.
+    ⏳ 18+ Segments, leaderboards, achievements — Fase 3
 
-Recomendação de próximo passo
+PRÓXIMO PASSO: Bloco 17 FRONTEND
+Escopo MVP
 
-Bloco 17 — Notificações in-app.
+Arquivos novos:
 
-Motivo: é o que mais aproxima o Rumo de uma rede social de verdade. Sem notificação, o feed vira via de mão única — o user não sabe que recebeu like/comment/follow.
-Escopo (MVP)
+    web/src/api/notifications.ts
 
-Backend:
+        listNotifications(limit?, offset?) → GET /notifications
 
-    Model Notification:
+        getUnreadCount() → GET /notifications/unread-count
 
-        id (UUID v7)
+        markNotificationRead(id) → POST /notifications/{id}/read
 
-        recipient_id (FK users, indexed) — quem recebe
+        markAllNotificationsRead() → POST /notifications/read-all
 
-        actor_id (FK users) — quem causou
+    web/src/hooks/useNotifications.ts
 
-        type (enum: like | comment | follow)
+        notificationsKeys (all, list, unreadCount)
 
-        activity_id (FK activities, nullable) — pra like/comment
+        useNotifications(limit?, offset?) — query, staleTime 30s
 
-        comment_id (FK comments, nullable) — pra comment
+        useUnreadCount() — query com refetchInterval: 30000 (polling 30s)
 
-        is_read (bool, default False, indexed)
+        useMarkRead() — mutation, invalida notificationsKeys.all
 
-        created_at
+        useMarkAllRead() — mutation, invalida notificationsKeys.all
 
-    Migração Alembic
+    web/src/components/NotificationBell.tsx (named export)
 
-    Triggers em like_service, comment_service, follow_service: criar notificação no destinatário (skip se for auto-ação)
+        Ícone de sino (SVG inline)
 
-    Endpoints:
+        Badge com contagem de não lidas (só se count > 0)
 
-        GET /notifications?limit&offset — do current_user, ordenado por created_at desc
+        Link para /notifications
 
-        GET /notifications/unread-count — { count } (pra badge)
+        Usado no AppHeader (desktop + mobile drawer)
 
-        POST /notifications/{id}/read — marca uma como lida
+    web/src/pages/NotificationsPage.tsx (default export)
 
-        POST /notifications/read-all — marca todas como lidas
+        Lista de notificações
 
-    Schema NotificationResponse com actor: UserPublic aninhado + activity_preview (title/tipo) opcional
+        Cada item: avatar do actor, tipo ("curtiu sua atividade", "comentou", "começou a seguir"), preview da atividade (se houver), tempo relativo (formatRelativeDate)
 
-Frontend:
+        Não lida: fundo destacado (bg-rumo-50)
 
-    api/notifications.ts — list/unread-count/read/read-all
+        Clique no item: markRead + navega pra atividade (/activities/:id) ou perfil do actor (/users/:id se follow)
 
-    hooks/useNotifications.ts — useNotifications, useUnreadCount, useMarkRead, useMarkAllRead
+        Botão "Marcar todas como lidas" no topo
 
-    components/NotificationBell.tsx — sino no AppHeader com badge de não lidas
+        Empty state
 
-    pages/NotificationsPage.tsx — lista com avatar do actor, tipo, atividade, tempo relativo; clique → marca como lida + navega pra atividade/perfil
+    Atualizar web/src/App.tsx — adicionar rota /notifications (protegida)
 
-    Polling useUnreadCount a cada 30s (sem WebSocket no MVP)
+    Atualizar web/src/components/AppHeader.tsx — adicionar <NotificationBell /> ao lado do avatar/nome (desktop) e dentro do drawer mobile
 
-    Rota /notifications (protegida)
+    Atualizar web/src/types/api.ts — adicionar tipos:
+    typescript
 
-Não fazer no MVP:
+    export type NotificationType = "like" | "comment" | "follow";
+    export interface NotificationActor { id: string; username: string; full_name: string | null; }
+    export interface NotificationActivityPreview { id: string; title: string | null; activity_type: ActivityType; }
+    export interface Notification {
+      id: string;
+      type: NotificationType;
+      is_read: boolean;
+      created_at: string;
+      actor: UserPublic;  // ou NotificationActor
+      activity: NotificationActivityPreview | null;
+      comment_id: string | null;
+    }
+    export interface UnreadCountResponse { count: number; }
+    export interface MarkAllReadResponse { updated: number; }
+
+Não fazer no MVP
 
     Push notifications (fica pra depois)
 
@@ -685,6 +686,20 @@ Não fazer no MVP:
     Agrupamento ("X e mais 3 curtiram")
 
     Preferências de notificação
+
+Pontos de atenção para o próximo chat
+
+    Polling 30s de useUnreadCount — se o usuário estiver em /notifications, o markRead deve invalidar e refazer o fetch
+
+    Badge no mobile: dentro do drawer, precisa aparecer no item "Notificações"
+
+    Clique em notificação de follow: navega pra /users/{actor.id}, não pra atividade
+
+    Clique em notificação de like/comment: navega pra /activities/{activity.id} (só se activity não for null)
+
+    Ordem dos itens: backend já retorna created_at desc
+
+    NotificationBell no header: cuidado com o layout mobile (hamburger já ocupa espaço)
 
 Pendências técnicas (dívida para limpar)
 Backend
@@ -766,9 +781,11 @@ Backend / Python
 
     include_router sem prefix + @router.post("") = FastAPIError
 
+    include_router COM prefix + router que já declara prefix = /prefix/prefix (aconteceu no bloco 17)
+
     ResponseValidationError mascara erro do Pydantic — debugar com TypeAdapter
 
-    selectinload obrigatório quando schema acessa relação em async
+    selectinload obrigatório quando schema acessa relação em async (crítico em Notification: actor + activity)
 
     validation_alias no Pydantic pra ORM→JSON com nome diferente
 
@@ -800,6 +817,8 @@ Backend / Python
 
     Pydantic Settings + list[str]: parseado via json.loads. Aspas tipográficas quebram
 
+    IntegrityError no flush → rollback → só então criar notificação (padrão do bloco 17: flush antes de create_notification pra evitar notificação órfã em replay idempotente de like/follow)
+
 Banco / PostGIS
 
     Alembic + PostGIS: filtro include_object no env.py
@@ -813,6 +832,8 @@ Banco / PostGIS
     Dev: PG 16.4 + PostGIS 3.4; Prod: PG 17.11 + PostGIS 3.5
 
     ST_AsGeoJSON() retorna string JSON
+
+    Unique constraint (user_id, activity_id) em likes é o que faz o IntegrityError do bloco 17 funcionar — se algum dia removerem, o replay idempotente quebra silenciosamente
 
 Neon
 
@@ -837,6 +858,10 @@ Render
     SECRET_KEY com generateValue: true
 
     CLOUDINARY_URL: colar só o valor, sem prefixo, sem aspas
+
+    Deploy Failed com ImportError/ModuleNotFoundError: conferir se o arquivo foi realmente commitado (git ls-files) e se o nome exato do símbolo importado existe no arquivo destino
+
+    Deploy Failed persistente: Clear build cache & deploy no Dashboard
 
 Cloudinary
 
@@ -950,24 +975,25 @@ Workflow preferido pelo usuário
 
 Convenções
 
-    Comentários/docstrings em português; nomes em inglês.
+    Comentários/docstrings em português; nomes em inglês
 
-    REST com prefixos, response_model sempre.
+    REST com prefixos, response_model sempre
 
-    HTTPException: 401/403/404/409/422/400.
+    HTTPException: 401/403/404/409/422/400
 
-    Commits em português: feat:, fix:, chore:, docs:.
+    Commits em português: feat:, fix:, chore:, docs:
 
-    Blocos incrementais: implementar → testar (em prod) → commitar.
+    Blocos incrementais: implementar → testar (em prod) → commitar
 
-    Explicações didáticas com o "porquê".
+    Explicações didáticas com o "porquê"
 
-    Chat decide o caminho quando há ambiguidade.
+    Chat decide o caminho quando há ambiguidade
 
 Estilo de comunicação preferido
 
 Direto ao ponto, blocos de código prontos para copiar/colar, explicações concisas. Sempre avisar quando estiver perto do limite de contexto.
 Usuários de teste
+
 Produção (Neon) — usados agora
 
     prod@rumo.com / senha12345 (username: produser)
@@ -978,10 +1004,4 @@ Local (Docker) — não usados no workflow atual
 
     teste@rumo.com / senha12345 (username: testuser)
 
-    teste2@rumo.com / senha12345 (username: teste2)
-
-Como retomar (para o próximo chat)
-
-Cola o conteúdo de docs/HANDOFF.md (este bloco) e diga:
-
-    "Retomando o Rumo. Handoff anexo. Bloco 15 + fixes concluídos. Vamos começar o bloco 17 (notificações in-app)."
+    teste2@rumo.com / senha12345

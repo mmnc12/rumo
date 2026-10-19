@@ -25,13 +25,32 @@ async def _get_owned_activity(
     return activity
 
 
+async def _recalc_cover_and_count(
+    db: AsyncSession, activity: Activity
+) -> None:
+    """
+    Recalcula cover_photo_url e photo_count a partir da tabela activity_photos.
+
+    Fonte da verdade é a tabela; os campos denormalizados só espelham.
+    Usado no delete (quando a capa pode mudar) e como fallback de segurança.
+    """
+    result = await db.execute(
+        select(ActivityPhoto)
+        .where(ActivityPhoto.activity_id == activity.id)
+        .order_by(ActivityPhoto.created_at)
+    )
+    photos = list(result.scalars().all())
+    activity.photo_count = len(photos)
+    activity.cover_photo_url = photos[0].url if photos else None
+
+
 async def upload_photo(
     db: AsyncSession,
     activity_id,
     file: UploadFile,
     current_user: User,
 ) -> ActivityPhoto:
-    await _get_owned_activity(db, activity_id, current_user)
+    activity = await _get_owned_activity(db, activity_id, current_user)
 
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
@@ -68,6 +87,12 @@ async def upload_photo(
         height=result.get("height"),
     )
     db.add(photo)
+
+    # Sincroniza denormalizados. Se é a primeira foto, vira capa.
+    if activity.photo_count == 0 or activity.cover_photo_url is None:
+        activity.cover_photo_url = photo.url
+    activity.photo_count = (activity.photo_count or 0) + 1
+
     await db.commit()
     await db.refresh(photo)
     return photo
@@ -105,4 +130,10 @@ async def delete_photo(
         pass  # se falhar no Cloudinary, ainda removemos do banco
 
     await db.delete(photo)
+    await db.flush()  # aplica o DELETE antes de recalcular
+
+    # Recalcula a partir da tabela (fonte da verdade).
+    # Custo: 1 SELECT na tabela de fotos da atividade — aceitável.
+    await _recalc_cover_and_count(db, activity)
+
     await db.commit()

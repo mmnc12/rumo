@@ -92,6 +92,16 @@ class Activity(Base):
     # Pontos brutos com detalhes (altitude, precisão, etc.)
     raw_track_points: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
+    # Thumbnail denormalizado (primeira foto por created_at) — bloco 17b
+    # Mantido em sincronia exclusivamente por photo_service.
+    cover_photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Contagem denormalizada de fotos — bloco 17b
+    # Mantida em sincronia exclusivamente por photo_service.
+    photo_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+
     # Controle
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -120,6 +130,7 @@ class Activity(Base):
         CheckConstraint("distance_m IS NULL OR distance_m >= 0", name="ck_distance_non_negative"),
         CheckConstraint("duration_s IS NULL OR duration_s >= 0", name="ck_duration_non_negative"),
         CheckConstraint("calories IS NULL OR calories >= 0", name="ck_calories_non_negative"),
+        CheckConstraint("photo_count >= 0", name="ck_photo_count_non_negative"),
         Index("ix_activities_user_started", "user_id", "started_at"),
     )
 
