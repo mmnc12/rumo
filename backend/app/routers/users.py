@@ -2,10 +2,11 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
+from app.core.rate_limit import limiter
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import UserPublic
@@ -20,7 +21,9 @@ def _handle_service_error(exc: ServiceError) -> HTTPException:
 
 
 @router.get("/search", response_model=list[UserPublic])
+@limiter.limit("20/minute")
 async def search_users(
+    request: Request,
     q: str = Query(..., min_length=2, max_length=100),
     limit: int = Query(default=20, ge=1, le=50),
     db: AsyncSession = Depends(get_db),
@@ -30,6 +33,11 @@ async def search_users(
 
     IMPORTANTE: rota estática `/search` declarada ANTES de `/{user_id}`,
     senão o FastAPI tenta parsear "search" como UUID e retorna 422.
+
+    Rate limit: 20/minuto por IP — a busca faz full scan ILIKE em
+    username + full_name (sem índice pg_trgm ainda), então um scraper
+    derruba o Neon free tier. 20/min cobre uso legítimo do SearchPage
+    (debounce 300ms + staleTime 30s) e barra varredura em massa.
     """
     try:
         return await user_service.search_users(db, q, current_user.id, limit)

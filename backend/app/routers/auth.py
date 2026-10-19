@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
+from app.core.rate_limit import limiter
 from app.core.security import (
     create_access_token,
     hash_password,
@@ -22,7 +23,9 @@ router = APIRouter(prefix="/auth", tags=["Autenticação"])
     status_code=status.HTTP_201_CREATED,
     summary="Cadastrar novo usuário",
 )
+@limiter.limit("3/hour")
 async def register(
+    request: Request,
     payload: UserCreate,
     db: AsyncSession = Depends(get_db),
 ):
@@ -32,6 +35,7 @@ async def register(
     - Valida email/username únicos
     - Hasheia a senha antes de salvar (bcrypt)
     - Retorna os dados públicos do usuário criado (sem senha)
+    - Rate limit: 3 cadastros por hora por IP (anti-spam)
     """
     # 1. Verificar se o email já existe
     result = await db.execute(
@@ -75,7 +79,9 @@ async def register(
     "/login",
     summary="Login (form-urlencoded, padrão OAuth2)",
 )
+@limiter.limit("5/minute")
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
@@ -85,6 +91,7 @@ async def login(
     - Aceita `username` (na verdade, o email) e `password` via form-urlencoded
     - Retorna `{access_token, token_type}`
     - Use o token no header: `Authorization: Bearer <token>`
+    - Rate limit: 5 tentativas por minuto por IP (anti-brute-force)
     """
     # 1. Busca o usuário pelo email (o campo `username` do form é o email)
     result = await db.execute(

@@ -9,12 +9,14 @@ from fastapi import (
     Form,
     HTTPException,
     Query,
+    Request,
     UploadFile,
     status,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
+from app.core.rate_limit import limiter
 from app.database import get_db
 from app.models.user import User
 from app.schemas.activity import (
@@ -78,12 +80,18 @@ async def stats_monthly(
 # ===== CRUD =====
 
 @router.post("", response_model=ActivityResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/hour")
 async def create_activity(
+    request: Request,
     payload: ActivityCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Cria uma nova atividade (JSON pré-calculado, com track_points opcional)."""
+    """Cria uma nova atividade (JSON pré-calculado, com track_points opcional).
+
+    Rate limit: 10/hora por IP — escrita pesada no Neon free tier
+    (insert de atividade + possível insert em lote de track_points).
+    """
     return await activity_service.create_activity(db, current_user.id, payload)
 
 
@@ -92,7 +100,9 @@ async def create_activity(
     response_model=ActivityResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit("10/hour")
 async def upload_activity(
+    request: Request,
     file: UploadFile = File(..., description="Arquivo .gpx"),
     title: str | None = Form(None, max_length=120),
     activity_type: str | None = Form(None),
@@ -105,6 +115,10 @@ async def upload_activity(
 
     O backend parseia o arquivo, calcula distância, pace, elevação
     e preenche rota (PostGIS) + raw_track_points automaticamente.
+
+    Rate limit: 10/hora por IP — parse de GPX é síncrono e bloqueia o
+    event loop; 10/hora cobre uso legítimo (algumas atividades por dia)
+    e barra loop de upload que derrubaria o Render free tier.
     """
     if not file.filename or not file.filename.lower().endswith(".gpx"):
         raise HTTPException(

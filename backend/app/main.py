@@ -2,9 +2,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 
 from app.config import settings
+from app.core.rate_limit import limiter, rate_limit_handler
 from app.database import engine
 from app.routers import (
     activities,
@@ -52,6 +54,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Rate limiting: estado e handler de 429.
+# Sem SlowAPIMiddleware — o limite é cirúrgico por endpoint (decorators),
+# não global, para não punir usuário legítimo scrollando o feed.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 
 app.include_router(auth.router)
 app.include_router(activities.router, prefix="/activities", tags=["activities"])
