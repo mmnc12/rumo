@@ -4,7 +4,6 @@ import {
   useMarkRead,
   useMarkAllRead,
 } from "../hooks/useNotifications";
-import { useAuth } from "../hooks/useAuth";
 import { formatRelativeDate } from "../lib/format";
 import type { Notification } from "../types/api";
 
@@ -26,7 +25,6 @@ function notificationTarget(n: Notification): string | null {
 }
 
 export default function NotificationsPage() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const { data: notifications, isLoading } = useNotifications(50, 0);
   const markRead = useMarkRead();
@@ -42,6 +40,15 @@ export default function NotificationsPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-6">
+      <div className="mb-4">
+        <Link
+          to="/feed"
+          className="text-sm text-rumo-600 hover:text-rumo-700 hover:underline"
+        >
+          ← Voltar
+        </Link>
+      </div>
+
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-rumo-900">Notificações</h1>
         {hasUnread && (
@@ -80,7 +87,9 @@ export default function NotificationsPage() {
                 }`}
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rumo-100 text-sm font-semibold text-rumo-700">
-                  {(n.actor.full_name ?? n.actor.username).charAt(0).toUpperCase()}
+                  {(n.actor.full_name ?? n.actor.username)
+                    .charAt(0)
+                    .toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-rumo-900">
@@ -108,15 +117,6 @@ export default function NotificationsPage() {
             </li>
           ))}
         </ul>
-      )}
-
-      {user === null && (
-        <p className="mt-4 text-center text-sm text-rumo-500">
-          <Link to="/login" className="text-rumo-600 underline">
-            Entre
-          </Link>{" "}
-          para ver suas notificações.
-        </p>
       )}
     </div>
   );
