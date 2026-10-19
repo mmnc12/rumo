@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   createComment,
   deleteComment,
@@ -11,20 +16,34 @@ import {
   unlikeActivity,
 } from "../api/social";
 import { activitiesKeys } from "./useActivities";
-import type { LikeList } from "../types/api";
+import type { FeedItem, LikeList } from "../types/api";
 
 export const socialKeys = {
-  feed: (limit = 20, offset = 0) => ["feed", { limit, offset }] as const,
+  feed: (limit = 20) => ["feed", { limit }] as const,
   likes: (activityId: string) => ["likes", activityId] as const,
   comments: (activityId: string) => ["comments", activityId] as const,
   followers: (userId: string) => ["followers", userId] as const,
   following: (userId: string) => ["following", userId] as const,
 };
 
-export function useFeed(limit = 20, offset = 0) {
-  return useQuery({
-    queryKey: socialKeys.feed(limit, offset),
-    queryFn: () => getFeed(limit, offset),
+/**
+ * Feed do usuário (atividades próprias + de quem segue), paginado
+ * com "Carregar mais".
+ *
+ * useInfiniteQuery mantém as páginas em cache. getNextPageParam assume
+ * list[T] puro: última página cheia (=== limit) → pode haver mais;
+ * menor que limit → fim.
+ */
+export function useFeed(limit = 20) {
+  return useInfiniteQuery<FeedItem[]>({
+    queryKey: socialKeys.feed(limit),
+    queryFn: ({ pageParam = 0 }) =>
+      getFeed(limit, pageParam as number),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (lastPage.length < limit) return undefined;
+      return allPages.reduce((acc, p) => acc + p.length, 0);
+    },
     staleTime: 30_000,
     retry: 1,
     refetchOnWindowFocus: false,

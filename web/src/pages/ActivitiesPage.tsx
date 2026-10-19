@@ -4,9 +4,21 @@ import { ActivityCard } from "../components/ActivityCard";
 import { useActivities } from "../hooks/useActivities";
 
 export default function ActivitiesPage() {
-  const { data: activities, isLoading, isError, error, refetch } = useActivities({
-    limit: 20,
-  });
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useActivities({ limit: 20 });
+
+  // useInfiniteQuery entrega { pages: Activity[][], pageParams } — achatamos
+  // para renderizar numa lista só. A ordem (mais recente primeiro) é a
+  // ordem que o backend devolve.
+  const activities = data?.pages.flat() ?? [];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -42,7 +54,7 @@ export default function ActivitiesPage() {
           </div>
         )}
 
-        {!isLoading && !isError && activities && activities.length === 0 && (
+        {!isLoading && !isError && activities.length === 0 && (
           <div className="bg-white rounded-lg shadow-sm p-8 text-center">
             <div className="text-5xl mb-3">🏃</div>
             <h2 className="font-semibold text-gray-900 mb-1">
@@ -60,12 +72,27 @@ export default function ActivitiesPage() {
           </div>
         )}
 
-        {!isLoading && !isError && activities && activities.length > 0 && (
-          <div className="space-y-3">
-            {activities.map((a) => (
-              <ActivityCard key={a.id} activity={a} />
-            ))}
-          </div>
+        {!isLoading && !isError && activities.length > 0 && (
+          <>
+            <div className="space-y-3">
+              {activities.map((a) => (
+                <ActivityCard key={a.id} activity={a} />
+              ))}
+            </div>
+
+            {hasNextPage && (
+              <div className="mt-4 text-center">
+                <button
+                  type="button"
+                  onClick={() => fetchNextPage()}
+                  disabled={isFetchingNextPage}
+                  className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {isFetchingNextPage ? "Carregando…" : "Carregar mais"}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>

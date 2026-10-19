@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import {
   deleteActivity,
@@ -14,7 +19,9 @@ import type { Activity, TrackResponse } from "../types/api";
 export const activitiesKeys = {
   all: ["activities"] as const,
   lists: () => [...activitiesKeys.all, "list"] as const,
-  list: (params?: { limit?: number; offset?: number; userId?: string }) =>
+  // Lista infinita: a key não inclui offset (o offset é pageParam).
+  // Inclui o userId para diferenciar "minhas" de "de outro usuário".
+  list: (params?: { limit?: number; userId?: string }) =>
     [...activitiesKeys.lists(), params] as const,
   details: () => [...activitiesKeys.all, "detail"] as const,
   detail: (id: string) => [...activitiesKeys.details(), id] as const,
@@ -25,19 +32,24 @@ export const activitiesKeys = {
 // ===== Lista =====
 
 /**
- * Lista atividades do usuário autenticado (paginado).
+ * Lista atividades do usuário autenticado (paginado com "Carregar mais").
  *
- * staleTime 30s: lista muda com frequência (uploads recentes),
- * mas não precisa refetch a cada focus.
+ * useInfiniteQuery mantém as páginas já carregadas em cache e permite
+ * fetchNextPage sem refazer as anteriores. getNextPageParam assume que
+ * a API retorna list[T] puro (sem envelope): se a última página veio
+ * cheia (=== limit), pode haver mais; se veio menor, é o fim.
  */
-export function useActivities(params?: {
-  limit?: number;
-  offset?: number;
-  userId?: string;
-}) {
-  return useQuery<Activity[]>({
-    queryKey: activitiesKeys.list(params),
-    queryFn: () => listActivities(params),
+export function useActivities(params?: { limit?: number }) {
+  const limit = params?.limit ?? 20;
+  return useInfiniteQuery<Activity[]>({
+    queryKey: activitiesKeys.list({ limit }),
+    queryFn: ({ pageParam = 0 }) =>
+      listActivities({ limit, offset: pageParam as number }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (lastPage.length < limit) return undefined;
+      return allPages.reduce((acc, p) => acc + p.length, 0);
+    },
     staleTime: 30_000,
     retry: 1,
   });
@@ -51,9 +63,16 @@ export function useActivities(params?: {
  * o componente trata esse erro (mostra CTA "siga pra ver").
  */
 export function useUserActivities(userId: string | undefined) {
-  return useQuery<Activity[]>({
-    queryKey: activitiesKeys.list({ userId }),
-    queryFn: () => listActivities({ userId: userId! }),
+  const limit = 20;
+  return useInfiniteQuery<Activity[]>({
+    queryKey: activitiesKeys.list({ userId, limit }),
+    queryFn: ({ pageParam = 0 }) =>
+      listActivities({ userId: userId!, limit, offset: pageParam as number }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (lastPage.length < limit) return undefined;
+      return allPages.reduce((acc, p) => acc + p.length, 0);
+    },
     enabled: !!userId,
     staleTime: 30_000,
     retry: 1,
@@ -126,7 +145,6 @@ export function useDeleteActivity() {
   return useMutation({
     mutationFn: (id: string) => deleteActivity(id),
     onSuccess: (_data, id) => {
-      // Invalida tudo relacionado a essa atividade (lista, detail, track)
       queryClient.invalidateQueries({ queryKey: activitiesKeys.all });
       queryClient.removeQueries({ queryKey: activitiesKeys.detail(id) });
       queryClient.removeQueries({ queryKey: activitiesKeys.track(id) });

@@ -41,9 +41,12 @@ export default function ProfilePage() {
   } = useUser(id);
 
   const {
-    data: activities,
+    data: activitiesData,
     isLoading: loadingActivities,
     error: errorActivities,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
   } = useUserActivities(id);
 
   const {
@@ -81,6 +84,11 @@ export default function ProfilePage() {
 
   const activitiesForbidden =
     errorActivities instanceof ApiError && errorActivities.status === 403;
+
+  // useInfiniteQuery entrega { pages: Activity[][], pageParams } — achatamos
+  // para renderizar numa lista só. Se o backend retornou 403, `pages` vem
+  // vazio, então o CTA "siga pra ver" continua funcionando.
+  const activities = activitiesData?.pages.flat() ?? [];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -199,20 +207,35 @@ export default function ProfilePage() {
             </p>
           )}
 
-          {activities && activities.length === 0 && !activitiesForbidden && (
+          {!loadingActivities && !errorActivities && activities.length === 0 && (
             <p className="text-sm text-gray-500">
               Nenhuma atividade registrada ainda.
             </p>
           )}
 
-          {activities && activities.length > 0 && (
-            <ul className="space-y-3">
-              {activities.map((a) => (
-                <li key={a.id}>
-                  <ActivityCard activity={a} />
-                </li>
-              ))}
-            </ul>
+          {activities.length > 0 && (
+            <>
+              <ul className="space-y-3">
+                {activities.map((a) => (
+                  <li key={a.id}>
+                    <ActivityCard activity={a} />
+                  </li>
+                ))}
+              </ul>
+
+              {hasNextPage && (
+                <div className="mt-4 text-center">
+                  <button
+                    type="button"
+                    onClick={() => fetchNextPage()}
+                    disabled={isFetchingNextPage}
+                    className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    {isFetchingNextPage ? "Carregando…" : "Carregar mais"}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </section>
 
