@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from app.schemas.user import UserPublic
 
@@ -30,13 +30,9 @@ class NotificationResponse(BaseModel):
     comment_id: UUID | None = None
 
 
-class NotificationListResponse(BaseModel):
-    items: list[NotificationResponse]
-
-
 class UnreadCountResponse(BaseModel):
     count: int
 
 
-class MarkReadResponse(BaseModel):
-    updated: int = Field(description="Quantidade de notificações marcadas como lidas")
+class MarkAllReadResponse(BaseModel):
+    updated: int
