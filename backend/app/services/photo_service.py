@@ -1,3 +1,5 @@
+"""Service de fotos de atividades (Cloudinary + denormalizados na Activity)."""
+
 import cloudinary
 import cloudinary.uploader
 from fastapi import HTTPException, UploadFile, status
@@ -7,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.activity import Activity
 from app.models.activity_photo import ActivityPhoto
 from app.models.user import User
+from app.services import activity_service
 
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -16,6 +19,15 @@ FOLDER = "rumo/activities"
 async def _get_owned_activity(
     db: AsyncSession, activity_id, current_user: User
 ) -> Activity:
+    """Busca a atividade e exige que o usuário seja o DONO (escrita).
+
+    Usado só em upload/delete — operações de escrita. Diferente da
+    listagem, que usa a regra social (dono OU seguidor) via
+    `activity_service.get_activity(..., allow_following=True)`.
+
+    Mantém 403 aqui (semântica de escrita: "existe, você não é o dono").
+    A listagem usa 404 pra não vazar existência — ver `list_photos`.
+    """
     result = await db.execute(select(Activity).where(Activity.id == activity_id))
     activity = result.scalar_one_or_none()
     if activity is None:
@@ -98,7 +110,32 @@ async def upload_photo(
     return photo
 
 
-async def list_photos(db: AsyncSession, activity_id) -> list[ActivityPhoto]:
+async def list_photos(
+    db: AsyncSession,
+    activity_id,
+    user_id,
+) -> list[ActivityPhoto]:
+    """
+    Lista as fotos de uma atividade.
+
+    Regra de visibilidade: dono OU seguidor do dono — mesma regra do
+    feed e do GET /activities/{id} (fonte de verdade: `following_ids_subquery`
+    via `activity_service.get_activity`).
+
+    Reusa `get_activity(..., allow_following=True)` em vez de duplicar a
+    checagem: garante uma regra só no app e devolve `NotFoundError` (404)
+    quando não autorizado — mesmo padrão do detalhe/track, não vaza
+    existência da atividade pra quem não é dono nem seguidor.
+
+    Custo: 1 SELECT extra na `activities` (indexada por id) + o join
+    do selectinload. Desprezível — não otimizar prematuramente.
+    """
+    # Confirma existência + permissão. Levanta NotFoundError (404 no router)
+    # tanto pra "não existe" quanto pra "existe mas você não pode ver".
+    await activity_service.get_activity(
+        db, user_id, activity_id, allow_following=True
+    )
+
     result = await db.execute(
         select(ActivityPhoto)
         .where(ActivityPhoto.activity_id == activity_id)
