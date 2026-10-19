@@ -12,6 +12,7 @@ import UploadPage from "./pages/UploadPage";
 // Páginas pesadas (leaflet / recharts) — carregadas sob demanda
 const ActivityDetailPage = lazy(() => import("./pages/ActivityDetailPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const SearchPage = lazy(() => import("./pages/SearchPage"));
 
 function PageFallback() {
   return (
@@ -75,6 +76,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <NotificationsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/search"
+          element={
+            <ProtectedRoute>
+              <SearchPage />
             </ProtectedRoute>
           }
         />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../hooks/useAuth";
 import { NotificationBell } from "./NotificationBell";
@@ -7,6 +7,7 @@ import { NotificationBell } from "./NotificationBell";
 export function AppHeader() {
   const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const navigate = useNavigate();
 
   // Fecha o drawer com Esc (acessibilidade + conveniência)
   useEffect(() => {
@@ -30,6 +31,13 @@ export function AppHeader() {
 
   function closeMenu() {
     setMenuOpen(false);
+  }
+
+  function goToSearch(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const q = String(fd.get("q") ?? "").trim();
+    navigate(q ? `/search?q=${encodeURIComponent(q)}` : "/search");
   }
 
   return (
@@ -72,8 +80,18 @@ export function AppHeader() {
           </nav>
         </div>
 
-        {/* Ações desktop — sino antes do username */}
+        {/* Ações desktop — busca, sino, username */}
         <div className="hidden items-center gap-3 sm:flex">
+          <form onSubmit={goToSearch} role="search">
+            <input
+              type="search"
+              name="q"
+              placeholder="Buscar usuários…"
+              aria-label="Buscar usuários"
+              className="w-40 rounded-lg border border-gray-300 px-3 py-1.5 text-sm outline-none focus:border-rumo-500 focus:ring-2 focus:ring-rumo-100"
+            />
+          </form>
+
           <Link
             to="/upload"
             className="rounded-lg bg-rumo-500 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-rumo-600"
@@ -179,6 +197,9 @@ export function AppHeader() {
               </DrawerLink>
               <DrawerLink to="/activities" onClick={closeMenu}>
                 Minhas atividades
+              </DrawerLink>
+              <DrawerLink to="/search" onClick={closeMenu}>
+                Buscar usuários
               </DrawerLink>
               <DrawerLink to="/notifications" onClick={closeMenu}>
                 Notificações
