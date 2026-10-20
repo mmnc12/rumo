@@ -16,8 +16,12 @@ _ELEVATION_THRESHOLD_M = 1.0
 _MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 
 
-def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Distância em metros entre dois pontos (fórmula de Haversine)."""
+def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Distância em metros entre dois pontos (fórmula de Haversine).
+
+    Público (sem underscore) porque o fit_service reusa como fallback
+    quando o FIT não traz `distance` acumulada.
+    """
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
@@ -88,7 +92,7 @@ def parse_gpx(file_bytes: bytes) -> dict[str, Any]:
     # Distância
     distance_m = 0.0
     for prev, curr in zip(valid_points, valid_points[1:]):
-        distance_m += _haversine_m(
+        distance_m += haversine_m(
             prev.latitude, prev.longitude, curr.latitude, curr.longitude
         )
 

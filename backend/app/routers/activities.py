@@ -38,6 +38,8 @@ from app.services.follow_service import is_following
 
 router = APIRouter()
 
+_ALLOWED_UPLOAD_EXTENSIONS = (".gpx", ".fit")
+
 
 # ===== Estatísticas (declaradas ANTES das rotas dinâmicas /{activity_id}) =====
 
@@ -132,7 +134,7 @@ async def create_activity(
 @limiter.limit("10/hour")
 async def upload_activity(
     request: Request,
-    file: UploadFile = File(..., description="Arquivo .gpx"),
+    file: UploadFile = File(..., description="Arquivo .gpx ou .fit"),
     title: str | None = Form(None, max_length=120),
     activity_type: str | None = Form(None),
     description: str | None = Form(None),
@@ -140,25 +142,47 @@ async def upload_activity(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Cria uma atividade a partir de um arquivo GPX.
+    Cria uma atividade a partir de um arquivo GPX ou FIT.
 
-    O backend parseia o arquivo, calcula distância, pace, elevação
-    e preenche rota (PostGIS) + raw_track_points automaticamente.
+    O backend detecta o formato pela extensão e parseia o arquivo,
+    calculando distância, pace, elevação e preenchendo rota (PostGIS)
+    + raw_track_points automaticamente.
 
-    Rate limit: 10/hora por IP — parse de GPX é síncrono e bloqueia o
-    event loop; 10/hora cobre uso legítimo (algumas atividades por dia)
-    e barra loop de upload que derrubaria o Render free tier.
+    Rate limit: 10/hora por IP — parse é síncrono e bloqueia o event
+    loop (GPX e FIT têm o mesmo custo ~1–3s); 10/hora cobre uso
+    legítimo (algumas atividades por dia) e barra loop de upload que
+    derrubaria o Render free tier.
     """
-    if not file.filename or not file.filename.lower().endswith(".gpx"):
+    if not file.filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Formato não suportado. Envie um arquivo .gpx",
+            detail="Arquivo sem nome. Envie um arquivo .gpx ou .fit",
+        )
+
+    filename_lower = file.filename.lower()
+    is_gpx = filename_lower.endswith(".gpx")
+    is_fit = filename_lower.endswith(".fit")
+
+    if not (is_gpx or is_fit):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Formato não suportado. Envie um arquivo .gpx ou .fit",
         )
 
     file_bytes = await file.read()
 
     try:
-        return await activity_service.create_activity_from_gpx(
+        if is_gpx:
+            return await activity_service.create_activity_from_gpx(
+                db=db,
+                user_id=current_user.id,
+                file_bytes=file_bytes,
+                title=title,
+                activity_type=activity_type,
+                description=description,
+            )
+        # is_fit
+        return await activity_service.create_activity_from_fit(
             db=db,
             user_id=current_user.id,
             file_bytes=file_bytes,

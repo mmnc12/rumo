@@ -1,4 +1,4 @@
-"""Service de atividades: CRUD + upload de GPX + track (geometria) + busca."""
+"""Service de atividades: CRUD + upload de GPX/FIT + track + busca."""
 
 import json
 
@@ -13,6 +13,7 @@ from app.schemas import ActivityCreate
 from app.schemas.activity import TrackResponse
 from app.services import follow_service
 from app.services.errors import NotFoundError
+from app.services.fit_service import map_fit_sport, parse_fit
 from app.services.follow_service import following_ids_subquery
 from app.services.gpx_service import map_gpx_type, parse_gpx
 
@@ -34,6 +35,39 @@ def _normalize_activity_type(value: str | None) -> str | None:
     if value not in _VALID_ACTIVITY_TYPES:
         return None
     return value
+
+
+def _normalize_upload_fields(
+    title: str | None,
+    activity_type: str | None,
+    description: str | None,
+    parsed_title: str | None,
+    parsed_type: str | None,
+    type_mapper,
+) -> tuple[str, str, str | None]:
+    """
+    Normaliza os campos comuns a GPX e FIT.
+
+    - title: None/vazio/"string" → parsed_title → "Atividade"
+    - activity_type: None/vazio/"string"/inválido → type_mapper(parsed_type)
+    - description: None/vazio/"string" → None
+
+    `type_mapper` é `map_gpx_type` ou `map_fit_sport` — cada parser tem
+    seu próprio vocabulário de tipo, mas o fallback e a validação são iguais.
+    """
+    clean_title = title.strip() if title else None
+    if not clean_title or clean_title == "string":
+        clean_title = None
+    final_title = clean_title or parsed_title or "Atividade"
+
+    clean_type = _normalize_activity_type(activity_type)
+    final_type = clean_type or type_mapper(parsed_type)
+
+    clean_description = description.strip() if description else None
+    if not clean_description or clean_description == "string":
+        clean_description = None
+
+    return final_title, final_type, clean_description
 
 
 def points_to_linestring(track_points: list[list[float]]) -> WKTElement | None:
@@ -105,20 +139,64 @@ async def create_activity_from_gpx(
     """
     parsed = parse_gpx(file_bytes)
 
-    # Normaliza title (Swagger às vezes manda "string" como placeholder)
-    clean_title = title.strip() if title else None
-    if not clean_title or clean_title == "string":
-        clean_title = None
-    final_title = clean_title or parsed["title"] or "Atividade"
+    final_title, final_type, clean_description = _normalize_upload_fields(
+        title, activity_type, description,
+        parsed["title"], parsed["gpx_type"], map_gpx_type,
+    )
 
-    # Normaliza activity_type
-    clean_type = _normalize_activity_type(activity_type)
-    final_type = clean_type or map_gpx_type(parsed["gpx_type"])
+    route = points_to_linestring(parsed["track_points"])
 
-    # Normaliza description também (mesmo problema do Swagger)
-    clean_description = description.strip() if description else None
-    if not clean_description or clean_description == "string":
-        clean_description = None
+    activity = Activity(
+        user_id=user_id,
+        activity_type=final_type,
+        title=final_title,
+        description=clean_description,
+        started_at=parsed["started_at"],
+        finished_at=parsed["finished_at"],
+        duration_s=parsed["duration_s"],
+        distance_m=parsed["distance_m"],
+        elevation_gain_m=parsed["elevation_gain_m"],
+        calories=None,
+        avg_pace_s_per_km=(
+            int(parsed["avg_pace_s_per_km"]) if parsed["avg_pace_s_per_km"] else None
+        ),
+        avg_speed_mps=parsed["avg_speed_mps"],
+        route=route,
+        raw_track_points=parsed["track_points"],
+    )
+
+    db.add(activity)
+    await db.commit()
+    await db.refresh(activity)
+    return activity
+
+
+async def create_activity_from_fit(
+    db: AsyncSession,
+    user_id,
+    file_bytes: bytes,
+    title: str | None = None,
+    activity_type: str | None = None,
+    description: str | None = None,
+) -> Activity:
+    """
+    Cria uma atividade a partir de um arquivo FIT (Garmin/ANT).
+
+    Espelha create_activity_from_gpx, mas usa `map_fit_sport` no fallback
+    de tipo (o FIT usa `sport` da sessão, não `type` do track).
+
+    - title: se None/vazio/"string", FIT não tem nome de atividade → "Atividade"
+    - activity_type: se None/vazio/"string"/inválido, mapeia do sport do FIT
+    - description: opcional
+    - calories: None (dívida consciente — cálculo fica para bloco separado,
+      igual ao GPX)
+    """
+    parsed = parse_fit(file_bytes)
+
+    final_title, final_type, clean_description = _normalize_upload_fields(
+        title, activity_type, description,
+        parsed["title"], parsed["gpx_type"], map_fit_sport,
+    )
 
     route = points_to_linestring(parsed["track_points"])
 
@@ -270,8 +348,6 @@ async def get_activity_track(
     - Usa ST_AsGeoJSON + ST_XMin/YMin/XMax/YMax do PostGIS: uma única query.
     - Não expõe raw_track_points — só geometria (decisão do 13a.0).
     """
-    # 1) Confirma que a atividade existe e o usuário pode vê-la
-    #    (reusa get_activity com allow_following=True -> 404 caso contrário)
     activity = await get_activity(
         db, user_id, activity_id, allow_following=True
     )
@@ -279,7 +355,6 @@ async def get_activity_track(
     if activity.route is None:
         raise NotFoundError("Atividade não possui rota")
 
-    # 2) Extrai GeoJSON + bbox + n_points direto do PostGIS
     stmt = select(
         func.ST_AsGeoJSON(Activity.route).label("geojson"),
         func.ST_NPoints(Activity.route).label("n_points"),
@@ -292,9 +367,8 @@ async def get_activity_track(
     result = await db.execute(stmt)
     row = result.one()
 
-    # ST_AsGeoJSON retorna uma string JSON — parsear
     geojson = json.loads(row.geojson)
-    coordinates = geojson["coordinates"]  # [[lon, lat], ...]
+    coordinates = geojson["coordinates"]
 
     return TrackResponse(
         activity_id=activity_id,

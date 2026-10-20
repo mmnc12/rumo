@@ -36,8 +36,9 @@ pytest==8.3.4
 pytest-asyncio==0.25.0
 httpx==0.28.1
 
-# GPX
+# GPX / FIT
 gpxpy==1.6.2
+fitparse>=1.2.0
 
 cloudinary>=1.41.0
 
