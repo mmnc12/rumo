@@ -9,7 +9,7 @@ from typing import Any
 import fitparse
 
 from app.services.errors import BadRequestError
-from app.services.gpx_service import _haversine_m
+from app.services.gpx_service import haversine_m
 
 _MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB — mesmo limite do GPX
 
@@ -116,7 +116,7 @@ def parse_fit(file_bytes: bytes) -> dict[str, Any]:
             and p.get("position_long") is not None
         ]
         for prev, curr in zip(valid_coords, valid_coords[1:]):
-            distance_m += _haversine_m(
+            distance_m += haversine_m(
                 prev[0] * _SEMICIRCLES_TO_DEG,
                 prev[1] * _SEMICIRCLES_TO_DEG,
                 curr[0] * _SEMICIRCLES_TO_DEG,
