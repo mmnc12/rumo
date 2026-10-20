@@ -19,19 +19,73 @@ _SEMICIRCLES_TO_DEG = 180.0 / 2**31
 
 # Mapeamento de sport do FIT para o ActivityType do Rumo.
 # Strings vêm da mensagem `session` (não do `track`).
+# Fonte: FIT Protocol — "Sport" enum (perfil oficial Garmin).
+# Esportes sem equivalente direto no Rumo caem em "other" via fallback.
 FIT_SPORT_MAP: dict[str, str] = {
+    # Corrida
     "running": "run",
     "run": "run",
+    "trail_running": "run",
+    "treadmill_running": "run",
+    "indoor_running": "run",
+    # Caminhada
     "walking": "walk",
     "walk": "walk",
+    "casual_walking": "walk",
+    "speed_walking": "walk",
+    "indoor_walking": "walk",
     "hiking": "hike",
     "hike": "hike",
+    # Ciclismo
     "cycling": "cycle",
     "biking": "cycle",
     "bike": "cycle",
+    "road_biking": "cycle",
+    "mountain_biking": "cycle",
+    "indoor_cycling": "cycle",
+    "gravel_cycling": "cycle",
+    "e_biking": "cycle",
+    # Natação
     "swimming": "swim",
     "swim": "swim",
+    "lap_swimming": "swim",
+    "open_water_swimming": "swim",
 }
+
+# Esportes FIT conhecidos que o Rumo NÃO tem no enum ActivityType.
+# Mapeados explicitamente para "other" para documentar que não é falha
+# do parser — é ausência de tipo no domínio do Rumo.
+FIT_OTHER_SPORTS: frozenset[str] = frozenset({
+    "generic",
+    "transition",
+    "fitness_equipment",
+    "training",
+    "rowing",
+    "indoor_rowing",
+    "stand_up_paddleboarding",
+    "surfing",
+    "windsurfing",
+    "kitesurfing",
+    "skiing",
+    "alpine_skiing",
+    "cross_country_skiing",
+    "snowboarding",
+    "snowshoeing",
+    "climbing",
+    "golf",
+    "tennis",
+    "soccer",
+    "basketball",
+    "american_football",
+    "baseball",
+    "martial_arts",
+    "boxing",
+    "yoga",
+    "pilates",
+    "diving",
+    "kayaking",
+    "canoeing",
+})
 
 
 def _as_utc(dt: datetime | None) -> datetime | None:
@@ -55,6 +109,21 @@ def _semicircles_to_deg(value: int | None) -> float | None:
     if value is None:
         return None
     return value * _SEMICIRCLES_TO_DEG
+
+
+def _is_null_position(lat: float | None, lon: float | None) -> bool:
+    """
+    Detecta coordenada "GPS desligado" (ambos 0).
+
+    Relógios em modo indoor (esteira, bike indoor) gravam position_lat=0
+    e position_long=0 em todos os records. Esses pontos não devem entrar
+    no track_points — senão o mapa renderiza uma linha no Golfo da Guiné.
+
+    Decisão: pular só quando AMBOS são 0. Um ponto real em (0,0) existe
+    (cruzamento do equador com Greenwich), mas é raríssimo em atividade;
+    já (0,0) em todos os records é o padrão indoor.
+    """
+    return lat == 0.0 and lon == 0.0
 
 
 def parse_fit(file_bytes: bytes) -> dict[str, Any]:
@@ -99,7 +168,22 @@ def parse_fit(file_bytes: bytes) -> dict[str, Any]:
 
     started_at = _as_utc(points[0]["timestamp"])
     finished_at = _as_utc(points[-1]["timestamp"])
-    duration_s = int((finished_at - started_at).total_seconds())
+
+    # Duração: prefere `total_timer_time` da session (mais preciso —
+    # exclui pausas). Fallback: finished_at - started_at dos records.
+    # Garmin/Polar gravam total_timer_time < total_elapsed_time quando há pausa.
+    duration_s: int
+    session_timer_time: float | None = None
+    for session in fit.get_messages("session"):
+        value = session.get_value("total_timer_time")
+        if value is not None and value > 0:
+            session_timer_time = float(value)
+            break
+
+    if session_timer_time is not None:
+        duration_s = int(session_timer_time)
+    else:
+        duration_s = int((finished_at - started_at).total_seconds())
 
     # Distância: prefere o campo `distance` acumulado do FIT (mais preciso
     # que haversine, porque o dispositivo já aplicou correções).
@@ -114,6 +198,7 @@ def parse_fit(file_bytes: bytes) -> dict[str, Any]:
             for p in points
             if p.get("position_lat") is not None
             and p.get("position_long") is not None
+            and not _is_null_position(p.get("position_lat"), p.get("position_long"))
         ]
         for prev, curr in zip(valid_coords, valid_coords[1:]):
             distance_m += haversine_m(
@@ -141,12 +226,15 @@ def parse_fit(file_bytes: bytes) -> dict[str, Any]:
 
     # track_points no formato [[lat, lon, ele, unix_ts], ...]
     # Coordenadas FIT são opcionais (indoor sem GPS) — pontos sem lat/lon
-    # são pulados, mas a atividade ainda é criada com distance/duration.
+    # ou com (0,0) "GPS desligado" são pulados, mas a atividade ainda é
+    # criada com distance/duration.
     track_points: list[list[float]] = []
     for p in points:
         lat = _semicircles_to_deg(p.get("position_lat"))
         lon = _semicircles_to_deg(p.get("position_long"))
         if lat is None or lon is None:
+            continue
+        if _is_null_position(lat, lon):
             continue
         track_points.append([
             round(lat, 7),
