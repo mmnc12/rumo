@@ -12,9 +12,10 @@ Estratégia:
     e "attached to a different loop".
 - Auth: sobrescreve get_current_user.
 - Isolamento: TRUNCATE ... CASCADE por teste.
-- Event loop: loop_scope="session" em todas as fixtures async + NullPool
-  no engine. NullPool abre/fecha conexão por uso, então nenhuma conexão
-  sobrevive ao loop que a criou.
+- Event loop: `loop_scope="function"` em db_session/test_user/client para
+  garantir que cada teste rode no mesmo loop em que a conexão foi criada.
+  `test_engine` e `_setup_schema` ficam em session porque o engine com
+  NullPool não retém conexão entre loops (abre/fecha por uso).
 """
 
 import os
@@ -68,11 +69,17 @@ async def _setup_schema(test_engine):
         await conn.run_sync(Base.metadata.drop_all)
 
 
-@pytest_asyncio.fixture(loop_scope="session")
+@pytest_asyncio.fixture(loop_scope="function")
 async def db_session(
     test_engine, _setup_schema
 ) -> AsyncGenerator[AsyncSession, None]:
-    """Sessão de teste com isolamento via TRUNCATE CASCADE entre testes."""
+    """Sessão de teste com isolamento via TRUNCATE CASCADE entre testes.
+
+    loop_scope="function": cada teste roda no mesmo loop em que a conexão
+    asyncpg é criada. Sem isso, o teste FIT (síncrono pesado) contamina o
+    loop da sessão e o próximo teste que toca o banco estoura
+    "attached to a different loop".
+    """
     async with test_engine.begin() as conn:
         await conn.execute(
             text(
@@ -91,7 +98,7 @@ async def db_session(
         yield session
 
 
-@pytest_asyncio.fixture(loop_scope="session")
+@pytest_asyncio.fixture(loop_scope="function")
 async def test_user(db_session: AsyncSession) -> User:
     """Usuário de teste já commitado no banco.
 
@@ -115,7 +122,7 @@ async def test_user(db_session: AsyncSession) -> User:
     return user
 
 
-@pytest_asyncio.fixture(loop_scope="session")
+@pytest_asyncio.fixture(loop_scope="function")
 async def client(
     test_engine, _setup_schema, test_user: User
 ) -> AsyncGenerator[AsyncClient, None]:

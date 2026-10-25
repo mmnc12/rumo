@@ -104,7 +104,7 @@ def test_estimate_calories_weight_is_float():
 
 # ===== _get_user_weight_kg — precisa do banco =====
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio
 async def test_get_user_weight_kg_returns_configured_weight(db_session, test_user):
     """Se o usuário tem weight_kg definido, retorna como float.
 
@@ -126,7 +126,7 @@ async def test_get_user_weight_kg_returns_configured_weight(db_session, test_use
     assert weight == 72.5
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio
 async def test_get_user_weight_kg_falls_back_when_null(db_session, test_user):
     """Peso null (usuário não preencheu) → _DEFAULT_WEIGHT_KG."""
     await db_session.execute(
