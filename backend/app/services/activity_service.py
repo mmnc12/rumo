@@ -7,7 +7,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import Activity
+from app.models import Activity, User
 from app.models.activity import ActivityType
 from app.schemas import ActivityCreate
 from app.schemas.activity import TrackResponse
@@ -20,6 +20,86 @@ from app.services.gpx_service import map_gpx_type, parse_gpx
 
 _VALID_ACTIVITY_TYPES = {t.value for t in ActivityType}
 
+
+# ---------------------------------------------------------------------------
+# Cálculo de calorias
+# ---------------------------------------------------------------------------
+#
+# Fórmula: kcal = MET x peso_kg x duração_horas
+#
+# MET = "Metabolic Equivalent of Task" — quantas vezes o gasto energético
+# da atividade supera o basal em repouso (1 MET ~= 1 kcal/kg/h).
+#
+# Valores tirados do Compendium of Physical Activities (Ainsworth et al.),
+# arredondados para 1 casa. São aproximações — Strava/Garmin usam modelos
+# mais finos (FC, VO2max, potência), mas para o Rumo a estimativa por MET
+# é suficiente e barata. Ajustar aqui se aparecer reclamação de precisão.
+#
+# Chaves são os valores do enum ActivityType. Cobre TODOS os tipos válidos;
+# se um tipo novo entrar no enum e faltar aqui, o fallback é _MET_DEFAULT.
+
+_MET_BY_TYPE: dict[str, float] = {
+    "run": 9.8,        # corrida ~10 km/h
+    "walk": 3.5,       # caminhada ~5 km/h
+    "cycle": 7.5,      # pedalada lazer ~16 km/h
+    "hike": 6.0,       # trilha
+    "swim": 8.0,       # natação moderada
+    "other": 5.0,      # default conservador
+}
+_MET_DEFAULT = 5.0
+
+# Peso de fallback quando o usuário não preencheu weight_kg.
+# 70 kg é a média adulta global aproximada (usada em várias calculadoras
+# públicas). Não é ideal — o certo é o usuário preencher o perfil — mas
+# evita calories=NULL e mantém /stats/summary útil.
+_DEFAULT_WEIGHT_KG = 70.0
+
+
+def _estimate_calories(
+    activity_type: str | None,
+    duration_s: int | None,
+    weight_kg: float | None,
+) -> int | None:
+    """
+    Estima calorias queimadas por MET x peso x duração.
+
+    - Retorna None se a duração for ausente/zero (não há o que estimar).
+    - Peso ausente usa _DEFAULT_WEIGHT_KG (ver comentário acima).
+    - Tipo desconhecido usa _MET_DEFAULT (5.0).
+    - Sempre retorna int >= 0 (CHECK do banco exige não-negativo).
+    """
+    if not duration_s or duration_s <= 0:
+        return None
+
+    met = _MET_BY_TYPE.get(activity_type or "", _MET_DEFAULT)
+    kg = weight_kg if weight_kg and weight_kg > 0 else _DEFAULT_WEIGHT_KG
+
+    duration_hours = duration_s / 3600.0
+    kcal = met * kg * duration_hours
+
+    # Defensivo: MET positivo x kg positivo x duração positiva nunca dá
+    # negativo, mas o CheckConstraint do banco exige >= 0. Clampa por segurança.
+    return max(0, int(round(kcal)))
+
+
+async def _get_user_weight_kg(db: AsyncSession, user_id) -> float:
+    """
+    Busca o weight_kg do usuário para o cálculo de calorias.
+
+    Custa 1 query extra por upload — aceitável: upload é raro (10/h de rate
+    limit) e o peso não vem no JWT. Não otimizar sem medir: a alternativa
+    (mudar a assinatura de create_activity_from_* pra receber o User) quebra
+    o contrato do service e mexe no router por ~1 query.
+    """
+    stmt = select(User.weight_kg).where(User.id == user_id)
+    result = await db.execute(stmt)
+    weight = result.scalar_one_or_none()
+    return float(weight) if weight is not None else _DEFAULT_WEIGHT_KG
+
+
+# ---------------------------------------------------------------------------
+# Normalização de campos de upload
+# ---------------------------------------------------------------------------
 
 def _normalize_activity_type(value: str | None) -> str | None:
     """
@@ -70,6 +150,10 @@ def _normalize_upload_fields(
     return final_title, final_type, clean_description
 
 
+# ---------------------------------------------------------------------------
+# Geometria
+# ---------------------------------------------------------------------------
+
 def points_to_linestring(track_points: list[list[float]]) -> WKTElement | None:
     """Converte lista de pontos GPS em LINESTRING WKT."""
     if not track_points or len(track_points) < 2:
@@ -91,13 +175,29 @@ def linestring_to_points(wkt_or_geom) -> list[list[float]] | None:
     return points or None
 
 
+# ---------------------------------------------------------------------------
+# Criação
+# ---------------------------------------------------------------------------
+
 async def create_activity(
     db: AsyncSession,
     user_id,
     payload: ActivityCreate,
 ) -> Activity:
-    """Cria uma atividade no banco (a partir de JSON pré-calculado)."""
+    """
+    Cria uma atividade no banco (a partir de JSON pré-calculado).
+
+    Calorias: se o payload trouxer `calories` explícito, o valor do usuário
+    prevalece. Só calcula quando vier None — mesma regra do GPX/FIT.
+    """
     route = points_to_linestring(payload.track_points) if payload.track_points else None
+
+    calories = payload.calories
+    if calories is None:
+        weight_kg = await _get_user_weight_kg(db, user_id)
+        calories = _estimate_calories(
+            payload.activity_type, payload.duration_s, weight_kg
+        )
 
     activity = Activity(
         user_id=user_id,
@@ -109,7 +209,7 @@ async def create_activity(
         duration_s=payload.duration_s,
         distance_m=payload.distance_m,
         elevation_gain_m=payload.elevation_gain_m,
-        calories=payload.calories,
+        calories=calories,
         avg_pace_s_per_km=payload.avg_pace_s_per_km,
         avg_speed_mps=payload.avg_speed_mps,
         route=route,
@@ -136,6 +236,7 @@ async def create_activity_from_gpx(
     - title: se None/vazio/"string", usa o <name> do GPX (fallback: "Atividade")
     - activity_type: se None/vazio/"string"/inválido, mapeia do <type> do GPX
     - description: opcional
+    - calories: se o GPX trouxer (raro), usa; senão estima por MET x peso x hora
     """
     parsed = parse_gpx(file_bytes)
 
@@ -143,6 +244,13 @@ async def create_activity_from_gpx(
         title, activity_type, description,
         parsed["title"], parsed["gpx_type"], map_gpx_type,
     )
+
+    calories = parsed.get("calories")
+    if calories is None:
+        weight_kg = await _get_user_weight_kg(db, user_id)
+        calories = _estimate_calories(
+            final_type, parsed["duration_s"], weight_kg
+        )
 
     route = points_to_linestring(parsed["track_points"])
 
@@ -156,7 +264,7 @@ async def create_activity_from_gpx(
         duration_s=parsed["duration_s"],
         distance_m=parsed["distance_m"],
         elevation_gain_m=parsed["elevation_gain_m"],
-        calories=None,
+        calories=calories,
         avg_pace_s_per_km=(
             int(parsed["avg_pace_s_per_km"]) if parsed["avg_pace_s_per_km"] else None
         ),
@@ -188,8 +296,9 @@ async def create_activity_from_fit(
     - title: se None/vazio/"string", FIT não tem nome de atividade → "Atividade"
     - activity_type: se None/vazio/"string"/inválido, mapeia do sport do FIT
     - description: opcional
-    - calories: None (dívida consciente — cálculo fica para bloco separado,
-      igual ao GPX)
+    - calories: se o FIT trouxer (session.total_calories), usa; senão estima
+      por MET x peso x hora. O parse_fit atual NÃO extrai total_calories —
+      fica como dívida futura; hoje sempre cai no estimate.
     """
     parsed = parse_fit(file_bytes)
 
@@ -197,6 +306,13 @@ async def create_activity_from_fit(
         title, activity_type, description,
         parsed["title"], parsed["gpx_type"], map_fit_sport,
     )
+
+    calories = parsed.get("calories")
+    if calories is None:
+        weight_kg = await _get_user_weight_kg(db, user_id)
+        calories = _estimate_calories(
+            final_type, parsed["duration_s"], weight_kg
+        )
 
     route = points_to_linestring(parsed["track_points"])
 
@@ -210,7 +326,7 @@ async def create_activity_from_fit(
         duration_s=parsed["duration_s"],
         distance_m=parsed["distance_m"],
         elevation_gain_m=parsed["elevation_gain_m"],
-        calories=None,
+        calories=calories,
         avg_pace_s_per_km=(
             int(parsed["avg_pace_s_per_km"]) if parsed["avg_pace_s_per_km"] else None
         ),
@@ -224,6 +340,10 @@ async def create_activity_from_fit(
     await db.refresh(activity)
     return activity
 
+
+# ---------------------------------------------------------------------------
+# Leitura
+# ---------------------------------------------------------------------------
 
 async def list_activities(
     db: AsyncSession,
@@ -379,6 +499,10 @@ async def get_activity_track(
         simplified=False,
     )
 
+
+# ---------------------------------------------------------------------------
+# Exclusão
+# ---------------------------------------------------------------------------
 
 async def delete_activity(
     db: AsyncSession,
