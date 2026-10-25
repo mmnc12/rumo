@@ -7,8 +7,9 @@ import { AppHeader } from "../components/AppHeader";
 const MAX_SIZE_MB = 20;
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
 
-function isGpx(file: File): boolean {
-  return file.name.toLowerCase().endsWith(".gpx");
+function isSupportedFile(file: File): boolean {
+  const name = file.name.toLowerCase();
+  return name.endsWith(".gpx") || name.endsWith(".fit");
 }
 
 export default function UploadPage() {
@@ -21,8 +22,8 @@ export default function UploadPage() {
 
   function validateAndUpload(file: File) {
     setLocalError(null);
-    if (!isGpx(file)) {
-      setLocalError("Formato não suportado. Envie um arquivo .gpx.");
+    if (!isSupportedFile(file)) {
+      setLocalError("Formato não suportado. Envie um arquivo .gpx ou .fit.");
       return;
     }
     if (file.size > MAX_SIZE_BYTES) {
@@ -80,9 +81,9 @@ export default function UploadPage() {
           Enviar atividade
         </h1>
         <p className="mb-8 text-sm text-gray-500">
-          Arraste um arquivo <code className="font-mono">.gpx</code> ou clique
-          para escolher. Distância, pace e elevação são calculados
-          automaticamente.
+          Arraste um arquivo <code className="font-mono">.gpx</code> ou{" "}
+          <code className="font-mono">.fit</code>, ou clique para escolher.
+          Distância, pace e elevação são calculados automaticamente.
         </p>
 
         <div
@@ -107,7 +108,7 @@ export default function UploadPage() {
             <>
               <div className="text-4xl">📁</div>
               <p className="text-base font-medium text-gray-900">
-                {isDragging ? "Solte o arquivo aqui" : "Arraste seu .gpx aqui"}
+                {isDragging ? "Solte o arquivo aqui" : "Arraste seu .gpx ou .fit aqui"}
               </p>
               <p className="text-xs text-gray-500">
                 ou clique para escolher • máx. {MAX_SIZE_MB} MB
@@ -119,7 +120,7 @@ export default function UploadPage() {
         <input
           ref={inputRef}
           type="file"
-          accept=".gpx,application/gpx+xml"
+          accept=".gpx,.fit,application/gpx+xml,application/vnd.garmin.fit"
           hidden
           onChange={handleInputChange}
         />
