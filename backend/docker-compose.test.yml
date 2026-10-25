@@ -1,0 +1,23 @@
+# Banco de teste isolado do compose de dev e do Neon de produção.
+# Porta 5433 pra não conflitar com o 5432 do compose principal.
+# Uso: docker compose -f docker-compose.test.yml up -d
+#      docker compose -f docker-compose.test.yml down
+services:
+  postgres_test:
+    image: postgis/postgis:16-3.4
+    container_name: rumo_postgres_test
+    environment:
+      POSTGRES_USER: rumo
+      POSTGRES_PASSWORD: rumo
+      POSTGRES_DB: rumo_test
+    ports:
+      - "5433:5432"
+    tmpfs:
+      # Dados do banco de teste em RAM — não persiste entre execuções,
+      # garante estado limpo em cada "up" e velocidade de I/O.
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rumo -d rumo_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
