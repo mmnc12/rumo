@@ -18,6 +18,7 @@ import { useActivityPhotos, useDeletePhoto } from "../hooks/usePhotos";
 import {
   activityEmoji,
   formatActivityType,
+  formatCalories,
   formatDateTime,
   formatDistance,
   formatDuration,
@@ -185,8 +186,8 @@ export default function ActivityDetailPage() {
           <LikeButton activityId={activity.id} />
         </div>
 
-        {/* Métricas */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        {/* Métricas — 5 colunas no md+ (distância, duração, pace, elevação, calorias) */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
           <Metric label="Distância" value={formatDistance(activity.distance_m)} />
           <Metric label="Duração" value={formatDuration(activity.duration_s)} />
           <Metric label="Pace médio" value={formatPace(activity.avg_pace_s_per_km)} />
@@ -198,6 +199,7 @@ export default function ActivityDetailPage() {
                 : "—"
             }
           />
+          <Metric label="Calorias" value={formatCalories(activity.calories)} />
         </div>
 
         {/* Descrição */}

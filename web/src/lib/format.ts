@@ -66,6 +66,17 @@ export function formatSpeed(mps: number | null | undefined): string {
 }
 
 /**
+ * Calorias: kcal → "248 kcal" | "1.234 kcal"
+ * Formata com separador de milhar pt-BR. Sem decimal — kcal é estimativa,
+ * precisão ao nível da unidade não agrega e polui.
+ * Se null (duração ausente no upload), retorna "—".
+ */
+export function formatCalories(kcal: number | null | undefined): string {
+  if (kcal == null) return "—";
+  return `${Math.round(kcal).toLocaleString("pt-BR")} kcal`;
+}
+
+/**
  * Data absoluta: "12 out 2026, 15:30"
  * Intl.DateTimeFormat com pt-BR.
  */

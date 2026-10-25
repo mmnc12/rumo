@@ -1,5 +1,5 @@
 import type { StatsSummary } from "../types/api";
-import { formatDistance, formatDuration } from "../lib/format";
+import { formatCalories, formatDistance, formatDuration } from "../lib/format";
 
 interface Props {
   data: StatsSummary | undefined;
@@ -10,8 +10,8 @@ interface Props {
 export function StatsCards({ data, isLoading, isError }: Props) {
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {[0, 1, 2, 3, 4].map((i) => (
           <div
             key={i}
             className="h-20 animate-pulse rounded-lg bg-gray-100"
@@ -28,7 +28,7 @@ export function StatsCards({ data, isLoading, isError }: Props) {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
       <StatCard
         label="Atividades"
         value={String(data.total_activities)}
@@ -48,6 +48,10 @@ export function StatsCards({ data, isLoading, isError }: Props) {
             ? `${Math.round(data.total_elevation_gain_m)} m`
             : "—"
         }
+      />
+      <StatCard
+        label="Calorias"
+        value={formatCalories(data.total_calories)}
       />
     </div>
   );
