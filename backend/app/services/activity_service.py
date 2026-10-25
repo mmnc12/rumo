@@ -1,6 +1,7 @@
 """Service de atividades: CRUD + upload de GPX/FIT + track + busca."""
 
 import json
+import logging
 
 from geoalchemy2.elements import WKTElement
 from sqlalchemy import func, or_, select
@@ -17,6 +18,8 @@ from app.services.fit_service import map_fit_sport, parse_fit
 from app.services.follow_service import following_ids_subquery
 from app.services.gpx_service import map_gpx_type, parse_gpx
 
+
+logger = logging.getLogger(__name__)
 
 _VALID_ACTIVITY_TYPES = {t.value for t in ActivityType}
 
@@ -245,12 +248,19 @@ async def create_activity_from_gpx(
         parsed["title"], parsed["gpx_type"], map_gpx_type,
     )
 
+    # --- LOG SENTINELA (temporário — remover após diagnóstico) ---
+    logger.warning(
+        "CALORIAS DEBUG GPX: duration=%s type=%s parsed_calories=%s",
+        parsed.get("duration_s"), final_type, parsed.get("calories"),
+    )
+
     calories = parsed.get("calories")
     if calories is None:
         weight_kg = await _get_user_weight_kg(db, user_id)
         calories = _estimate_calories(
             final_type, parsed["duration_s"], weight_kg
         )
+        logger.warning("CALORIAS DEBUG GPX: estimado=%s (peso=%s)", calories, weight_kg)
 
     route = points_to_linestring(parsed["track_points"])
 
@@ -307,12 +317,19 @@ async def create_activity_from_fit(
         parsed["title"], parsed["gpx_type"], map_fit_sport,
     )
 
+    # --- LOG SENTINELA (temporário — remover após diagnóstico) ---
+    logger.warning(
+        "CALORIAS DEBUG FIT: duration=%s type=%s parsed_calories=%s",
+        parsed.get("duration_s"), final_type, parsed.get("calories"),
+    )
+
     calories = parsed.get("calories")
     if calories is None:
         weight_kg = await _get_user_weight_kg(db, user_id)
         calories = _estimate_calories(
             final_type, parsed["duration_s"], weight_kg
         )
+        logger.warning("CALORIAS DEBUG FIT: estimado=%s (peso=%s)", calories, weight_kg)
 
     route = points_to_linestring(parsed["track_points"])
 
