@@ -47,9 +47,12 @@ app = FastAPI(
 )
 
 # CORS — libera o frontend (Vercel) e mobile a consumirem a API
+# O allow_origin_regex permite qualquer porta local (Flutter Web, dev)
+# sem precisar atualizar a lista de origens toda vez que o app rodar.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origin_regex=r"http://localhost(:\d+)?|http://127\.0\.0\.1(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
