@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import '../models/comment.dart';
+
 class ApiException implements Exception {
   final int statusCode;
   final String message;
@@ -65,6 +67,44 @@ class ApiClient {
   Future<dynamic> delete(String path, {String? token}) async {
     final response = await _send('DELETE', path, token: token);
     return _decode(response);
+  }
+
+  // ---------- Comentários ----------
+
+  /// Lista os comentários de uma atividade (ordem cronológica, conforme backend).
+  Future<List<Comment>> listComments(
+    String activityId, {
+    String? token,
+  }) async {
+    final data = await get('/activities/$activityId/comments', token: token);
+    if (data is! List) {
+      throw ApiException(500, 'Resposta inesperada ao listar comentários');
+    }
+    return data
+        .map((e) => Comment.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Cria um comentário na atividade e retorna o comentário criado.
+  Future<Comment> createComment(
+    String activityId,
+    String content, {
+    String? token,
+  }) async {
+    final data = await post(
+      '/activities/$activityId/comments',
+      body: {'content': content},
+      token: token,
+    );
+    if (data is! Map<String, dynamic>) {
+      throw ApiException(500, 'Resposta inesperada ao criar comentário');
+    }
+    return Comment.fromJson(data);
+  }
+
+  /// Deleta um comentário (somente o autor; o backend valida).
+  Future<void> deleteComment(String commentId, {String? token}) async {
+    await delete('/comments/$commentId', token: token);
   }
 
   // ---------- internos ----------

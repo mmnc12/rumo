@@ -42,11 +42,11 @@ class _RumoAppState extends State<RumoApp> {
       routes: [
         GoRoute(
           path: '/login',
-          builder: (_, __) => LoginPage(auth: _auth),
+          builder: (_, _) => LoginPage(auth: _auth),
         ),
         GoRoute(
           path: '/feed',
-          builder: (_, __) => FeedPage(auth: _auth),
+          builder: (_, _) => FeedPage(auth: _auth),
         ),
         GoRoute(
           path: '/activity/:id',

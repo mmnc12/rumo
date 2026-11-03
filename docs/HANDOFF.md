@@ -1,85 +1,83 @@
 HANDOFF — Rumo (backend + frontend + mobile)
 
-Data de encerramento: 2026-11-02 (sessão 7 — Flutter Curtidas + Backend de Contagens validado)
-Duração da sessão: Média — correção do ambiente (Docker/venv), alteração no backend para contagens (likes/comments), atualização da API/Mobile e validação total com 111 testes.
-Próximo bloco recomendado: Adicionar Comentários no Flutter (Sessão 8).
+Data de encerramento: 2026-11-02 (sessão 8 — Comentários no Flutter validados em runtime)
+Duração da sessão: Média — implementação completa de comentários no mobile (model, API, UI no detalhe, contador no feed), correção de PATH do Flutter, analyze zerado e validação manual ponta a ponta.
+Próximo bloco recomendado: Mapa no Flutter (Sessão 9) — recomendo flutter_map (sem API key).
+Decisão para a Sessão 9: seguir com Mapa no Flutter via flutter_map, salvo se o usuário indicar outra prioridade. Primeira ação obrigatória: confirmar coordenadas no backend antes de alterar o pubspec.yaml.
 TL;DR para quem chega agora
 
-    Backend: 111 testes passando. O esquema ActivityResponse (e seus herdeiros) agora embute likes_count, liked_by_me e comments_count diretamente no feed, lista e detalhe. Os services activity_service.py e feed_service.py foram atualizados com subqueries correlacionadas para evitar N+1.
+    Backend: 111 testes passando. ActivityResponse embute likes_count, liked_by_me e comments_count no feed, lista e detalhe (subqueries correlacionadas, sem N+1). Endpoints de comentários (POST/GET/DELETE) prontos e validados.
 
     Frontend Web: React 19 + Vite 8 (inalterado, no ar).
 
-    Mobile: App Flutter (D:\Rumo\mobile) com Curtidas 100% funcional no Feed e no Detalhe. O ApiClient foi expandido (post/delete), o modelo Activity ganhou as contagens e o estado otimista, e o botão de curtir (like_button.dart) foi integrado nas duas telas.
+    Mobile: App Flutter (D:\Rumo\mobile) com Curtidas e Comentários 100% funcionais.
+        Curtidas: LikeButton com estado otimista no feed e no detalhe (Sessão 7).
+        Comentários: model Comment, métodos listComments/createComment/deleteComment no ApiClient, seção completa no activity_detail_page.dart (listar, criar, deletar só o próprio) e contador/botão no card do feed_page.dart com refresh ao voltar do detalhe.
 
-    Commits: O backend (schemas e services) e o mobile (api, model, widget, pages) estão prontos para commit.
+    Qualidade: flutter analyze => "No issues found!" (0 issues).
 
-    Ambiente: Docker Desktop instalado e configurado no Windows (caminho per-user). Banco de teste rodando na porta 5433.
+    Ambiente: Flutter 3.47.9 / Dart 3.13.7. PATH do Windows corrigido (C:\Users\nasci\flutter\bin no PATH do usuário) — a dívida de PATH duplicado foi resolvida.
+
+    Commits: estado da Sessão 7 já commitado. Sessão 8 pronta para commit (ver seção "Commits pendentes").
 
 Produção
 
     Backend: https://rumo-api-5s0b.onrender.com
-
     Docs Backend: https://rumo-api-5s0b.onrender.com/docs
-
     Frontend Web: https://rumo-wheat.vercel.app
-
     Repo local: D:\Rumo
 
-O que foi feito na Sessão 7
-1. Infraestrutura e Ambiente
+O que foi feito na Sessão 8
+1. Model — mobile/lib/models/comment.dart (novo)
 
-    O Docker Desktop foi instalado no Windows em modo per-user (C:\Users\nasci\AppData\Local\Programs\DockerDesktop). O PATH do PowerShell teve que ser atualizado manualmente ([Environment]::SetEnvironmentVariable).
+    Espelha CommentResponse do backend: id, activity_id, content, created_at, updated_at, author.
+    author reusa UserPublic (mesmo modelo do Activity), sem duplicação.
+    copyWith (content/updatedAt/author) e helper canDelete(currentUserId) para esconder o botão de excluir de quem não é autor.
 
-    O ambiente virtual Python (.venv) foi recriado/corrigido com pip install -r requirements.txt.
+2. API — mobile/lib/services/api.dart
 
-    O banco de testes (PostGIS na porta 5433) foi iniciado via docker compose -f docker-compose.test.yml up -d. Todos os 111 testes passaram.
+    Adicionados: listComments(activityId), createComment(activityId, content) e deleteComment(commentId).
+    Reutilizam o _send/post/delete existentes (headers, timeout, decode centralizados). Nada do que já funcionava foi alterado.
 
-2. Backend — Contagens Embutidas
+3. UI — mobile/lib/pages/activity_detail_page.dart
 
-    app/schemas/activity.py: Adicionados likes_count, liked_by_me e comments_count ao ActivityResponse.
+    Seção de comentários no detalhe: lista cronológica, input (max 500, envio por botão e por Enter), botão de excluir visível só para o autor.
+    Contador "Comentários (N)" atualizado localmente ao criar/deletar (sem recarregar a atividade).
+    Id do usuário atual obtido decodificando o sub do JWT (widget.auth.token) — não depende de getter no AuthService.
 
-    app/services/activity_service.py: list_activities, search_activities e get_activity agora usam subqueries correlacionadas e _attach_counts para preencher as contagens sem N+1.
+4. Feed — mobile/lib/pages/feed_page.dart
 
-    app/services/feed_service.py: get_feed faz o mesmo para o feed.
+    Botão de comentários no rodapé do card, ao lado do LikeButton, exibindo commentsCount e navegando para o detalhe.
+    _openDetail: ao voltar do detalhe, refaz GET /activities/{id} e atualiza só aquele item no feed (contadores em dia). Falha silenciosa.
 
-3. Mobile — Refatoração da Base
+5. Qualidade e ambiente
 
-    pubspec.yaml: Confirmadas as versões (Flutter 3.47.9 / Dart 3.13.7). Mantido o padrão de imports atual.
+    flutter analyze: 0 issues (corrigidos 3 lints unnecessary_underscores em main.dart e feed_page.dart).
+    PATH do Flutter corrigido: C:\Users\nasci\flutter\bin adicionado ao PATH do usuário; flutter --version e flutter analyze funcionando no PowerShell.
+    Validação manual ponta a ponta OK: listar, criar, deletar (só o autor) e contador do feed atualizando ao voltar do detalhe.
 
-    services/api.dart: Adicionados os métodos post() e delete() (com _send privado para centralizar a lógica de headers e timeout).
+Commits pendentes (Sessão 8 — recomendo 1 commit único de feature)
 
-    models/activity.dart: Adicionados likesCount, likedByMe e commentsCount (com defaults seguros), além do método copyWith() para o estado otimista.
-
-4. Mobile — Curtidas (Bloco 7.1)
-
-    widgets/like_button.dart (novo): Widget de coração com estado otimista, chamadas POST /like e DELETE /like, e rollback + SnackBar em caso de erro.
-
-    pages/feed_page.dart: Consome GET /feed (antes era /activities) e integra o LikeButton no rodapé do card, com merge de estado via _replaceActivity.
-
-    pages/activity_detail_page.dart: Consome GET /activities/{id} e integra o LikeButton no cabeçalho do autor.
+    cd D:\Rumo
+    git add mobile/lib/models/comment.dart mobile/lib/services/api.dart mobile/lib/pages/activity_detail_page.dart mobile/lib/pages/feed_page.dart mobile/lib/main.dart
+    git commit -m "feat(mobile): comentários no detalhe e contador no feed (model, API, UI, delete do autor, analyze zerado)"
 
 O que não foi feito / Dívidas Técnicas
 
-    Comentários no Flutter: O backend já tem os endpoints (POST/GET/DELETE /comments), mas o mobile ainda não tem UI nem chamadas.
+    Mapa: flutter_map ou google_maps_flutter ainda não adicionados. (Próximo bloco recomendado.)
+    Getter currentUserId no AuthService: hoje a página decodifica o JWT localmente. Vale mover para um getter único no AuthService numa sessão futura (limpeza, não bloqueia nada).
+    Validação dos paths de comentário: funcionou em runtime com GET/POST /activities/{id}/comments e DELETE /comments/{id}; se o backend mudar o path do DELETE, é ajuste de string só no api.dart.
+    Limpeza do PATH do Windows: resolvido o essencial (flutter no PATH). A limpeza de duplicatas antigas (flutter\bin 3x, "Program File" truncado) deixou de ser necessária para o funcionamento; pode ser feita por estética numa sessão futura, se desejado.
 
-    Mapa: google_maps_flutter ou flutter_map ainda não foram adicionados.
+Próximos Passos Recomendados (Sessão 9) — Mapa no Flutter
 
-    Limpeza do PATH do Windows: A variável PATH do sistema ainda tem duplicatas (ex.: flutter\bin 3x, Program File truncado). Não afeta o funcionamento, mas vale limpar numa sessão futura.
+Decisão para a Sessão 9: seguir com Mapa no Flutter via flutter_map, salvo se o usuário indicar outra prioridade. Primeira ação obrigatória: confirmar coordenadas no backend antes de alterar o pubspec.yaml.
 
-Próximos Passos Recomendados (Sessão 8) — Comentários no Flutter
+Recomendação: usar flutter_map (leve, sem API key, OpenStreetMap) em vez de google_maps_flutter (exige chave paga e config de plataforma).
 
-O backend já está pronto. O foco será exclusivamente no app Flutter:
-
-    models/comment.dart (novo): Espelhar o CommentResponse do backend (id, activity_id, content, created_at, author).
-
-    services/api.dart: Adicionar métodos listComments(activityId), createComment(activityId, content) e deleteComment(commentId).
-
-    pages/comments_page.dart (ou seção no activity_detail_page.dart):
-
-        Listar comentários (ordem cronológica).
-
-        Campo de input para enviar (POST).
-
-        Botão de deletar (só para o autor do comentário, com DELETE).
-
-    Integração: Adicionar botão de "Comentários" no feed_page.dart (mostrando commentsCount) e a seção de comentários no activity_detail_page.dart.
+    pubspec.yaml: adicionar flutter_map e latlong2.
+    Backend: confirmar se Activity já expõe coordenadas (lat/lng ou GeoJSON). Se não, avaliar adicionar ao ActivityResponse (ou endpoint de track/rota).
+    models/activity.dart: incluir campos de coordenada (com defaults seguros), se vierem do backend.
+    widgets/activity_map.dart (novo): mapa somente-leitura com marcador do início (e polyline da rota, se houver track).
+    Integração: exibir o mapa no activity_detail_page.dart (card "Rota") e, opcionalmente, miniatura no feed.
+    Sem quebrar o existente: manter o padrão atual (ApiClient, auth, estados de loading/erro) e rodar flutter analyze ao final (meta: 0 issues).

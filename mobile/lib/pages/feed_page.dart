@@ -60,6 +60,24 @@ class _FeedPageState extends State<FeedPage> {
     });
   }
 
+  /// Abre o detalhe e, ao voltar, recarrega o item para refletir
+  /// contagens de comentários/crudes feitas lá.
+  Future<void> _openDetail(Activity activity) async {
+    await context.push('/activity/${activity.id}');
+    if (!mounted) return;
+    // Recarrega apenas esse item do detalhe para atualizar commentsCount.
+    try {
+      final data = await widget.auth.api.get(
+        '/activities/${activity.id}',
+        token: widget.auth.token,
+      );
+      final updated = Activity.fromJson(data as Map<String, dynamic>);
+      _replaceActivity(updated);
+    } catch (_) {
+      // silencioso: se falhar, mantém o estado atual do feed.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -99,13 +117,13 @@ class _FeedPageState extends State<FeedPage> {
                       child: ListView.separated(
                         padding: const EdgeInsets.all(12),
                         itemCount: _activities.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        separatorBuilder: (_, _) => const SizedBox(height: 12),
                         itemBuilder: (context, index) {
                           final a = _activities[index];
                           return _ActivityCard(
                             activity: a,
                             auth: widget.auth,
-                            onTap: () => context.push('/activity/${a.id}'),
+                            onTap: () => _openDetail(a),
                             onChanged: _replaceActivity,
                           );
                         },
@@ -207,7 +225,7 @@ class _ActivityCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
 
-              // Rodapé: data + curtidas
+              // Rodapé: data + curtidas + comentários
               Row(
                 children: [
                   Expanded(
@@ -220,6 +238,21 @@ class _ActivityCard extends StatelessWidget {
                     activity: activity,
                     auth: auth,
                     onChanged: onChanged,
+                  ),
+                  const SizedBox(width: 4),
+                  // Botão de comentários com contador; navega para o detalhe.
+                  TextButton.icon(
+                    onPressed: onTap,
+                    icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                    label: Text('${activity.commentsCount}'),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      minimumSize: const Size(0, 36),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                   ),
                 ],
               ),
