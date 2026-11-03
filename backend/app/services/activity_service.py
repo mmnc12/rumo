@@ -10,6 +10,8 @@ from sqlalchemy.orm import selectinload
 
 from app.models import Activity, User
 from app.models.activity import ActivityType
+from app.models.comment import Comment
+from app.models.like import Like
 from app.schemas import ActivityCreate
 from app.schemas.activity import TrackResponse
 from app.services import follow_service
@@ -23,36 +25,99 @@ _VALID_ACTIVITY_TYPES = {t.value for t in ActivityType}
 
 
 # ---------------------------------------------------------------------------
-# CÃ¡lculo de calorias
+# Contagens embutidas (likes / comments / liked_by_me)
 # ---------------------------------------------------------------------------
 #
-# FÃ³rmula: kcal = MET x peso_kg x duraÃ§Ã£o_horas
+# Para evitar N+1 no cliente, embutimos 3 contagens em cada Activity que
+# sai do service. Técnica: subqueries correlacionadas no SELECT, e depois
+# anexamos os resultados como atributos dinâmicos no objeto ORM (setattr).
+# O Pydantic lê via from_attributes. Funciona em async sem lazy load
+# (não dispara query no atributo).
 #
-# MET = "Metabolic Equivalent of Task" â€” quantas vezes o gasto energÃ©tico
+# Custo: 3 subqueries por linha do resultado (máx. 100 por request, por
+# causa do limit). Todas usam índice (activity_id FK e unique
+# (user_id, activity_id) em likes). Aceitável para 20 itens/página.
+# Dívida registrada: se virar gargalo, migrar para LEFT JOIN LATERAL
+# com GROUP BY numa única passada.
+#
+# liked_by_me é sempre False se user_id for None — mas todos os callers
+# passam user_id, então na prática sempre é calculado.
+
+
+def _count_likes_subq():
+    return (
+        select(func.count(Like.id))
+        .where(Like.activity_id == Activity.id)
+        .correlate(Activity)
+        .scalar_subquery()
+    )
+
+
+def _count_comments_subq():
+    return (
+        select(func.count(Comment.id))
+        .where(Comment.activity_id == Activity.id)
+        .correlate(Activity)
+        .scalar_subquery()
+    )
+
+
+def _liked_by_me_subq(user_id):
+    return (
+        select(func.count(Like.id))
+        .where(
+            Like.activity_id == Activity.id,
+            Like.user_id == user_id,
+        )
+        .correlate(Activity)
+        .scalar_subquery()
+    )
+
+
+def _attach_counts(
+    activity: Activity,
+    likes: int,
+    comments: int,
+    liked_by_me: int,
+) -> Activity:
+    """Anexa as contagens como atributos dinâmicos lidos pelo Pydantic."""
+    activity.likes_count = int(likes or 0)
+    activity.comments_count = int(comments or 0)
+    activity.liked_by_me = bool(liked_by_me and int(liked_by_me) > 0)
+    return activity
+
+
+# ---------------------------------------------------------------------------
+# Cálculo de calorias
+# ---------------------------------------------------------------------------
+#
+# Fórmula: kcal = MET x peso_kg x duração_horas
+#
+# MET = "Metabolic Equivalent of Task" — quantas vezes o gasto energético
 # da atividade supera o basal em repouso (1 MET ~= 1 kcal/kg/h).
 #
 # Valores tirados do Compendium of Physical Activities (Ainsworth et al.),
-# arredondados para 1 casa. SÃ£o aproximaÃ§Ãµes â€” Strava/Garmin usam modelos
-# mais finos (FC, VO2max, potÃªncia), mas para o Rumo a estimativa por MET
-# Ã© suficiente e barata. Ajustar aqui se aparecer reclamaÃ§Ã£o de precisÃ£o.
+# arredondados para 1 casa. São aproximações — Strava/Garmin usam modelos
+# mais finos (FC, VO2max, potência), mas para o Rumo a estimativa por MET
+# é suficiente e barata. Ajustar aqui se aparecer reclamação de precisão.
 #
-# Chaves sÃ£o os valores do enum ActivityType. Cobre TODOS os tipos vÃ¡lidos;
-# se um tipo novo entrar no enum e faltar aqui, o fallback Ã© _MET_DEFAULT.
+# Chaves são os valores do enum ActivityType. Cobre TODOS os tipos válidos;
+# se um tipo novo entrar no enum e faltar aqui, o fallback é _MET_DEFAULT.
 
 _MET_BY_TYPE: dict[str, float] = {
     "run": 9.8,        # corrida ~10 km/h
     "walk": 3.5,       # caminhada ~5 km/h
     "cycle": 7.5,      # pedalada lazer ~16 km/h
     "hike": 6.0,       # trilha
-    "swim": 8.0,       # nataÃ§Ã£o moderada
+    "swim": 8.0,       # natação moderada
     "other": 5.0,      # default conservador
 }
 _MET_DEFAULT = 5.0
 
-# Peso de fallback quando o usuÃ¡rio nÃ£o preencheu weight_kg.
-# 70 kg Ã© a mÃ©dia adulta global aproximada (usada em vÃ¡rias calculadoras
-# pÃºblicas). NÃ£o Ã© ideal â€” o certo Ã© o usuÃ¡rio preencher o perfil â€” mas
-# evita calories=NULL e mantÃ©m /stats/summary Ãºtil.
+# Peso de fallback quando o usuário não preencheu weight_kg.
+# 70 kg é a média adulta global aproximada (usada em várias calculadoras
+# públicas). Não é ideal — o certo é o usuário preencher o perfil — mas
+# evita calories=NULL e mantém /stats/summary útil.
 _DEFAULT_WEIGHT_KG = 70.0
 
 
@@ -62,12 +127,12 @@ def _estimate_calories(
     weight_kg: float | None,
 ) -> int | None:
     """
-    Estima calorias queimadas por MET x peso x duraÃ§Ã£o.
+    Estima calorias queimadas por MET x peso x duração.
 
-    - Retorna None se a duraÃ§Ã£o for ausente/zero (nÃ£o hÃ¡ o que estimar).
-    - Peso ausente usa _DEFAULT_WEIGHT_KG (ver comentÃ¡rio acima).
+    - Retorna None se a duração for ausente/zero (não há o que estimar).
+    - Peso ausente usa _DEFAULT_WEIGHT_KG (ver comentário acima).
     - Tipo desconhecido usa _MET_DEFAULT (5.0).
-    - Sempre retorna int >= 0 (CHECK do banco exige nÃ£o-negativo).
+    - Sempre retorna int >= 0 (CHECK do banco exige não-negativo).
     """
     if not duration_s or duration_s <= 0:
         return None
@@ -78,17 +143,17 @@ def _estimate_calories(
     duration_hours = duration_s / 3600.0
     kcal = met * kg * duration_hours
 
-    # Defensivo: MET positivo x kg positivo x duraÃ§Ã£o positiva nunca dÃ¡
-    # negativo, mas o CheckConstraint do banco exige >= 0. Clampa por seguranÃ§a.
+    # Defensivo: MET positivo x kg positivo x duração positiva nunca dá
+    # negativo, mas o CheckConstraint do banco exige >= 0. Clampa por segurança.
     return max(0, int(round(kcal)))
 
 
 async def _get_user_weight_kg(db: AsyncSession, user_id) -> float:
     """
-    Busca o weight_kg do usuÃ¡rio para o cÃ¡lculo de calorias.
+    Busca o weight_kg do usuário para o cálculo de calorias.
 
-    Custa 1 query extra por upload â€” aceitÃ¡vel: upload Ã© raro (10/h de rate
-    limit) e o peso nÃ£o vem no JWT. NÃ£o otimizar sem medir: a alternativa
+    Custa 1 query extra por upload — aceitável: upload é raro (10/h de rate
+    limit) e o peso não vem no JWT. Não otimizar sem medir: a alternativa
     (mudar a assinatura de create_activity_from_* pra receber o User) quebra
     o contrato do service e mexe no router por ~1 query.
     """
@@ -99,14 +164,14 @@ async def _get_user_weight_kg(db: AsyncSession, user_id) -> float:
 
 
 # ---------------------------------------------------------------------------
-# NormalizaÃ§Ã£o de campos de upload
+# Normalização de campos de upload
 # ---------------------------------------------------------------------------
 
 def _normalize_activity_type(value: str | None) -> str | None:
     """
     Valida/normaliza um activity_type vindo como string.
 
-    Retorna None se for vazio ou invÃ¡lido (pra usar o fallback).
+    Retorna None se for vazio ou inválido (pra usar o fallback).
     """
     if not value:
         return None
@@ -129,12 +194,12 @@ def _normalize_upload_fields(
     """
     Normaliza os campos comuns a GPX e FIT.
 
-    - title: None/vazio/"string" â†’ parsed_title â†’ "Atividade"
-    - activity_type: None/vazio/"string"/invÃ¡lido â†’ type_mapper(parsed_type)
-    - description: None/vazio/"string" â†’ None
+    - title: None/vazio/"string" → parsed_title → "Atividade"
+    - activity_type: None/vazio/"string"/inválido → type_mapper(parsed_type)
+    - description: None/vazio/"string" → None
 
-    `type_mapper` Ã© `map_gpx_type` ou `map_fit_sport` â€” cada parser tem
-    seu prÃ³prio vocabulÃ¡rio de tipo, mas o fallback e a validaÃ§Ã£o sÃ£o iguais.
+    `type_mapper` é `map_gpx_type` ou `map_fit_sport` — cada parser tem
+    seu próprio vocabulário de tipo, mas o fallback e a validação são iguais.
     """
     clean_title = title.strip() if title else None
     if not clean_title or clean_title == "string":
@@ -177,7 +242,7 @@ def linestring_to_points(wkt_or_geom) -> list[list[float]] | None:
 
 
 # ---------------------------------------------------------------------------
-# CriaÃ§Ã£o
+# Criação
 # ---------------------------------------------------------------------------
 
 async def create_activity(
@@ -186,10 +251,10 @@ async def create_activity(
     payload: ActivityCreate,
 ) -> Activity:
     """
-    Cria uma atividade no banco (a partir de JSON prÃ©-calculado).
+    Cria uma atividade no banco (a partir de JSON pré-calculado).
 
-    Calorias: se o payload trouxer `calories` explÃ­cito, o valor do usuÃ¡rio
-    prevalece. SÃ³ calcula quando vier None â€” mesma regra do GPX/FIT.
+    Calorias: se o payload trouxer `calories` explícito, o valor do usuário
+    prevalece. Só calcula quando vier None — mesma regra do GPX/FIT.
     """
     route = points_to_linestring(payload.track_points) if payload.track_points else None
 
@@ -235,12 +300,12 @@ async def create_activity_from_gpx(
     Cria uma atividade a partir de um arquivo GPX.
 
     - title: se None/vazio/"string", usa o <name> do GPX (fallback: "Atividade")
-    - activity_type: se None/vazio/"string"/invÃ¡lido, mapeia do <type> do GPX
+    - activity_type: se None/vazio/"string"/inválido, mapeia do <type> do GPX
     - description: opcional
-    - calories: se o GPX trouxer (raro), usa; senÃ£o estima por MET x peso x hora
+    - calories: se o GPX trouxer (raro), usa; senão estima por MET x peso x hora
 
-    Parse roda em thread separada (`asyncio.to_thread`) para nÃ£o bloquear
-    o event loop â€” o parser Ã© sÃ­ncrono e pesa 1â€“3s por arquivo.
+    Parse roda em thread separada (`asyncio.to_thread`) para não bloquear
+    o event loop — o parser é síncrono e pesa 1–3s por arquivo.
     """
     parsed = await asyncio.to_thread(parse_gpx, file_bytes)
 
@@ -295,17 +360,17 @@ async def create_activity_from_fit(
     Cria uma atividade a partir de um arquivo FIT (Garmin/ANT).
 
     Espelha create_activity_from_gpx, mas usa `map_fit_sport` no fallback
-    de tipo (o FIT usa `sport` da sessÃ£o, nÃ£o `type` do track).
+    de tipo (o FIT usa `sport` da sessão, não `type` do track).
 
-    - title: se None/vazio/"string", FIT nÃ£o tem nome de atividade â†’ "Atividade"
-    - activity_type: se None/vazio/"string"/invÃ¡lido, mapeia do sport do FIT
+    - title: se None/vazio/"string", FIT não tem nome de atividade → "Atividade"
+    - activity_type: se None/vazio/"string"/inválido, mapeia do sport do FIT
     - description: opcional
-    - calories: se o FIT trouxer (session.total_calories), usa; senÃ£o estima
-      por MET x peso x hora. O parse_fit atual NÃƒO extrai total_calories â€”
-      fica como dÃvida futura; hoje sempre cai no estimate.
+    - calories: se o FIT trouxer (session.total_calories), usa; senão estima
+      por MET x peso x hora. O parse_fit atual NÃO extrai total_calories —
+      fica como dívida futura; hoje sempre cai no estimate.
 
-    Parse roda em thread separada (`asyncio.to_thread`) para nÃ£o bloquear
-    o event loop â€” o parser Ã© sÃ­ncrono e pesa 1â€“3s por arquivo.
+    Parse roda em thread separada (`asyncio.to_thread`) para não bloquear
+    o event loop — o parser é síncrono e pesa 1–3s por arquivo.
     """
     parsed = await asyncio.to_thread(parse_fit, file_bytes)
 
@@ -358,16 +423,28 @@ async def list_activities(
     limit: int = 20,
     offset: int = 0,
 ) -> list[Activity]:
-    """Lista atividades do usuÃ¡rio, ordenadas por started_at DESC."""
+    """Lista atividades do usuário, ordenadas por started_at DESC.
+
+    Embutе likes_count / comments_count / liked_by_me via subqueries
+    correlacionadas para o cliente não precisar de requests extras.
+    """
+    likes_sq = _count_likes_subq().label("likes_count")
+    comments_sq = _count_comments_subq().label("comments_count")
+    liked_sq = _liked_by_me_subq(user_id).label("liked_by_me_raw")
+
     stmt = (
-        select(Activity)
+        select(Activity, likes_sq, comments_sq, liked_sq)
         .where(Activity.user_id == user_id)
         .order_by(Activity.started_at.desc())
         .limit(limit)
         .offset(offset)
     )
     result = await db.execute(stmt)
-    return list(result.scalars().all())
+
+    activities: list[Activity] = []
+    for activity, likes, comments, liked in result.all():
+        activities.append(_attach_counts(activity, likes, comments, liked))
+    return activities
 
 
 async def search_activities(
@@ -380,25 +457,32 @@ async def search_activities(
     """
     Busca atividades por texto em title/description, filtrando por visibilidade.
 
-    Regra de visibilidade: dono OU seguido â€” mesma do feed. Usa o helper
-    `following_ids_subquery` pra nÃ£o duplicar SQL (fonte de verdade Ãºnica).
+    Regra de visibilidade: dono OU seguido — mesma do feed. Usa o helper
+    `following_ids_subquery` pra não duplicar SQL (fonte de verdade única).
 
-    `ILIKE %q%` NÃƒO usa Ã­ndice B-tree â€” full scan Ã© o que roda hoje.
-    AceitÃ¡vel atÃ© ~5k atividades; criar Ã­ndice GIN gin_trgm_ops quando crescer
-    (dÃvida jÃ¡ registrada no handoff).
+    `ILIKE %q%` NÃO usa índice B-tree — full scan é o que roda hoje.
+    Aceitável até ~5k atividades; criar índice GIN gin_trgm_ops quando crescer
+    (dívida já registrada no handoff).
 
     Carrega `user` com selectinload porque o router serializa com
-    FeedItemResponse (author aninhado) â€” async quebra lazy load.
+    FeedItemResponse (author aninhado) — async quebra lazy load.
+
+    Também embute as contagens (likes/comments/liked_by_me) via
+    subqueries correlacionadas.
     """
     clean_q = q.strip()
     if not clean_q:
-        # Defensivo: se o router deixar passar, nÃ£o varre o banco Ã  toa.
+        # Defensivo: se o router deixar passar, não varre o banco à toa.
         return []
 
     pattern = f"%{clean_q}%"
 
+    likes_sq = _count_likes_subq().label("likes_count")
+    comments_sq = _count_comments_subq().label("comments_count")
+    liked_sq = _liked_by_me_subq(user_id).label("liked_by_me_raw")
+
     stmt = (
-        select(Activity)
+        select(Activity, likes_sq, comments_sq, liked_sq)
         .where(
             or_(
                 Activity.title.ilike(pattern),
@@ -418,7 +502,10 @@ async def search_activities(
     )
 
     result = await db.execute(stmt)
-    return list(result.scalars().all())
+    activities: list[Activity] = []
+    for activity, likes, comments, liked in result.all():
+        activities.append(_attach_counts(activity, likes, comments, liked))
+    return activities
 
 
 async def get_activity(
@@ -431,36 +518,45 @@ async def get_activity(
     """
     Retorna uma atividade.
 
-    - allow_following=False: sÃ³ o dono (comportamento original).
+    - allow_following=False: só o dono (comportamento original).
     - allow_following=True: dono OU quem segue o dono.
 
-    Levanta NotFoundError em ambos os casos (nÃ£o vaza existÃªncia).
+    Levanta NotFoundError em ambos os casos (não vaza existência).
 
     Carrega `user` com selectinload para que ActivityDetailResponse
     consiga serializar `author` sem lazy load (async quebra lazy load).
+
+    Embutе as contagens (likes/comments/liked_by_me) via subqueries
+    correlacionadas.
     """
+    likes_sq = _count_likes_subq().label("likes_count")
+    comments_sq = _count_comments_subq().label("comments_count")
+    liked_sq = _liked_by_me_subq(user_id).label("liked_by_me_raw")
+
     stmt = (
-        select(Activity)
+        select(Activity, likes_sq, comments_sq, liked_sq)
         .options(selectinload(Activity.user))
         .where(Activity.id == activity_id)
     )
     result = await db.execute(stmt)
-    activity = result.scalar_one_or_none()
+    row = result.one_or_none()
 
-    if activity is None:
-        raise NotFoundError("Atividade nÃ£o encontrada")
+    if row is None:
+        raise NotFoundError("Atividade não encontrada")
+
+    activity, likes, comments, liked = row
 
     if activity.user_id == user_id:
-        return activity
+        return _attach_counts(activity, likes, comments, liked)
 
     if allow_following:
         following = await follow_service.is_following(
             db, user_id, activity.user_id
         )
         if following:
-            return activity
+            return _attach_counts(activity, likes, comments, liked)
 
-    raise NotFoundError("Atividade nÃ£o encontrada")
+    raise NotFoundError("Atividade não encontrada")
 
 
 async def get_activity_track(
@@ -471,16 +567,16 @@ async def get_activity_track(
     """
     Retorna a geometria da rota de uma atividade em formato GeoJSON-like.
 
-    - Dono OU seguidor do dono acessa (404 caso contrÃ¡rio â€” nÃ£o vaza existÃªncia).
-    - Usa ST_AsGeoJSON + ST_XMin/YMin/XMax/YMax do PostGIS: uma Ãºnica query.
-    - NÃ£o expÃµe raw_track_points â€” sÃ³ geometria (decisÃ£o do 13a.0).
+    - Dono OU seguidor do dono acessa (404 caso contrário — não vaza existência).
+    - Usa ST_AsGeoJSON + ST_XMin/YMin/XMax/YMax do PostGIS: uma única query.
+    - Não expõe raw_track_points — só geometria (decisão do 13a.0).
     """
     activity = await get_activity(
         db, user_id, activity_id, allow_following=True
     )
 
     if activity.route is None:
-        raise NotFoundError("Atividade nÃ£o possui rota")
+        raise NotFoundError("Atividade não possui rota")
 
     stmt = select(
         func.ST_AsGeoJSON(Activity.route).label("geojson"),
@@ -508,7 +604,7 @@ async def get_activity_track(
 
 
 # ---------------------------------------------------------------------------
-# ExclusÃ£o
+# Exclusão
 # ---------------------------------------------------------------------------
 
 async def delete_activity(
@@ -517,10 +613,10 @@ async def delete_activity(
     activity_id,
 ) -> None:
     """
-    Remove uma atividade do usuÃ¡rio.
+    Remove uma atividade do usuário.
 
-    SÃ³ o dono apaga (404 se nÃ£o existir ou nÃ£o for dele).
-    NÃƒO usa allow_following â€” segue a regra original de escrita.
+    Só o dono apaga (404 se não existir ou não for dele).
+    NÃO usa allow_following — segue a regra original de escrita.
     """
     activity = await get_activity(db, user_id, activity_id)
     await db.delete(activity)

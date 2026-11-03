@@ -47,15 +47,60 @@ class ApiClient {
 
   /// GET autenticado.
   Future<dynamic> get(String path, {String? token}) async {
-    final uri = Uri.parse('$baseUrl$path');
-    final headers = <String, String>{'Accept': 'application/json'};
-    if (token != null) {
-      headers['Authorization'] = 'Bearer $token';
-    }
+    final response = await _send('GET', path, token: token);
+    return _decode(response);
+  }
 
-    final response = await _client
-        .get(uri, headers: headers)
-        .timeout(const Duration(seconds: 30));
+  /// POST autenticado. `body` é serializado como JSON.
+  Future<dynamic> post(
+    String path, {
+    Object? body,
+    String? token,
+  }) async {
+    final response = await _send('POST', path, token: token, body: body);
+    return _decode(response);
+  }
+
+  /// DELETE autenticado.
+  Future<dynamic> delete(String path, {String? token}) async {
+    final response = await _send('DELETE', path, token: token);
+    return _decode(response);
+  }
+
+  // ---------- internos ----------
+
+  Future<http.Response> _send(
+    String method,
+    String path, {
+    String? token,
+    Object? body,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final headers = <String, String>{
+      'Accept': 'application/json',
+      if (body != null) 'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+
+    final encodedBody = body == null ? null : jsonEncode(body);
+
+    late final http.Response response;
+    switch (method) {
+      case 'GET':
+        response = await _client
+            .get(uri, headers: headers)
+            .timeout(const Duration(seconds: 30));
+      case 'POST':
+        response = await _client
+            .post(uri, headers: headers, body: encodedBody)
+            .timeout(const Duration(seconds: 30));
+      case 'DELETE':
+        response = await _client
+            .delete(uri, headers: headers)
+            .timeout(const Duration(seconds: 30));
+      default:
+        throw ArgumentError('Método HTTP não suportado: $method');
+    }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(
@@ -64,6 +109,10 @@ class ApiClient {
       );
     }
 
+    return response;
+  }
+
+  dynamic _decode(http.Response response) {
     if (response.body.isEmpty) return null;
     return jsonDecode(utf8.decode(response.bodyBytes));
   }

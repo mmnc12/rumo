@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../models/activity.dart';
 import '../services/api.dart';
 import '../services/auth_service.dart';
+import '../widgets/like_button.dart';
 
 class FeedPage extends StatefulWidget {
   final AuthService auth;
@@ -32,7 +33,7 @@ class _FeedPageState extends State<FeedPage> {
 
     try {
       final data = await widget.auth.api.get(
-        '/activities?limit=20&offset=0',
+        '/feed?limit=20&offset=0',
         token: widget.auth.token,
       );
       final list = (data as List)
@@ -46,6 +47,17 @@ class _FeedPageState extends State<FeedPage> {
     } finally {
       setState(() => _loading = false);
     }
+  }
+
+  /// Substitui um item da lista pelo `updated` (mesmo id).
+  /// Chamado pelo LikeButton com o estado otimista e, em erro, com o original
+  /// (rollback). Como o LikeButton faz o merge, aqui só trocamos o item.
+  void _replaceActivity(Activity updated) {
+    setState(() {
+      _activities = _activities
+          .map((a) => a.id == updated.id ? updated : a)
+          .toList();
+    });
   }
 
   @override
@@ -92,7 +104,9 @@ class _FeedPageState extends State<FeedPage> {
                           final a = _activities[index];
                           return _ActivityCard(
                             activity: a,
+                            auth: widget.auth,
                             onTap: () => context.push('/activity/${a.id}'),
+                            onChanged: _replaceActivity,
                           );
                         },
                       ),
@@ -103,9 +117,16 @@ class _FeedPageState extends State<FeedPage> {
 
 class _ActivityCard extends StatelessWidget {
   final Activity activity;
+  final AuthService auth;
   final VoidCallback onTap;
+  final ValueChanged<Activity> onChanged;
 
-  const _ActivityCard({required this.activity, required this.onTap});
+  const _ActivityCard({
+    required this.activity,
+    required this.auth,
+    required this.onTap,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -119,6 +140,7 @@ class _ActivityCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Cabeçalho: avatar + username + tipo
               Row(
                 children: [
                   CircleAvatar(
@@ -151,6 +173,8 @@ class _ActivityCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
+
+              // Título
               Text(
                 activity.title ?? activity.typeLabel,
                 style: theme.textTheme.titleMedium,
@@ -158,22 +182,46 @@ class _ActivityCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 8),
+
+              // Métricas
               Wrap(
                 spacing: 12,
                 runSpacing: 4,
                 children: [
                   if (activity.distanceLabel != null)
-                    _Metric(icon: Icons.straighten, text: activity.distanceLabel!),
+                    _Metric(
+                      icon: Icons.straighten,
+                      text: activity.distanceLabel!,
+                    ),
                   if (activity.durationLabel != null)
-                    _Metric(icon: Icons.timer_outlined, text: activity.durationLabel!),
+                    _Metric(
+                      icon: Icons.timer_outlined,
+                      text: activity.durationLabel!,
+                    ),
                   if (activity.caloriesLabel != null)
-                    _Metric(icon: Icons.local_fire_department, text: activity.caloriesLabel!),
+                    _Metric(
+                      icon: Icons.local_fire_department,
+                      text: activity.caloriesLabel!,
+                    ),
                 ],
               ),
               const SizedBox(height: 8),
-              Text(
-                activity.startedAtLabel,
-                style: theme.textTheme.bodySmall,
+
+              // Rodapé: data + curtidas
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      activity.startedAtLabel,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                  LikeButton(
+                    activity: activity,
+                    auth: auth,
+                    onChanged: onChanged,
+                  ),
+                ],
               ),
             ],
           ),

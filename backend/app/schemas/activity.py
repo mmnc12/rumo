@@ -56,6 +56,14 @@ class ActivityResponse(BaseModel):
     photo_count: int
     created_at: datetime
 
+    # Contagens embutidas (evita N+1 no cliente). Preenchidas pelos
+    # services via subqueries correlacionadas — ver comentário em
+    # activity_service.list_activities / get_activity / search_activities
+    # e feed_service.get_feed.
+    likes_count: int = 0
+    liked_by_me: bool = False
+    comments_count: int = 0
+
 
 class ActivityDetailResponse(ActivityResponse):
     """Detalhe de uma atividade, com autor aninhado.

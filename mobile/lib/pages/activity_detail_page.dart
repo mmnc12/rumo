@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/activity.dart';
 import '../services/api.dart';
 import '../services/auth_service.dart';
+import '../widgets/like_button.dart';
 
 class ActivityDetailPage extends StatefulWidget {
   final String activityId;
@@ -52,6 +53,13 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
     }
   }
 
+  /// Atualiza o estado local quando a curtida muda (otimista ou rollback).
+  void _onLikeChanged(Activity updated) {
+    setState(() {
+      _activity = updated;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -91,6 +99,8 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
           '${a.typeLabel} • ${a.startedAtLabel}',
           style: theme.textTheme.bodySmall,
         ),
+        
+        // Autor e Botão de Curtir
         if (a.user != null) ...[
           const SizedBox(height: 16),
           Row(
@@ -105,13 +115,23 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
                     : null,
               ),
               const SizedBox(width: 12),
-              Text(
-                a.user!.fullName ?? a.user!.username,
-                style: theme.textTheme.titleMedium,
+              Expanded(
+                child: Text(
+                  a.user!.fullName ?? a.user!.username,
+                  style: theme.textTheme.titleMedium,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              // Botão de curtir integrado
+              LikeButton(
+                activity: a,
+                auth: widget.auth,
+                onChanged: _onLikeChanged,
               ),
             ],
           ),
         ],
+        
         const SizedBox(height: 24),
         GridView.count(
           crossAxisCount: 2,

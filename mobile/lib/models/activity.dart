@@ -37,6 +37,11 @@ class Activity {
   final String? coverPhotoUrl;
   final UserPublic? user;
 
+  // Contagens embutidas no feed/detalhe (backend já retorna).
+  final int likesCount;
+  final bool likedByMe;
+  final int commentsCount;
+
   Activity({
     required this.id,
     required this.activityType,
@@ -52,6 +57,9 @@ class Activity {
     this.avgSpeedMps,
     this.coverPhotoUrl,
     this.user,
+    this.likesCount = 0,
+    this.likedByMe = false,
+    this.commentsCount = 0,
   });
 
   factory Activity.fromJson(Map<String, dynamic> json) {
@@ -74,6 +82,37 @@ class Activity {
       user: json['user'] != null
           ? UserPublic.fromJson(json['user'] as Map<String, dynamic>)
           : null,
+      likesCount: (json['likes_count'] as int?) ?? 0,
+      likedByMe: (json['liked_by_me'] as bool?) ?? false,
+      commentsCount: (json['comments_count'] as int?) ?? 0,
+    );
+  }
+
+  /// Retorna uma cópia com os campos de curtida atualizados.
+  /// Usado para estado otimista (não persiste no backend por si só).
+  Activity copyWith({
+    int? likesCount,
+    bool? likedByMe,
+    int? commentsCount,
+  }) {
+    return Activity(
+      id: id,
+      activityType: activityType,
+      startedAt: startedAt,
+      title: title,
+      description: description,
+      finishedAt: finishedAt,
+      durationS: durationS,
+      distanceM: distanceM,
+      elevationGainM: elevationGainM,
+      calories: calories,
+      avgPaceSPerKm: avgPaceSPerKm,
+      avgSpeedMps: avgSpeedMps,
+      coverPhotoUrl: coverPhotoUrl,
+      user: user,
+      likesCount: likesCount ?? this.likesCount,
+      likedByMe: likedByMe ?? this.likedByMe,
+      commentsCount: commentsCount ?? this.commentsCount,
     );
   }
 
