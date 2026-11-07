@@ -1,4 +1,4 @@
-HANDOFF — Rumo (backend + frontend + mobile) — gerado ao fim da Sessão 17
+HANDOFF — Rumo (backend + frontend + mobile) — gerado ao fim da Sessão 18
 
 ===============================================================================
 
@@ -21,7 +21,6 @@ Sessões anteriores perderam tempo porque o assistente tentou "adivinhar" a
 O QUE É LOCAL vs O QUE É PRODUÇÃO
 
     LOCAL (na máquina do usuário): D:\Rumo (repo git), D:\Rumo\backend (FastAPI
-
         Postgres/PostGIS + Alembic + pytest), D:\Rumo\web (React 19 + Vite 8 +
         TypeScript + Tailwind + react-leaflet + recharts), D:\Rumo\mobile (Flutter).
         O assistente NÃO tem acesso a esses arquivos neste chat — o usuário precisa
@@ -39,7 +38,7 @@ O QUE É LOCAL vs O QUE É PRODUÇÃO
     localmente" para testar UI.
 
     DOCKER: INSTALADO E FUNCIONAL no Windows local. pytest -q local verde
-    (124 passed ao fim da Sessão 17). Container de teste rumo_postgres_test
+    (129 passed ao fim da Sessão 18). Container de teste rumo_postgres_test
     na porta 5433. Para reativar numa sessão nova: (1) abrir Docker Desktop e
     esperar a baleia verde; (2) garantir que o terminal foi aberto via Win+R
     (fora do VS Code / Windows Terminal, que herdam PATH antigo);
@@ -49,7 +48,7 @@ O QUE É LOCAL vs O QUE É PRODUÇÃO
 
 ESTRUTURA DO REPO (referência — NÃO É PARA ASSUMIR, É PARA CONFERIR)
 
-Árvore de alto nível REAL, confirmada na Sessão 17:
+Árvore de alto nível REAL, confirmada na Sessão 17 e mantida na S18:
 
 D:\Rumo
 ├── .vscode
@@ -87,52 +86,55 @@ D:\Rumo
 │ ├── services
 │ └── widgets\ # activity_map.dart, like_button.dart (flat)
 └── web
-└── src
-├── api\ # activities.ts, auth.ts, client.ts, notifications.ts,
-│ # photos.ts, social.ts, stats.ts
-├── assets
-├── components\ # ActivityCard, ActivityResults, AppHeader,
-│ # CommentsSection, LikeButton, NotificationBell,
-│ # PeriodChart (unifica 4 gráficos), PhotoGallery,
-│ # PhotoUpload, ProtectedRoute, RouteMap, StatsCards,
-│ # UserResults
-├── contexts
-├── hooks\ # useActivities, useActivitySearch, useAuth, useDebounce,
-│ # useNotifications, usePhotos, useProfile, useSocial,
-│ # useStats, useUserSearch
-├── lib\ # format.ts (format* + formatElevation),
-│ # geo.ts (bboxToOsmTileGrid — único helper geo desde S17)
-├── pages\ # ActivitiesPage, ActivityDetailPage, FeedPage,
-│ # LoginPage, NotificationsPage, ProfilePage,
-│ # RegisterPage, SearchPage, UploadPage
-└── types\ # api.ts (todos os tipos, StatsByType* — S14)
+    └── src
+        ├── api\ # activities.ts, auth.ts, client.ts, notifications.ts,
+        │ # photos.ts, social.ts, stats.ts
+        ├── assets
+        ├── components\ # ActivityCard, ActivityResults, AppHeader,
+        │ # CommentsSection, LikeButton, NotificationBell,
+        │ # PeriodChart (unifica 4 gráficos), PhotoGallery,
+        │ # PhotoUpload, ProtectedRoute, RouteMap, StatsCards,
+        │ # UserResults
+        ├── contexts
+        ├── hooks\ # useActivities, useActivitySearch, useAuth, useDebounce,
+        │ # useNotifications, usePhotos, useProfile, useSocial,
+        │ # useStats, useUserSearch
+        ├── lib\ # format.ts (format* + formatElevation),
+        │ # geo.ts (bboxToOsmTileGrid — único helper geo desde S17)
+        ├── pages\ # ActivitiesPage, ActivityDetailPage, FeedPage,
+        │ # LoginPage, NotificationsPage, ProfilePage,
+        │ # RegisterPage, SearchPage, UploadPage
+        └── types\ # api.ts (todos os tipos, StatsByTypePrevious — S18)
 
-DIVERGÊNCIAS vs handoff da Sessão 16:
+DIVERGÊNCIAS vs handoff da Sessão 17:
 
-    web/src/lib/geo.ts: bboxToOsmTileUrl REMOVIDA na S17. Restou só
-    bboxToOsmTileGrid (mosaico 2×2). Commit 0f1c6ef.
+    backend/app/services/stats_service.py: get_by_type ganhou comparação
+    com a janela anterior. Novo helper _current_window_expr; WHERE ampliado
+    para 2N dias quando period != "all"; métricas atuais via CASE WHEN;
+    previous montado em Python. get_summary e get_period_stats intocados.
 
-    backend/app/routers/activities.py: rota /stats/by-type ganhou param
-    `period: Literal["all", "90d", "1y"] = Query(default="all")` — S17.
+    backend/app/schemas/stats.py: +StatsByTypePreviousItem; +campo
+    previous: StatsByTypePreviousItem | None = None em StatsByTypeItem.
 
-    backend/app/services/stats_service.py: get_by_type ganhou param `period`
-    e helper _apply_period_filter; get_summary e get_period_stats intocados.
+    backend/tests/test_stats.py: +5 testes de previous (service + rota).
+    Total: 129 passed (era 124 na S17).
 
-    backend/tests/test_stats.py: +6 testes novos de period (service + rota).
-    Total: 124 passed (era 118).
+    web/src/api/stats.ts: SÓ DOCSTRING de getStatsByType ganhou parágrafo
+    S18. Sem mudança de código.
 
-    web/src/api/stats.ts: +tipo StatsPeriod; getStatsByType(period = "all")
-    sempre envia param explícito na URL.
+    web/src/hooks/useStats.ts: SÓ 3 comentários S18. Sem mudança de código.
 
-    web/src/hooks/useStats.ts: statsKeys.byType(period); useStatsByType
-    (period = "all", enabled = true).
+    web/src/types/api.ts: +StatsByTypePrevious; +campo
+    previous: StatsByTypePrevious | null em StatsByTypeItem (obrigatório
+    no tipo, não opcional — o backend sempre envia null quando não aplica).
 
-    web/src/pages/ProfilePage.tsx: +useState<StatsPeriod>("all") e segmented
-    control Todos/90 dias/1 ano no header do card "Por tipo de atividade".
-    +import type { StatsPeriod }. +const PERIOD_FILTERS.
+    web/src/pages/ProfilePage.tsx: +showPrevious; +<th> e <td> "vs. anterior"
+    condicionais; +componentes PreviousDelta e DeltaLine (no fim do arquivo).
+    Todo o resto intocado (filtros, toggles, StatsCards, PeriodChart, lista).
 
-    web/src/components/StatsCards.tsx: INTOCADO na S17 (5 cards de summary
-    continuam "todos os tempos", filtro é só na tabela por tipo).
+    backend/app/routers/activities.py: INTOCADO na S18 (period já existia
+    desde a S17; previous é derivado no service, declarado no schema,
+    serializado pelo FastAPI).
 
     mobile/: INTOCADO desde a S11 (sem drill-down de stats no app).
 
@@ -187,7 +189,7 @@ COMO RODAR DOCKER E PYTEST LOCAL (Windows deste usuário)
         rodar ..venv\Scripts\Activate.ps1 com o venv já ativo dá
         "módulo '..venv' não encontrado" (inofensivo, mas confunde).
 
-        pytest -q — esperado: 124 passed, 0 warnings (verde na Sessão 17)
+        pytest -q — esperado: 129 passed, 0 warnings (verde na Sessão 18)
 
     Se Activate.ps1 der erro de política:
     Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
@@ -199,28 +201,18 @@ COMO TESTAR O BACKEND DE PRODUÇÃO SEM O APP (PowerShell)
     $login = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/login" -Method Post -ContentType "application/x-www-form-urlencoded" -Body $body
     $token = $login.access_token
 
-    Stats by-type (S17 — validado em produção, 422 em valor inválido):
-    Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=all"  -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
-    Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=90d"  -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
-    Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=1y"   -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
-
-    Detecção de versão em produção (S17 — como saber se o Render
-    redeployou o commit mais recente):
-    try {
-        Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=30d" -Headers @{ Authorization = "Bearer $token" }
-        Write-Host "RESULTADO: 200 — backend antigo (Sessao 17 NAO deployada)"
-    } catch {
-        if ($_.Exception.Response.StatusCode.value__ -eq 422) {
-            Write-Host "RESULTADO: 422 — backend NOVO no ar"
-        }
-    }
+    Stats by-type COM previous (S18 — validado em produção):
+    Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=all"  -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 4
+    Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=90d"  -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 4
+    Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=1y"   -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 4
 
     Conta de teste: prod@rumo.com / senha12345.
-    NOTA — essa conta tem 6 atividades (other: 3, walk: 3), todas com
-    menos de 90 dias. Por isso period=all, period=90d e period=1y
-    retornam IGUAIS para essa conta. NÃO é bug — é ausência de dado
-    antigo. Os 124 testes locais (com _dt_ago(100) e _dt_ago(400))
-    provam o filtro real. NÃO PERDER TEMPO achando que está quebrado.
+    NOTA — essa conta tem 3 walk (todas <90d). Por isso period=all, period=90d
+    e period=1y retornam IGUAIS, e "previous" vem null em TODOS os itens
+    (não há atividade na janela anterior). NÃO é bug — é ausência de dado
+    antigo. Os 129 testes locais (com _dt_ago(120), _dt_ago(500)) provam
+    o filtro e o previous de verdade. NÃO PERDER TEMPO achando que está
+    quebrado.
 
 O QUE O ASSISTENTE PRECISA PEDIR AO USUÁRIO (não tem acesso a arquivos)
 
@@ -237,11 +229,10 @@ O QUE O ASSISTENTE PRECISA PEDIR AO USUÁRIO (não tem acesso a arquivos)
     Pedir ruff check <arquivo> (lista duplicatas de uma vez) e entregar o
     arquivo completo para Ctrl+A → colar → salvar.
 
-    ATENÇÃO (S17 — NOVO) — arquivo "salvo" que não salvou. A S17 perdeu
-    dois rounds porque o usuário colou o conteúdo novo no chat, mas o
-    Ctrl+S não foi feito (ou foi feito em outro buffer/arquivo). SINTOMA:
-    build ou pytest falha dizendo que um símbolo novo não existe, mesmo
-    o assistente tendo entregado o arquivo. DIAGNÓSTICO RÁPIDO:
+    ATENÇÃO (S17) — arquivo "salvo" que não salvou. A S17 perdeu dois rounds
+    porque o Ctrl+S não foi feito (ou foi feito em outro buffer/arquivo).
+    SINTOMA: build ou pytest falha dizendo que um símbolo novo não existe,
+    mesmo o assistente tendo entregado o arquivo. DIAGNÓSTICO RÁPIDO:
     Get-Content -Encoding UTF8 <caminho> | Select-String -Pattern "<simbolo>"
     Se não aparecer, o arquivo no disco ainda é o antigo. Pedir pro
     usuário salvar de novo. Isso NÃO é bug de código — é save perdido.
@@ -257,12 +248,28 @@ O QUE O ASSISTENTE PRECISA PEDIR AO USUÁRIO (não tem acesso a arquivos)
     ATENÇÃO — git log sem --no-pager abre o less e trava o terminal.
     SEMPRE usar git --no-pager log ... ou prefixar com $env:PAGER="".
 
+    ATENÇÃO (S18 — NOVO) — "422 de versão" NÃO distingue S17 de S18.
+    O endpoint /activities/stats/by-type?period=30d devolve 422 desde a S17
+    (period já existia). Para saber se o Render redeployou a S18, o check
+    correto é: GET ?period=90d e verificar se o item tem a CHAVE "previous"
+    (valor null é OK). Se a chave não existir, o Render ainda está na S17.
+    NÃO confundir "backend de pé" com "S18 no ar".
+
+    ATENÇÃO (S18 — NOVO) — WHERE mata a janela anterior antes do CASE WHEN.
+    Regra aprendida: quando um único SELECT precisa somar duas janelas de
+    tempo, o WHERE NÃO pode filtrar só a janela atual — ele descarta as
+    linhas da janela anterior ANTES do CASE WHEN chegar nelas. Solução:
+    ampliar o WHERE para cobrir as duas janelas (started_at >= now - 2N) e
+    fazer o recorte da janela atual DENTRO de cada métrica, via
+    SUM(CASE WHEN <janela_atual> THEN col ELSE 0 END), inclusive a contagem
+    (SUM(CASE WHEN ... THEN 1 ELSE 0 END)). Detalhe na seção 7.
+
 ACORDOS DE TRABALHO (válidos em todas as sessões)
 
     SEMPRE seguir a recomendação do assistente. Quando houver decisão
     pendente, executar a recomendada salvo instrução explícita em contrário.
-    (Usuário reforçou isso no início da Sessão 15, de novo na Sessão 16,
-    e de novo na Sessão 17: "sempre vamos fazer o que você recomenda".)
+    (Usuário reforçou isso no início das Sessões 15, 16, 17 e de novo na 18:
+    "sempre vamos fazer o que você recomenda".)
 
     SEMPRE entregar o CÓDIGO COMPLETO ao atualizar um arquivo — nunca diff
     parcial, nunca "// resto igual". Preservar imports, comentários e trechos
@@ -271,7 +278,11 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
 
     UMA versão por arquivo por resposta. Se errar no meio do raciocínio,
     cortar a versão errada e entregar só a corrigida com nota de 1 linha.
-    NUNCA duas versões do mesmo arquivo na mesma resposta.
+    NUNCA duas versões do mesmo arquivo na mesma resposta. (A S18 violou
+    essa regra uma vez com o ProfilePage.tsx — entregou uma versão com bug
+    no PreviousDelta e, na mesma resposta, a corrigida. O usuário não
+    reclamou, mas foi erro do assistente. NÃO repetir: se errar, cortar a
+    versão errada e entregar só a corrigida.)
 
     HANDOFF PREVENTIVO em ~70-80% do limite de contexto: parar o trabalho em
     curso e entregar o HANDOFF completo neste mesmo formato (seções 0 a 8),
@@ -294,7 +305,7 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
     TL;DR PARA QUEM CHEGA AGORA
     ===============================================================================
 
-    Backend: 124 testes passando LOCALMENTE (pytest -q verde na Sessão 17),
+    Backend: 129 testes passando LOCALMENTE (pytest -q verde na Sessão 18),
     0 warnings. Activity.route é PostGIS LINESTRING. GET /activities/{id}/track
     devolve TrackResponse com coordinates em ordem GeoJSON [lon, lat],
     bbox [minLon,minLat,maxLon,maxLat], n_points, simplified. 404 quando
@@ -312,6 +323,8 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
         GET /activities/stats/by-type?period=<all|90d|1y> — StatsByTypeResponse.
             (S17) period é opcional, default "all". Valores inválidos → 422.
             Janela é retroativa a partir de now() (started_at >= now() - N dias).
+            (S18) Cada item ganhou "previous" (janela imediatamente anterior)
+            ou null (quando period="all" ou tipo ausente na janela anterior).
 
     Os 3 primeiros endpoints de stats (summary/weekly/monthly) aceitam
     activity_type opcional. O by-type NÃO aceita activity_type (é o
@@ -319,60 +332,70 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
 
     Frontend Web: React 19 + Vite 8 + TypeScript + Tailwind; react-leaflet
     (RouteMap no detalhe) + recharts (gráficos no perfil). Drill-down por
-    tipo ganhou segmented control de janela temporal (S17).
+    tipo tem segmented control de janela temporal (S17) e, quando period
+    != "all", coluna "vs. anterior" com delta (Ativ./Dist./Elev.) colorido
+    (S18).
 
     Mobile: mapa de rota no detalhe (flutter_map, OSM/Esri satélite),
     alternância Mapa/Satélite, miniatura no feed via CameraFit.bounds.
     Sem drill-down de stats no app.
 
-    [Sessão 17 — entregas]
+    [Sessão 18 — entregas]
 
-        Backend — filtro de período no drill-down por tipo.
+        Backend — comparação com janela imediatamente anterior.
 
-            routers/activities.py: /stats/by-type ganhou
-            period: Literal["all","90d","1y"] = Query(default="all").
-            Validação automática via FastAPI → 422 em valor inválido.
+            schemas/stats.py: +StatsByTypePreviousItem (5 métricas, sem
+            activity_type). StatsByTypeItem ganhou
+            previous: StatsByTypePreviousItem | None = None.
 
-            services/stats_service.py: get_by_type(db, user_id, period="all").
-            Novo helper _apply_period_filter(stmt, period) aplica
-            WHERE started_at >= now() - INTERVAL para 90d/1y; no-op para all.
-            get_summary e get_period_stats INTOCADOS.
+            services/stats_service.py: get_by_type estendido. Novo
+            _current_window_expr (condição started_at >= now - N).
+            _previous_window_expr (já existia da entrega interna, mas é
+            o helper que define [now-2N, now-N)). WHERE ampliado para
+            started_at >= now - 2N quando period != "all". Métricas da
+            janela atual via SUM(CASE WHEN <janela_atual> THEN col ELSE 0
+            END), inclusive contagem. Métricas da janela anterior via
+            SUM(CASE WHEN <janela_anterior> THEN col ELSE 0 END). previous
+            montado em Python; null quando prev_total_activities == 0.
+            Loop pula linhas com curr_activities == 0 (tipo só na janela
+            anterior não aparece). get_summary e get_period_stats INTOCADOS.
 
-            tests/test_stats.py: +6 testes (all baseline, 90d exclui antiga,
-            1y exclui >365d, 1y superset de 90d, rota com param, rota com
-            valor inválido → 422). Helper _dt_ago(days) para datas relativas
-            a now(). Margem de 10 dias entre dentro/fora elimina flakiness.
-            Total: 124 passed.
+            tests/test_stats.py: +5 testes:
+              - test_get_by_type_previous_90d (45d atual, 120d anterior)
+              - test_get_by_type_previous_1y (200d atual, 500d anterior)
+              - test_get_by_type_previous_all_is_none (period=all → null)
+              - test_get_by_type_previous_none_when_type_absent_in_window
+                (item existe, previous null)
+              - test_route_by_type_previous_shape (shape HTTP com as 5
+                chaves exatas em 90d; null em all)
+            Total: 129 passed.
 
-        Web — segmented control Todos / 90 dias / 1 ano.
+        Web — coluna "vs. anterior" no drill-down por tipo.
 
-            api/stats.ts: +tipo StatsPeriod = "all" | "90d" | "1y";
-            getStatsByType(period="all") sempre envia ?period= na URL.
+            types/api.ts: +StatsByTypePrevious (5 campos). StatsByTypeItem
+            ganhou previous: StatsByTypePrevious | null (obrigatório no tipo;
+            null é valor válido, não undefined).
 
-            hooks/useStats.ts: statsKeys.byType(period) inclui period na key
-            (refetch automático); useStatsByType(period="all", enabled=true).
+            pages/ProfilePage.tsx: +import type { StatsByTypeItem };
+            +const showPrevious = byTypePeriod !== "all"; +<th> "vs. anterior"
+            condicional; +<td> com <PreviousDelta item={item} /> condicional;
+            +componentes PreviousDelta e DeltaLine no fim do arquivo.
+            PreviousDelta mostra 3 linhas: Ativ./Dist./Elev., com delta
+            absoluto e percentual (percentual só quando previous > 0), cor
+            verde (subiu) / vermelho (desceu) / cinza (igual). null → "—".
+            DeltaLine recebe current, previous, formatter opcional.
 
-            pages/ProfilePage.tsx: +useState<StatsPeriod>("all") chamado
-            byTypePeriod; segmented control no header do card da tabela
-            (padrão inline-flex rounded-lg bg-gray-50 p-1 + botão
-            rounded-md, coerente com os outros dois toggles da página).
-            Call site: useStatsByType(byTypePeriod, isSelf).
+            api/stats.ts: SÓ DOCSTRING de getStatsByType ganhou parágrafo S18.
+            hooks/useStats.ts: SÓ 3 comentários S18.
 
-            components/StatsCards.tsx: INTOCADO (summary de 5 cards é
-            "todos os tempos", não faz parte do drill-down).
-
-        Cleanup — bboxToOsmTileUrl removida (fecha dívida S16).
-
-            web/src/lib/geo.ts: função deprecated removida. Restou só
-            bboxToOsmTileGrid (mosaico 2×2). Build provou que ninguém
-            importava (hash e tamanho do bundle idênticos antes/depois).
-            Commit 0f1c6ef.
-
-        Estado final: working tree limpo, HEAD == origin/main == 5925a03,
-        pytest 124 passed / 0 warnings (local), npm run build verde
-        (824 modules, ProfilePage +600 B), Render deployado (422 em
-        period=30d validado em produção), Vercel redeployado (timing
-        pós-push), flutter analyze sem issues (S16).
+        Estado final: working tree limpo, HEAD == origin/main == b0e3a29,
+        pytest 129 passed / 0 warnings (local), ruff All checks passed,
+        npm run build verde (824 modules, ProfilePage 15.98 kB), flutter
+        analyze sem issues, Render deployado (previous presente na
+        resposta do period=90d em produção), Vercel redeployado (timing
+        pós-push, não validado visualmente — próxima sessão pode conferir
+        abrindo https://rumo-wheat.vercel.app e indo em /users/me ou
+        equivalente).
 
 ===============================================================================
 
@@ -399,8 +422,10 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
 
     Venv backend: D:\Rumo\backend.venv (ativa com ..venv\Scripts\Activate.ps1)
 
-    Git (estado ao fim da Sessão 17):
-    5925a03 (HEAD -> main, origin/main) feat(stats): filtro de periodo no drill-down por tipo (90d|1y|all)
+    Git (estado ao fim da Sessão 18):
+    b0e3a29 (HEAD -> main, origin/main) feat(stats): comparacao com janela anterior no drill-down por tipo (Sessao 18)
+    494d8cc docs: handoff da Sessao 17
+    5925a03 feat(stats): filtro de periodo no drill-down por tipo (90d|1y|all)
     0f1c6ef chore(web): remove bboxToOsmTileUrl deprecated da Sessao 16
     1ab793d docs: handoff da Sessão 16
     a8a515f feat(web): miniatura do feed em mosaico 2x2 de tiles OSM
@@ -411,147 +436,138 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
 
     Todos os commits estão em origin/main (pushados).
 
-    Render e Vercel deployam automático a cada push em main. A Sessão 17
-    está deployada em produção (validado via 422 em period=30d).
+    Render e Vercel deployam automático a cada push em main. A Sessão 18
+    está deployada em produção (validado via "previous": null no
+    period=90d).
 
 ===============================================================================
 
-    O QUE FOI FEITO NA SESSÃO 17
+    O QUE FOI FEITO NA SESSÃO 18
     ===============================================================================
 
-3.1 Validação de estado inicial (Sessão 17)
+3.1 Validação de estado inicial (Sessão 18)
 
     PowerShell via Win+R, repo em D:\Rumo, venv backend ativo.
 
     git push: Everything up-to-date.
 
-    HEAD == origin/main == 1ab793d (commit do handoff da S16).
+    HEAD == origin/main == 5925a03 (commit da S17, antes do handoff).
 
-    git status --short: limpo.
+    git status --short: docs/HANDOFF.md modificado (handoff da S17 ainda
+    não commitado).
 
-    npm run build: 824 modules, 1.80s, verde.
+    npm run build: 824 modules, verde.
 
-    flutter analyze: No issues found (2.9s).
+    flutter analyze: No issues found.
 
-    docker compose -f docker-compose.test.yml up -d: rumo_postgres_test
-    já up (Running).
+    docker ps: rumo_postgres_test healthy.
 
-    pytest -q: 124 passed (na verdade 118 passed — a S17 ainda não tinha
-    começado; 124 veio depois dos testes novos). 0 warnings.
+    pytest -q: 124 passed (estado da S17).
 
-    Descoberta de estrutura via Get-ChildItem: bate com o handoff da S16,
-    sem divergências.
+    Detecção de versão em produção: 422 em period=30d. S17 deployada.
 
-3.2 [Web] Rota A+ (a) — remover bboxToOsmTileUrl
+    Commit do handoff da S17: 494d8cc (docs: handoff da Sessao 17).
 
-    Lido web/src/lib/geo.ts.
+3.2 Definição de contrato (antes de codar)
 
-    Função bboxToOsmTileUrl estava @deprecated desde a S16, sem uso
-    (tree-shaking já tinha eliminado do bundle).
+    Usuário reforçou "sempre vamos seguir suas recomendações".
 
-    Entrega: geo.ts completo sem a função, com nota [Sessão 17]
-    registrando a remoção.
+    Contrato fixado:
 
-    npm run build: 824 modules, 1.99s, verde. HASH E TAMANHO de
-    index-*.js IDÊNTICOS antes/depois — prova que a função era 100% morta.
+        - "Anterior" = janela imediatamente anterior, sem sobreposição:
+          90d → [now-180d, now-90d); 1y → [now-730d, now-365d).
+        - period="all" → sem comparação (previous is None).
+        - previous aninhado no item; null quando period="all" ou quando
+          o tipo não tem atividade na janela anterior.
+        - Implementação (A): um único SELECT, SUM(CASE WHEN ...) por
+          métrica; sem N+1.
+        - Front: coluna "vs. anterior" no ProfilePage, visível só em
+          period != "all"; delta absoluto + percentual; verde/vermelho/cinza.
+        - Fora de escopo: StatsCards (summary "todos os tempos"), mobile,
+          get_summary, get_period_stats.
 
-    Commit: 0f1c6ef. Push OK.
+3.3 [Backend] Implementação + testes
 
-3.3 [Backend + Web] Rota B — filtro de período no drill-down por tipo
+    Ordem de entrega (uma versão por arquivo por resposta):
 
-    Decisão de contrato (aprovada pelo usuário com "sempre vamos fazer o
-    que você recomenda"):
+        stats_service.py (completo)
+        schemas/stats.py (completo)
+        tests/test_stats.py (completo)
 
-        Param: period, tipo Literal["all","90d","1y"], default "all".
-        "1y" = 365 dias corridos.
-        Web: 3 botões (Todos / 90 dias / 1 ano), default "Todos".
-        Mobile: fora do escopo (não tem drill-down).
-        4-6 testes novos, sem tocar nos 118 existentes.
+    Cada um: usuário cola Get-Content -Encoding UTF8, assistente entrega
+    arquivo completo, usuário confirma com Select-String (padrão S17),
+    depois pytest -q.
 
-    Entrega 1/4 — backend/app/routers/activities.py.
+    Rounds:
 
-        Import novo: from typing import Literal.
-        stats_by_type ganhou period: Literal[...] = Query(default="all", ...).
-        Docstring atualizada. Chamada stats_service.get_by_type(db, uid, period).
+        stats_service.py: 124 passed (o campo previous não estava no
+        schema ainda, então testes antigos intocados).
 
-    Entrega 2/4 — backend/app/services/stats_service.py.
+        schemas/stats.py: 124 passed.
 
-        Imports novos: from datetime import timedelta; from typing import Literal.
-        Novo helper _apply_period_filter(stmt, period) — espelha o estilo de
-        _apply_type_filter. Aplica Activity.started_at >= func.now() - timedelta
-        para 90d/1y; no-op para all.
-        get_by_type(db, user_id, period="all") — stmt = _apply_period_filter
-        (stmt, period) antes do GROUP BY.
-        get_summary e get_period_stats intocados.
+        tests/test_stats.py: 3 FAILED, 126 passed.
+        Falhas: test_get_by_type_previous_90d, test_get_by_type_previous_1y,
+        test_route_by_type_previous_shape — todos com
+        "assert prev is not None" falhando.
 
-        pytest -q após o service: 118 passed (testes antigos não quebraram
-        porque default "all" preserva assinatura).
+    Diagnóstico (S18 — lição principal):
 
-    Entrega 3/4 — backend/tests/test_stats.py.
+        O get_by_type usava WHERE started_at >= now - N (só janela atual)
+        e CASE WHEN <janela_anterior> para previous. O WHERE descartava
+        as linhas da janela anterior ANTES do CASE WHEN — previous vinha
+        sempre null. Os 3 testes capturaram o bug corretamente.
 
-        +helper _dt_ago(days) (relativo a now(), documentado).
-        +6 testes: all baseline, 90d exclui antiga, 1y exclui >365d,
-        1y superset de 90d, rota com param, rota com valor inválido → 422.
-        Nenhum teste antigo alterado.
+    Fix (entregue em stats_service.py completo, uma versão só):
 
-        pytest -q: 124 passed em 32.91s. 0 warnings.
+        - Novo helper _current_window_expr(period).
+        - Quando period != "all": WHERE vira started_at >= now - 2*N.
+        - Métricas atuais (5 originais) viram SUM(CASE WHEN <janela_atual>
+          THEN col ELSE 0 END), inclusive count
+          (SUM(CASE WHEN ... THEN 1 ELSE 0 END)).
+        - Loop pós-SQL pula linhas com curr_activities == 0.
+        - previous montado em Python; null quando prev_total_activities == 0.
 
-    Entrega 4/4 — web (api/stats.ts + hooks/useStats.ts + pages/ProfilePage.tsx).
+    Após o fix: 129 passed em 34.83s.
 
-        api/stats.ts: +tipo StatsPeriod; getStatsByType(period="all")
-        com URLSearchParams sempre enviando ?period=.
+3.4 [Front] Implementação
 
-        hooks/useStats.ts: +import StatsPeriod; statsKeys.byType(period) =
-        ["stats","by-type",period]; useStatsByType(period="all",
-        enabled=true); queryFn chama getStatsByType(period).
+    Ordem de entrega (uma versão por arquivo por resposta, com build):
 
-        pages/ProfilePage.tsx: +import type { StatsPeriod }; +const
-        PERIOD_FILTERS; +useState<StatsPeriod>("all") byTypePeriod;
-        call site virou useStatsByType(byTypePeriod, isSelf); header do
-        card da tabela ganhou segmented control (Todos/90 dias/1 ano)
-        com justify-between.
+        api/stats.ts (só docstring — tipos moram em types/api.ts)
+        types/api.ts (tipo novo StatsByTypePrevious + campo previous)
+        hooks/useStats.ts (só comentários — sem mudança de código)
+        pages/ProfilePage.tsx (coluna vs. anterior)
 
-        StatsCards.tsx: INTOCADO.
+    Build verde em cada um. ProfilePage cresceu 14.95 kB → 15.98 kB
+    (+1.03 kB, dentro do esperado).
 
-    Dois rounds perdidos com "arquivo salvo que não salvou":
+    ERRO DO ASSISTENTE (registrado como lição):
 
-        Round 1: build falhou em useStats.ts (TS2305: StatsPeriod não
-        existe em ../api/stats). Diagnóstico: api/stats.ts no disco era
-        o antigo. Salvamento não pegou.
+        O ProfilePage foi entregue DUAS VEZES na mesma resposta — a primeira
+        versão tinha um bug de design no PreviousDelta (recebia só
+        `previous`, não o item inteiro, e não conseguia computar delta/cor).
+        O assistente tentou remendar com comentário "NOTA DE IMPLEMENTAÇÃO"
+        e entregou a versão corrigida logo abaixo. Isso violou a regra
+        "UMA versão por arquivo por resposta". O usuário não salvou a
+        errada (avisado com "⚠️ Pare — antes de salvar, preciso corrigir"),
+        então não houve retrabalho, mas foi erro de processo.
+        PRÓXIMAS SESSÕES: se errar no meio da escrita, cortar a versão
+        errada e entregar SÓ a corrigida.
 
-        Round 2: build falhou em ProfilePage.tsx (TS2345: boolean não é
-        StatsPeriod). Diagnóstico: ProfilePage.tsx no disco era o antigo.
-        Salvamento não pegou.
+3.5 Estado final da sessão
 
-        Ambos resolvidos pedindo Get-Content | Select-String para
-        confirmar o save antes do build. Lição registrada em "ATENÇÃO
-        (S17) — arquivo salvo que não salvou" na seção 0.
-
-    npm run build final: 824 modules, 2.42s, verde. ProfilePage-*.js
-    cresceu de 14.35 kB para 14.95 kB (+600 B). index-*.js mesmo tamanho
-    (nada novo entrou no chunk principal).
-
-    Commit: 5925a03. Push OK. Render + Vercel redeployaram.
-
-    Validação em produção:
-
-        period=all: 200 (shape antigo, retrocompatível).
-        period=90d: 200 (mesmo retorno que all — conta de teste sem
-                        atividade >90d; não é bug).
-        period=1y:  200 (idem).
-        period=30d: 422 — CONFIRMADO. Backend novo em produção.
-
-3.4 Estado final da sessão
-
-    Working tree limpo, main == origin/main == 5925a03.
+    Working tree limpo, main == origin/main == b0e3a29.
 
     npm run build: verde (824 modules).
 
-    pytest -q: 124 passed, 0 warnings (local).
+    pytest -q: 129 passed, 0 warnings (local).
 
-    Backend em produção: 422 em period=30d (Sessão 17 deployada).
+    ruff check .: All checks passed.
 
-    flutter analyze: No issues found (não tocado na S17; S16 já estava ok).
+    flutter analyze: No issues found (não tocado na S18).
+
+    Backend em produção: "previous": null presente no period=90d
+    (Sessão 18 deployada no Render).
 
     Nenhuma pendência de git.
 
@@ -614,7 +630,7 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
     → StatsMonthlyResponse: mesmo shape do weekly, period_start é sempre
     "YYYY-MM-01", chave "months".
 
-    GET /activities/stats/by-type?period=<all|90d|1y> (S17 — period opcional)
+    GET /activities/stats/by-type?period=<all|90d|1y> (S17 + S18)
     → StatsByTypeResponse:
     {
     "items": [
@@ -624,15 +640,26 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
     "total_distance_m": 84000.0,
     "total_duration_s": 25200,
     "total_elevation_gain_m": 1200.0,
-    "total_calories": 4200
+    "total_calories": 4200,
+    // S18: janela imediatamente anterior, ou null.
+    "previous": {
+    "total_activities": 9,
+    "total_distance_m": 61000.0,
+    "total_duration_s": 18300,
+    "total_elevation_gain_m": 900.0,
+    "total_calories": 3100
+    } // ou null
     },
     ...
     ]
     }
-    Só tipos com >= 1 atividade. Ordenação garantida: total_activities DESC,
-    activity_type ASC (aplicado em Python, não no SQL).
+    Só tipos com >= 1 atividade NA JANELA ATUAL aparecem.
+    Ordenação garantida: total_activities DESC, activity_type ASC (Python).
     period: "all" (default) | "90d" | "1y". Valores inválidos → 422.
-    Janela é retroativa: started_at >= now() - (90d | 365d).
+    Janela atual: started_at >= now - N. Janela anterior:
+    started_at >= now - 2N e started_at < now - N.
+    previous: null se period="all" ou se não há atividade do tipo na
+    janela anterior (todas as 5 métricas zero).
 
     Todos os endpoints de stats são do current_user (não aceitam user_id).
     A UI só mostra stats no próprio perfil (isSelf).
@@ -642,11 +669,12 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
     COMMITS PENDENTES / ESTADO DO REPO
     ===============================================================================
 
-    Sessões 9 a 17 commitadas e pushadas.
+    Sessões 9 a 18 commitadas e pushadas.
 
-    origin/main == main == HEAD == 5925a03.
+    origin/main == main == HEAD == b0e3a29.
 
-    Sessão 17 fechada com este handoff (commit docs: handoff da Sessão 17).
+    Sessão 18 fechada com este handoff (a commitar como
+    "docs: handoff da Sessao 18" na próxima ação).
 
     Nenhuma pendência conhecida de git.
 
@@ -655,16 +683,16 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
     SCRIPTS ÚTEIS (PowerShell)
     ===============================================================================
 
-[Sessão 18 — primeira ação] Abrir PowerShell via Win+R → "powershell"
+[Sessão 19 — primeira ação] Abrir PowerShell via Win+R → "powershell"
 (NÃO abrir de dentro do VS Code / Windows Terminal)
 Depois:
-[Sessão 18 — primeira ação] Estado do repo (sem abrir o less)
+[Sessão 19 — primeira ação] Estado do repo (sem abrir o less)
 
 cd D:\Rumo
 git push
 git --no-pager log --oneline -8
 git status --short
-[Sessão 18 — primeira ação] Descoberta da estrutura do repo
+[Sessão 19 — primeira ação] Descoberta da estrutura do repo
 
 Get-ChildItem -Directory | Select-Object Name
 Get-ChildItem D:\Rumo\web\src -Directory | Select-Object Name
@@ -675,14 +703,14 @@ Get-ChildItem D:\Rumo\backend -Directory | Select-Object Name
 Get-ChildItem D:\Rumo\backend\app -Directory | Select-Object Name
 Get-ChildItem D:\Rumo\backend\app\routers -File | Select-Object Name
 Get-ChildItem D:\Rumo\backend\tests -File | Select-Object Name
-[Sessão 18 — primeira ação] Sanidade de build
+[Sessão 19 — primeira ação] Sanidade de build
 
 cd D:\Rumo\web
 npm run build
 
 cd D:\Rumo\mobile
 & "C:\Users\nasci\flutter\bin\flutter.bat" analyze
-[Sessão 18 — primeira ação] Docker + pytest local
+[Sessão 19 — primeira ação] Docker + pytest local
 
 docker version
 docker compose version
@@ -696,20 +724,17 @@ Verificar que fitdecode está instalado e fitparse NÃO
 
 python -c "import fitdecode; print('fitdecode OK:', fitdecode.version)"
 python -c "import fitparse" 2>&1 # esperado: ModuleNotFoundError
-[Sessão 18 — primeira ação] Detecção de versão em produção (backend novo?)
+[Sessão 19 — primeira ação] Detecção de versão em produção (S18 — campo previous)
 
 $body = "username=prod@rumo.com&password=senha12345"
 $login = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/login" -Method Post -ContentType "application/x-www-form-urlencoded" -Body $body
 $token = $login.access_token
-try {
-    Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=30d" -Headers @{ Authorization = "Bearer $token" }
-    Write-Host "RESULTADO: 200 — backend AINDA é o antigo"
-} catch {
-    if ($_.Exception.Response.StatusCode.value__ -eq 422) {
-        Write-Host "RESULTADO: 422 — backend NOVO no ar (S17 deployada)"
-    } else {
-        Write-Host "RESULTADO: erro inesperado: $($_.Exception.Response.StatusCode.value__)"
-    }
+$resp = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=90d" -Headers @{ Authorization = "Bearer $token" }
+$first = $resp.items | Select-Object -First 1
+if ($first.PSObject.Properties.Name -contains "previous") {
+    Write-Host "RESULTADO: S18 no ar (campo previous presente; valor = $($first.previous))"
+} else {
+    Write-Host "RESULTADO: backend AINDA na S17 (sem campo previous)"
 }
 Login (produção)
 
@@ -725,7 +750,7 @@ Stats (produção)
 Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/summary" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
 Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/weekly?weeks=8" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
 Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/monthly?months=6" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
-Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=all" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
+Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=all" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 4
 Track (produção)
 
 $t = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/<id>/track" -Headers @{ Authorization = "Bearer $token" }
@@ -740,7 +765,7 @@ ruff check .
     DÍVIDAS TÉCNICAS
     ===============================================================================
 
-    (ARMADILHA CONHECIDA — decisão da Sessão 14, documentada na S15)
+    (ARMADILHA CONHECIDA — decisão da Sessão 14, documentada na S15/S16/S17)
     Enums nativos do Postgres ordenam pela ORDEM DE DECLARAÇÃO, não pela
     string. Activity.activity_type é Enum nativo (run, walk, cycle, hike,
     swim, other). ORDER BY activity_type no SQL devolve nessa ordem.
@@ -750,29 +775,43 @@ ruff check .
     o sort final em Python, ou (b) ser explicitamente testado contra a ordem
     de declaração do enum. Não confiar em ORDER BY direto em coluna Enum.
 
-    (NOVA — Sessão 17) Filtro `period` usa `now()` do Postgres.
+    (CONHECIDA — Sessão 17) Filtro `period` usa `now()` do Postgres.
     A janela retroativa é calculada com `func.now() - timedelta(...)` — ou
     seja, o relógio de referência é o do servidor de banco, não o do
-    processo Python. Para o usuário final, é o comportamento correto (o
-    que importa é "agora" na hora da query). Mas isso significa que testes
-    determinísticos com `_dt(2026, 1, 5)` NÃO servem para testar `period`
-    — precisam usar datas relativas a `now()`. Foi por isso que a S17
-    adicionou `_dt_ago(days)` no test_stats.py. REGRA: qualquer teste de
-    `period` (ou de outra feature baseada em `now()`) DEVE usar
-    `datetime.now(timezone.utc) - timedelta(days=N)` com margem ≥ 10 dias
-    entre dentro e fora da janela. Não misturar com `_dt` fixo.
+    processo Python. Testes determinísticos com `_dt(2026, 1, 5)` NÃO servem
+    para testar `period` — precisam usar datas relativas a `now()`. Foi por
+    isso que a S17 adicionou `_dt_ago(days)` no test_stats.py. REGRA:
+    qualquer teste de `period` (ou de outra feature baseada em `now()`) DEVE
+    usar `datetime.now(timezone.utc) - timedelta(days=N)` com margem ≥ 10
+    dias entre dentro e fora da janela. Não misturar com `_dt` fixo.
 
-    (NOVA — Sessão 17) `StatsCards.tsx` mostra summary "todos os tempos",
-    não filtrado por `period`. O segmented control de período afeta
-    APENAS a tabela por tipo. Isso é intencional — summary é "totais
-    gerais" e fica no topo da página; a tabela é drill-down. Se um dia o
-    usuário quiser filtro no summary, é feature nova (não extensão da S17).
+    (NOVA — Sessão 18) WHERE mata a janela anterior antes do CASE WHEN.
+    Quando um único SELECT precisa somar duas janelas de tempo, o WHERE do
+    SELECT não pode filtrar só a janela atual — ele descarta as linhas da
+    janela anterior ANTES de o CASE WHEN chegar nelas, e `previous` vem
+    sempre null. O bug foi pego por 3 testes (previous_90d, previous_1y,
+    previous_shape) e corrigido na S18.
+    REGRA PARA O FUTURO: sempre que uma query precisar de métricas de
+    múltiplas janelas no mesmo SELECT, o WHERE deve cobrir a união das
+    janelas (ex.: started_at >= now - 2N) e cada métrica recorta sua
+    própria janela via SUM(CASE WHEN <janela> THEN col ELSE 0 END) —
+    inclusive a contagem, que vira SUM(CASE WHEN ... THEN 1 ELSE 0 END).
+    Depois, filtrar em Python as linhas cuja janela "principal" ficou zerada
+    (para não mostrar tipos que só existem na janela secundária).
 
-    (NOVA — Sessão 17) Conta `prod@rumo.com` sem atividades com mais de
-    90 dias. Por isso `period=all`, `period=90d` e `period=1y` retornam
-    IGUAIS em produção. Para testar o filtro em produção com diferença
+    (CONHECIDA — Sessão 17, reafirmada na S18) StatsCards.tsx mostra
+    summary "todos os tempos", não filtrado por `period` nem por
+    `previous`. O segmented control de período afeta APENAS a tabela por
+    tipo. Isso é intencional — summary é "totais gerais" e fica no topo
+    da página; a tabela é drill-down. Se um dia o usuário quiser filtro
+    no summary, é feature nova.
+
+    (CONHECIDA — Sessão 17, reafirmada na S18) Conta prod@rumo.com sem
+    atividades com mais de 90 dias. Por isso period=all, period=90d e
+    period=1y retornam IGUAIS em produção, e previous vem null em todos
+    os itens. Para testar o filtro e o previous em produção com diferença
     visível, seria preciso (a) upload de GPX com data no passado, ou
-    (b) aceitar os 124 testes locais como prova (recomendado — são mais
+    (b) aceitar os 129 testes locais como prova (recomendado — são mais
     fortes que qualquer teste de produção nessa conta). NÃO PERDER TEMPO
     achando que está quebrado.
 
@@ -781,11 +820,21 @@ ruff check .
     um segundo uso, considerar React.lazy() para tirar o leaflet (163.60 kB)
     do chunk da página que não mostra mapa. Ganho hoje é marginal.
 
+    (Oportunidade — S18) Delta "vs. anterior" hoje cobre 3 métricas
+    (atividades, distância, elevação). Tempo e calorias ficaram fora por
+    legibilidade (3 linhas curtas por célula). Se virar requisito, é
+    extensão trivial: adicionar mais 2 DeltaLine no PreviousDelta. Não é
+    bug nem dívida — é decisão de UI documentada.
+
+    (Oportunidade — S18) Semântica do delta é NEUTRA: subiu=verde,
+    desceu=vermelho, igual=cinza. Não há juízo de "melhor/pior" (ex.:
+    pace menor é melhor, mas pace não entra no delta). Se o produto quiser
+    semântica de meta ("atingiu objetivo"), é feature nova.
+
     (Oportunidade) Drill-down de stats por tipo poderia ganhar:
-        - Comparação "este período vs. anterior" (ex.: 90d vs. os 90d
-          anteriores). Backend: adicionar campos *_previous em
-          StatsByTypeResponse ou em StatsWeeklyResponse/MonthlyResponse
-          (mexe em contrato — decidir antes).
+        - Comparação "este período vs. MESMO período do ano anterior" (a
+          S18 entregou "janela imediatamente anterior"; a alternativa
+          year-over-year é outra feature, com outro contrato).
         - Filtro de período custom (ex.: "últimos 180 dias"). Hoje é
           all|90d|1y fixo. Se virar requisito, o param `period` pode
           ganhar mais valores (aditivo, sem quebrar).
@@ -806,10 +855,10 @@ ruff check .
 
 ===============================================================================
 
-    PRÓXIMOS PASSOS RECOMENDADOS (Sessão 18 e além)
+    PRÓXIMOS PASSOS RECOMENDADOS (Sessão 19 e além)
     ===============================================================================
 
-PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 18 (antes de qualquer mudança de código):
+PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 19 (antes de qualquer mudança de código):
 
     No terminal (PowerShell via Win+R → "powershell"):
     cd D:\Rumo
@@ -819,8 +868,8 @@ PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 18 (antes de qualquer mudança de códig
     cd web ; npm run build
     cd ..\mobile
     & "C:\Users\nasci\flutter\bin\flutter.bat" analyze
-    Confirmar: push aceito, HEAD == origin/main == 5925a03 (ou o commit do
-    handoff), build e analyze verdes, working tree limpo.
+    Confirmar: push aceito, HEAD == origin/main == b0e3a29 (ou o commit do
+    handoff, se for o caso), build e analyze verdes, working tree limpo.
 
     DOCKER + PYTEST LOCAL:
     docker version
@@ -831,12 +880,13 @@ PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 18 (antes de qualquer mudança de códig
     # Se prompt já mostra (.venv), pular:
     ..venv\Scripts\Activate.ps1
     pytest -q
-    Esperado: 124 passed, 0 warnings.
+    Esperado: 129 passed, 0 warnings.
 
-    DETECÇÃO DE VERSÃO EM PRODUÇÃO (para saber se o Render está no
-    commit mais recente):
-    Rodar o try/catch da seção 6 ("Detecção de versão em produção").
-    Esperado: 422 em period=30d.
+    DETECÇÃO DE VERSÃO EM PRODUÇÃO (S18 — campo previous):
+    Rodar o script da seção 6 ("Detecção de versão em produção (S18 —
+    campo previous)"). Esperado: "S18 no ar (campo previous presente;
+    valor = )". Se aparecer "backend AINDA na S17", o Render não
+    redeployou — checar dashboard do Render.
 
     DESCOBERTA DE ESTRUTURA (obrigatória — não adivinhar):
     cd D:\Rumo
@@ -850,22 +900,22 @@ PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 18 (antes de qualquer mudança de códig
     Get-ChildItem D:\Rumo\backend\tests -File | Select-Object Name
     Colar as saídas no chat ANTES de pedir ou reescrever qualquer arquivo.
 
-ESTADO DA ROTA B (Sessão 17): PRIMEIRO ITEM FECHADO.
-Filtro de período no drill-down por tipo → FEITO e em produção (5925a03).
-Backend: /stats/by-type?period=all|90d|1y, default all, 422 em valor
-inválido. Web: segmented control no ProfilePage. StatsCards e mobile
-intocados.
+ESTADO DA ROTA B (Sessão 18): PRIMEIRO E SEGUNDO ITENS FECHADOS.
+Filtro de período (S17) + comparação com janela anterior (S18) → FEITOS
+e em produção (b0e3a29). Backend: /stats/by-type?period=all|90d|1y com
+previous opcional. Web: segmented control (S17) + coluna "vs. anterior"
+(S18). StatsCards e mobile intocados.
 
 A ROTA B SEGUE ABERTA para os demais itens. Próximos passos exigem
 ESCOLHA entre:
 
-OPÇÃO 1 — Comparação "este período vs. anterior".
-    Backend: adicionar campos *_previous em StatsWeeklyResponse e
-    StatsMonthlyResponse (ou novo endpoint /stats/compare).
-    MEXE EM CONTRATO — decidir antes de codar (nomes dos campos,
-    semântica de "anterior" — janela imediatamente anterior? mesmo
-    período do ano passado?).
-    Front: UI de comparação nos gráficos (delta numérico, cor, etc).
+OPÇÃO 1 — Comparação "este período vs. MESMO período do ano anterior".
+    Backend: nova semântica (year-over-year), provavelmente um param
+    adicional (ex.: compare=prev|yoy) ou um endpoint novo.
+    MEXE EM CONTRATO — decidir antes de codar.
+    Front: reaproveita PreviousDelta, mas com rótulo "vs. ano anterior".
+    ATENÇÃO: a conta de teste não tem dado >90d, então year-over-year
+    com 90d não vai mostrar diferença em produção. Testável só local.
 
 OPÇÃO 2 — Stats públicas em perfis de terceiros.
     Backend: novos endpoints com user_id + regra de follow.
@@ -881,33 +931,31 @@ OPÇÃO 4 — Resíduos de baixo risco da Rota A+ (b)/(c).
     (c) Cheat sheet de endpoints num README.
     Ganho marginal. Recomendação: só se não houver Rota B clara.
 
-RECOMENDAÇÃO PARA A SESSÃO 18:
+RECOMENDAÇÃO PARA A SESSÃO 19:
 
 Antes de escolher, VALIDAR ESTADO (seção 6 — primeira ação). Se estiver
-tudo verde (build, analyze, pytest 124, 422 em produção), aí escolher.
+tudo verde (build, analyze, pytest 129, previous presente em produção),
+aí escolher.
 
-Se a escolha for Rota B, minha recomendação é OPÇÃO 1 (comparação
-período vs. anterior) pelos motivos:
+Se a escolha for Rota B, minha recomendação é OPÇÃO 2 (stats públicas
+em perfis de terceiros) pelos motivos:
 
-  - É a evolução natural do que a S17 entregou (já temos `period`
-    funcionando; comparar é o próximo passo lógico).
-  - Não exige novo endpoint nem regra de privacidade — só estende o
-    response existente com dados já computáveis.
-  - Valida 100% localmente com pytest.
-  - Front: 1 componente (gráfico de barras com delta) — escopo contido.
+  - É evolução natural do produto: o app já mostra perfil de terceiros
+    (atividades, seguidores, seguindo), mas esconde stats.
+  - Não é mudança de contrato em endpoint existente — é adição de
+    endpoints novos. Menos risco de regressão.
+  - Valida 100% localmente com pytest (endpoint + service + permissão).
+  - Front: 1 condicional no ProfilePage (mostrar StatsCards/PeriodChart/
+    by-type para não-self, respeitando follow).
+  - Privacidade: só mostra stats se o viewer segue o alvo (mesma regra
+    de /activities/{id}/track e do feed).
 
-MAS: é mudança de contrato. A primeira coisa a fazer, antes de codar,
-é DEFINIR o contrato exato: nome dos campos (`*_previous`? objeto
-`previous`?), semântica de "anterior" (janela imediatamente anterior
-vs. mesmo período do ano anterior), e como a UI mostra (delta absoluto?
-percentual? ambos?). Recomendo "janela imediatamente anterior"
-(mais intuitivo: "esta semana vs. semana passada"). A Sessão 18 deve
-gastar os primeiros 5-10% do contexto definindo isso com o usuário
-e só então codar.
-
-Se a escolha for Opção 2 ou 3, o assistente deve explicitamente dizer
-que está adiando a Opção 1 (mais barata e natural agora).
+  ATENÇÃO: a S18 entregou "comparação com janela anterior" recente, e
+  a Opção 2 é uma feature visível, mas de escopo maior que a S18 (envolve
+  permissão e privacidade). Se o usuário preferir escopo menor, a Opção 1
+  (year-over-year) reaproveita toda a infra da S18, mas tem a limitação
+  da conta de teste.
 
 Em qualquer rota, handoff preventivo em ~70-80% do contexto — antes
-do fim, parar e entregar o HANDOFF completo da Sessão 18 neste mesmo
+do fim, parar e entregar o HANDOFF completo da Sessão 19 neste mesmo
 formato (seções 0 a 8).
