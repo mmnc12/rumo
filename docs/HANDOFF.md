@@ -1,5 +1,5 @@
 ===============================================================================
-HANDOFF — Rumo (backend + frontend + mobile) — gerado ao fim da Sessão 12
+HANDOFF — Rumo (backend + frontend + mobile) — gerado ao fim da Sessão 13
 ===============================================================================
 
 ===============================================================================
@@ -22,51 +22,82 @@ Sessões anteriores perderam tempo precioso porque o assistente tentou
 O QUE É LOCAL vs O QUE É PRODUÇÃO
 ----------------------------------
 - LOCAL (na máquina do usuário): D:\Rumo (repo git), D:\Rumo\backend (FastAPI
-  + Postgres/PostGIS + Alembic), D:\Rumo\web (React 19 + Vite 8 + TypeScript
-  + Tailwind + react-leaflet na ActivityDetailPage), D:\Rumo\mobile (Flutter).
+  + Postgres/PostGIS + Alembic + pytest), D:\Rumo\web (React 19 + Vite 8 +
+  TypeScript + Tailwind + react-leaflet + recharts), D:\Rumo\mobile (Flutter).
   O assistente NÃO tem acesso a esses arquivos neste chat — o usuário precisa
   colar conteúdo de arquivos e saídas de terminal. Não assumir que o
   assistente consegue "ver" pastas.
 - PRODUÇÃO (na nuvem, acessível por HTTP): backend no Render
   (https://rumo-api-5s0b.onrender.com), frontend web na Vercel
   (https://rumo-wheat.vercel.app). O backend de produção usa Postgres/PostGIS
-  gerenciado (não é o local). Testar via HTTP é sempre possível sem Docker.
-- DOCKER: NÃO instalado no Windows local (ver dívidas técnicas). É o PRÓXIMO
-  PASSO BLOQUEANTE da Sessão 13. Ignorar Docker em trabalho de código até
-  ele estar instalado e `pytest -q` verde localmente.
+  gerenciado (não é o local). Testar via HTTP é sempre possível.
+- DOCKER: AGORA INSTALADO E FUNCIONAL no Windows local. `pytest -q` local
+  verde (111 passed). Container de teste `rumo_postgres_test` na porta 5433.
+  Para reativar numa sessão nova: (1) abrir Docker Desktop e esperar a
+  baleia verde; (2) garantir que o terminal foi aberto via Win+R (fora do
+  VS Code / Windows Terminal, que herdam PATH antigo); (3) `docker compose
+  -f docker-compose.test.yml up -d`; (4) `pytest -q`.
 
 ESTRUTURA DO REPO (referência — NÃO É PARA ASSUMIR, É PARA CONFERIR)
 --------------------------------------------------------------------
-Árvore de alto nível esperada em D:\Rumo (validar com `Get-ChildItem` na
-primeira ação da Sessão 13; se divergir, PEDIR ao usuário antes de mexer):
+Árvore de alto nível REAL, confirmada no início da Sessão 13:
 
 D:\Rumo\
-├── backend\           # FastAPI + Postgres/PostGIS + Alembic + pytest
-│   ├── app\           # código da aplicação
-│   ├── tests\         # testes (pytest)
-│   ├── alembic\       # migrations
-│   ├── docker-compose.test.yml   # Postgres/PostGIS de teste na 5433
-│   └── ...
-├── web\               # React 19 + Vite 8 + TS + Tailwind
-│   ├── src\
-│   │   ├── components\   # ActivityCard.tsx, etc.
-│   │   ├── pages\        # ActivityDetailPage.tsx, ProfilePage.tsx, SearchPage.tsx, ...
-│   │   ├── lib\          # geo.ts, api client, etc.
-│   │   ├── types\        # api.ts (tipos do backend)
-│   │   └── ...
-│   ├── package.json      # scripts: build = "tsc -b && vite build"
-│   └── ...
-├── mobile\            # Flutter (flutter_map, OSM/Esri satélite)
-│   ├── lib\
-│   │   ├── models\       # activity.dart, comment.dart, ...
-│   │   ├── pages\        # feed_page.dart, activity_detail_page.dart, ...
-│   │   ├── widgets\      # activity_map.dart, like_button.dart, ...
-│   │   ├── services\     # auth_service.dart, api_client.dart, ...
-│   │   └── ...
-│   ├── pubspec.yaml
-│   └── ...
-└── docs\
-    └── HANDOFF.md     # este arquivo
+├── .vscode\
+├── backend\
+│   ├── .pytest_cache\
+│   ├── .ruff_cache\
+│   ├── .venv\          # virtualenv Python ativo (Ativar com .\.venv\Scripts\Activate.ps1)
+│   ├── alembic\
+│   ├── app\
+│   │   ├── core\
+│   │   ├── models\
+│   │   ├── routers\    # <-- aqui ficam os endpoints (activities.py, auth.py,
+│   │   │               #     comments.py, feed.py, notifications.py,
+│   │   │               #     photos.py, users.py). NÃO é "app/api/".
+│   │   ├── schemas\
+│   │   ├── services\
+│   │   └── __pycache__\
+│   ├── samples\
+│   ├── scripts\
+│   ├── tests\          # conftest.py + test_calories.py + test_comment.py +
+│   │                   # test_follow.py + test_like.py + test_stats.py
+│   ├── _scratch\       # rascunho (não mexer sem pedido)
+│   └── docker-compose.test.yml
+├── docs\
+│   └── HANDOFF.md      # este arquivo
+├── mobile\
+│   └── lib\
+│       ├── models\
+│       ├── pages\
+│       ├── services\
+│       └── widgets\    # (NÃO tem lib\widgets\widgets\; é flat)
+└── web\
+    └── src\
+        ├── api\        # activities.ts, auth.ts, client.ts, notifications.ts,
+        │               # photos.ts, social.ts, stats.ts
+        ├── assets\
+        ├── components\ # ActivityCard, AppHeader, CommentsSection, LikeButton,
+        │               # MonthlyActivitiesChart (NOVO S13),
+        │               # MonthlyChart (NOVO S13), NotificationBell,
+        │               # PhotoGallery, PhotoUpload, ProtectedRoute,
+        │               # RouteMap (NOVO S13), StatsCards,
+        │               # UserResults, WeeklyActivitiesChart (NOVO S13),
+        │               # WeeklyChart, ActivityResults
+        ├── contexts\
+        ├── hooks\      # useActivities, useActivitySearch, useAuth, useDebounce,
+        │               # useNotifications, usePhotos, useProfile, useSocial,
+        │               # useStats, useUserSearch
+        ├── lib\        # format.ts, geo.ts
+        ├── pages\      # ActivitiesPage, ActivityDetailPage, FeedPage,
+        │               # LoginPage, NotificationsPage, ProfilePage,
+        │               # RegisterPage, SearchPage, UploadPage
+        └── types\      # api.ts (todos os tipos, único arquivo)
+
+DIVERGÊNCIAS vs handoff da Sessão 12 (registrar para não errar):
+- Backend NÃO tem "app/api/". É "app/routers/".
+- Web TEM "api/", "assets/", "contexts/" no src (não estavam listados antes).
+- Backend TEM "_scratch/" (não estava listado antes).
 
 Se um arquivo específico for necessário, o pedido correto é:
     Get-Content -Encoding UTF8 <caminho completo>
@@ -83,41 +114,72 @@ COMO RODAR COMANDOS FLUTTER NO WINDOWS DESTE USUÁRIO
       & "C:\Users\nasci\flutter\bin\flutter.bat" <comando>
 - Repo/repo mobile: D:\Rumo e D:\Rumo\mobile. PowerShell, Windows 5.1.
 
+COMO RODAR DOCKER E PYTEST LOCAL (Windows deste usuário) — NOVO NA SESSÃO 13
+----------------------------------------------------------------------------
+- Docker Desktop instalado em:
+    C:\Users\nasci\AppData\Local\Programs\DockerDesktop
+- O executável `docker.exe` está em:
+    C:\Users\nasci\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe
+- Este caminho ESTÁ no PATH do usuário (confirmado). Se o `docker` não for
+  reconhecido numa sessão nova, é porque o PowerShell foi aberto de dentro
+  do VS Code / Windows Terminal (herda PATH antigo). SOLUÇÃO:
+      1. Fechar tudo. Abrir PowerShell via Win+R → "powershell" (filho
+         direto do Explorer, lê o PATH atualizado).
+      2. Confirmar: `docker version` (Client + Server) e
+         `docker compose version` (v5.5.1 na Sessão 13).
+      3. `cd D:\Rumo\backend`
+      4. `docker compose -f docker-compose.test.yml up -d`
+      5. `docker ps` (container `rumo_postgres_test` Up healthy na 5433)
+      6. `.\.venv\Scripts\Activate.ps1` (prompt vira `(.venv)`)
+      7. `pytest -q` — esperado: **111 passed** (verde na Sessão 13)
+- NOTA: no Windows local também existem containers permanentes
+  `rumo-redis` (6379) e `rumo-postgres` (5432), que NÃO são de teste.
+  O de teste é o `rumo_postgres_test` (5433). Não confundir.
+- Se `Activate.ps1` der erro de política de execução:
+    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+  antes de tentar de novo (só afeta a sessão atual).
+
 COMO TESTAR O BACKEND DE PRODUÇÃO SEM O APP (PowerShell)
 --------------------------------------------------------
 1) Login (retorna JWT):
      $body = "username=prod@rumo.com&password=senha12345"
      $login = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/login" -Method Post -ContentType "application/x-www-form-urlencoded" -Body $body
      $token = $login.access_token
-2) Feed (agora com bbox):
+2) Feed (com bbox):
      $feed = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/feed?limit=5" -Headers @{ Authorization = "Bearer $token" }
      $feed | ForEach-Object { Write-Host "id=$($_.id.Substring(0,8))  title=$($_.title)  bbox=$($_.bbox -join ',')" }
-3) Track de uma atividade (GeoJSON-like):
+3) Track de uma atividade:
      $id = "UUID"
      $t = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/$id/track" -Headers @{ Authorization = "Bearer $token" }
      Write-Host "n=$($t.n_points) bbox=$($t.bbox -join ',')"
-- Conta de teste usada: prod@rumo.com / senha12345.
-- Latências medidas em 2026-11-06: backend quente, /track de rota sintética
-  ~306ms. Não confundir com cold start do Render (~30s após ociosidade).
+4) Stats (validado na Sessão 13):
+     Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/summary" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
+     Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/weekly?weeks=8" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
+     Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/monthly?months=6" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
+- Conta de teste: prod@rumo.com / senha12345.
+- O endpoint /activities/stats/monthly EXISTE em produção e responde OK
+  (validado na Sessão 13). O tipo StatsMonthlyResponse no front estava
+  correto, só não era consumido — agora é.
 
 O QUE O ASSISTENTE PRECISA PEDIR AO USUÁRIO (não tem acesso a arquivos)
 -----------------------------------------------------------------------
 - Conteúdo de arquivos específicos via: Get-Content -Encoding UTF8 <caminho>
-  (SEMPRE passar -Encoding UTF8; sem isso, acentos viram "inÃ­cio" e o
-  arquivo fica corrompido na leitura.)
-- Saídas de comandos (flutter analyze, npm run build, git log, git status).
+  (SEMPRE passar -Encoding UTF8; sem isso, acentos viram "inÃ­cio".)
+- Saídas de comandos (flutter analyze, npm run build, git log, git status,
+  pytest -q).
 - Nunca assumir estrutura de pastas "de cabeça": pedir o arquivo antes de
   reescrevê-lo, para não quebrar o que já funciona.
 - ATENÇÃO — arquivos truncados: se um Get-Content vier com a última linha
   cortada (ex.: "upda"), o arquivo está corrompido no disco. NÃO adivinhar o
   final. Pedir `git status --short -- <arquivo>`; se estiver " M", rodar
-  `git checkout -- <arquivo>` e recuperar do HEAD. Isso aconteceu na Sessão
-  11 com web/src/types/api.ts e o usuário resolveu com Ctrl+Z antes do
-  `git checkout`. Documentar sempre que acontecer.
+  `git checkout -- <arquivo>` e recuperar do HEAD.
 - ATENÇÃO — `git diff` pipeado no PowerShell pode exibir acentos como
   mojibake (ex.: "Sess笏愿ｺo"). É artefato de codepage do pipe, NÃO corrupção
   do arquivo. Usar `Get-Content -Encoding UTF8` para inspecionar o conteúdo
   real antes de qualquer decisão sobre o arquivo.
+- ATENÇÃO — `git log --oneline` no PowerShell às vezes cola a última linha
+  com o prompt seguinte (ex.: "bc0b9d9 feat(...) PS D:\Rumo>"). Não é
+  corrupção; é só formatação. Ler com calma.
 
 ACORDOS DE TRABALHO (válidos em todas as sessões)
 --------------------------------------------------
@@ -132,44 +194,49 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
    NUNCA duas versões do mesmo arquivo na mesma resposta.
 4. HANDOFF PREVENTIVO em ~70-80% do limite de contexto: parar o trabalho em
    curso e entregar o HANDOFF completo neste mesmo formato (seções 0 a 8),
-   pronto para colar no próximo chat.
+   pronto para colar no próximo chat. Handoff deve ser COMPLETO e bem
+   explicado, não resumido.
 
 ===============================================================================
 1. TL;DR PARA QUEM CHEGA AGORA
 ===============================================================================
 
-- Backend: 111 testes passando (inalterado desde a Sessão 10). Activity.route
-  é PostGIS LINESTRING. GET /activities/{id}/track devolve TrackResponse com
+- Backend: 111 testes passando LOCALMENTE (pytest -q verde na Sessão 13).
+  Antes da Sessão 13, era só produção; agora é local também (Docker Desktop
+  + venv ativa + container de teste na 5433). Activity.route é PostGIS
+  LINESTRING. GET /activities/{id}/track devolve TrackResponse com
   coordinates em ordem GeoJSON [lon, lat], bbox [minLon,minLat,maxLon,maxLat],
   n_points, simplified. Responde 404 quando route é NULL. Acesso: dono OU
   seguidor do dono.
-- [Sessão 10] ActivityResponse (feed/lista/detalhe/busca) inclui
+- ActivityResponse (feed/lista/detalhe/busca) inclui
   `bbox: list[float] | None`, calculado via ST_XMin/YMin/XMax/YMax do PostGIS
-  no mesmo SELECT (sem N+1). `None` quando route é NULL. Validado em produção
-  (commit b8e4084).
-- [Sessão 11] Opção B COMPLETA nas 3 plataformas:
-  * Mobile: miniatura estática no card do feed (ActivityMap.fromBbox, com
-    InteractiveFlag.none). Validado no emulador (6/6 testes).
-  * Web: miniatura estática no card do feed via 1 tile OSM (<img>, sem
-    react-leaflet no card). Validado na Vercel.
-  * Web: toggle Mapa/Satélite no mapa do detalhe (OSM ↔ Esri World Imagery),
-    mesmo padrão visual do mobile. Validado na Vercel.
-- Frontend Web: React 19 + Vite 8 + TypeScript + Tailwind; react-leaflet já
-  no bundle (ActivityDetailPage).
+  no mesmo SELECT (sem N+1). `None` quando route é NULL.
+- Endpoints de stats (todos validados em produção):
+  * GET /activities/stats/summary — StatsSummary (totais gerais).
+  * GET /activities/stats/weekly?weeks=N — StatsWeeklyResponse.
+  * GET /activities/stats/monthly?months=N — StatsMonthlyResponse.
+  Todos aceitam `activity_type` opcional como filtro.
+- Frontend Web: React 19 + Vite 8 + TypeScript + Tailwind; react-leaflet
+  (RouteMap no detalhe) + recharts (gráficos no perfil).
 - Mobile: mapa de rota no detalhe (flutter_map, OSM/Esri satélite),
-  alternância Mapa/Satélite, currentUserId no AuthService.
-- [Sessão 12] Sessão de housekeeping e fechamento:
-  * Acordos de trabalho reafirmados (código completo, uma versão por arquivo,
-    handoff preventivo em ~70-80% do contexto, seguir sempre a recomendação).
-  * Estado do repo validado no início: git log coerente com a Sessão 11
-    (bc0b9d9 no topo), build web verde, flutter analyze 0 issues.
-  * Pendência do docs/HANDOFF.md FECHADA: arquivo sobrescrito com o handoff
-    da Sessão 11 e commitado (894e4b5). Working tree limpo.
-  * Sessão encerrada ANTES do Docker Desktop de propósito: instalação
-    interativa (WSL2, reboot, possível troubleshooting) é cara em contexto e
-    pobre em código. Decisão registrada na seção 8.
-  * Este handoff foi reescrito com ênfase em "não adivinhar estrutura de
-    pastas" (seção 0) para evitar retrabalho em chats novos.
+  alternância Mapa/Satélite, miniatura estática no feed.
+- [Sessão 13 — entregas]
+  * Docker Desktop funcional no Windows local + pytest -q local verde (111
+    passed). O caminho do docker.exe foi adicionado ao PATH (já estava, na
+    verdade — o problema era abrir PowerShell fora do VS Code/Windows
+    Terminal para ler o PATH atualizado).
+  * Web: toggle Semanal | Mensal no gráfico de evolução do perfil.
+    MonthlyChart.tsx (novo), getStatsMonthly em api/stats.ts,
+    useStatsMonthly em hooks/useStats.ts.
+  * Web: RouteMap.tsx extraído do ActivityDetailPage. Encapsula Leaflet,
+    Polyline, FitBounds, toggle Mapa/Satélite e o estado vazio ("Sem rota
+    disponível"). ActivityDetailPage ficou ~50 linhas mais enxuto e usa
+    `<RouteMap track={track} className="mb-6" />`.
+  * Web: segundo toggle Distância | Atividades no perfil. WeeklyActivities-
+    Chart.tsx e MonthlyActivitiesChart.tsx (novos). ProfilePage gerencia
+    dois eixos independentes: chartMode ("weekly" | "monthly") e
+    chartMetric ("distance" | "activities"). 4 combinações, zero request
+    nova (StatsPeriod já tem total_activities e total_distance_m).
 
 ===============================================================================
 2. PRODUÇÃO E AMBIENTE
@@ -182,69 +249,93 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
 - Mobile: D:\Rumo\mobile
 - Web: D:\Rumo\web (scripts: "build": "tsc -b && vite build", "lint": "eslint .")
 - Flutter: 3.47.9 / Dart 3.13.7
+- Docker Desktop: 4.93.0 (engine 29.8.1, compose v5.5.1)
 - SO: Windows, PowerShell 5.1
-- Git (estado ao fim da Sessão 12 — CONFIRMAR com git log + git status no
-  início da Sessão 13):
-    894e4b5 (HEAD -> main) docs: handoff da Sessão 11 (toggle Mapa/Satélite, miniaturas, bbox)
-    bc0b9d9 (origin/main) feat(web): toggle Mapa/Satélite no mapa do detalhe (igual mobile)
-    1fa8863 feat(web): miniatura de mapa no card do feed (bbox estático via tile OSM)
-    77b1722 feat(mobile): miniatura de mapa no card do feed (bbox estático)
-    b8e4084 feat(backend): bbox no ActivityResponse (feed/lista/detalhe/busca) para miniatura de mapa
-- ATENÇÃO: 894e4b5 está LOCAL, não pushado. origin/main ainda está em
-  bc0b9d9. Executar `git push` no início da Sessão 13 (antes de qualquer
-  mudança de código) para evitar divergência futura.
+- Venv backend: D:\Rumo\backend\.venv (ativa com .\.venv\Scripts\Activate.ps1)
+- Git (estado ao fim da Sessão 13 — CONFIRMAR com git log + git status no
+  início da Sessão 14):
+    <hash-F>  (HEAD -> main, origin/main) feat(web): segundo gráfico de atividades por período no perfil
+    b8f5a13   refactor(web): extrai RouteMap do ActivityDetailPage
+    e3c564b   feat(web): toggle Semanal/Mensal no gráfico de evolução do perfil
+    24b3fac   docs: handoff da Sessão 12
+    894e4b5   docs: handoff da Sessão 11 (toggle Mapa/Satélite, miniaturas, bbox)
+    bc0b9d9   feat(web): toggle Mapa/Satélite no mapa do detalhe (igual mobile)
+- Todos os commits da Sessão 13 estão em origin/main (pushados).
+- ATENÇÃO: o hash-F (feature F) será preenchido com o valor real do
+  git log --oneline -1 após o commit. Se a Sessão 14 começar e o hash não
+  aparecer aqui, PEDIR o git log ao usuário.
 
 ===============================================================================
-3. O QUE FOI FEITO NA SESSÃO 12
+3. O QUE FOI FEITO NA SESSÃO 13
 ===============================================================================
 
-3.1 Acordos reafirmados no início (valem daqui pra frente)
-    - Seguir sempre a recomendação do assistente.
-    - Sempre entregar arquivo completo ao atualizar.
-    - Uma versão por arquivo por resposta.
-    - Handoff preventivo em ~70-80% do contexto.
+3.1 Validação de estado e fechamento do handoff da Sessão 12
+    - Push inicial OK (origin/main em 894e4b5).
+    - docs/HANDOFF.md commitado como 24b3fac ("docs: handoff da Sessão 12").
+    - Working tree limpo.
+    - Descoberta de estrutura via Get-ChildItem (obrigatória — ver seção 6).
 
-3.2 Validação de estado (antes de qualquer mudança)
-    - git log --oneline -5: bc0b9d9 (toggle) no topo, seguido por 1fa8863,
-      77b1722, b8e4084, c26239b. Bate com o esperado na Sessão 11.
-    - git status --short: apenas " M docs/HANDOFF.md" (pendência recorrente).
-    - cd web ; npm run build: verde (1.84s, ActivityDetailPage em 11.91 kB).
-    - cd mobile ; flutter analyze: No issues found! (3.9s).
+3.2 Desbloqueio do Docker (dívida mais antiga)
+    - Docker Desktop já estava instalado em
+      C:\Users\nasci\AppData\Local\Programs\DockerDesktop (não no caminho
+      padrão C:\Program Files\Docker).
+    - O problema NÃO era PATH (já estava correto). Era sessão do PowerShell
+      aberta de dentro do VS Code / Windows Terminal, herdando PATH antigo
+      que não enxergava o docker.exe.
+    - Solução: abrir PowerShell via Win+R → "powershell" (filho direto do
+      Explorer, lê o PATH atualizado).
+    - `docker version` (Client + Server + Engine) OK. `docker compose version`
+      v5.5.1 OK.
+    - Container `rumo_postgres_test` Up healthy na 5433.
+    - `.\.venv\Scripts\Activate.ps1` ativa a venv. `pytest -q` = **111
+      passed in 34.63s** (com 3611 warnings do fitparse — não quebram).
+    - DÍVIDA FECHADA.
 
-3.3 Diagnóstico do docs/HANDOFF.md
-    - git diff --stat: 276 inserções, 56 remoções (reescrita total).
-    - Get-Content -Encoding UTF8 primeiras linhas: cabeçalho "Sessão 11".
-    - Diagnóstico: o arquivo no working tree JÁ era o handoff da Sessão 11
-      completo; o HEAD ainda era o handoff da Sessão 8. Hipótese A confirmada
-      (não havia edição manual inédita a preservar).
-    - Artefato de leitura: o pipe do `git diff` no PowerShell exibiu acentos
-      como mojibake ("Sess笏愿ｺo"). Não é corrupção do arquivo — é codepage
-      do pipe. Anotado na seção 0.
+3.3 [Web] Toggle Semanal/Mensal no perfil
+    - Backend: /activities/stats/monthly?months=N confirmado em produção
+      (responde 200 com StatsMonthlyResponse).
+    - api/stats.ts: nova função getStatsMonthly(months, params).
+    - hooks/useStats.ts: novo hook useStatsMonthly(months, activityType,
+      enabled), nova chave statsKeys.monthly(...).
+    - components/MonthlyChart.tsx (novo): espelho do WeeklyChart, eixo X
+      MM/YYYY, tooltip "Mês de MM/YYYY".
+    - pages/ProfilePage.tsx: estado chartMode ("weekly" | "monthly"),
+      toggle visual, render condicional. monthlyQuery lazy via
+      `enabled: isSelf && chartMode === "monthly"`.
+    - Commit: e3c564b.
 
-3.4 Fechamento da pendência do docs/HANDOFF.md
-    - docs/HANDOFF.md sobrescrito com o conteúdo canônico da Sessão 11 (o
-      mesmo já presente no working tree, para eliminar qualquer divergência).
-    - Commit: 894e4b5 docs: handoff da Sessão 11 (toggle Mapa/Satélite,
-      miniaturas, bbox).
-    - git status --short final: vazio. Pendência fechada.
+3.4 [Web] Extração do RouteMap
+    - components/RouteMap.tsx (novo): recebe track (TrackResponse |
+      undefined), height (default "24rem") e className (default "").
+      Encapsula: TileLayer OSM ↔ Esri, Polyline, FitBounds, toggle
+      Mapa/Satélite e o estado vazio ("Sem rota disponível pra esta
+      atividade."). Comportamento idêntico ao bloco inline anterior.
+    - pages/ActivityDetailPage.tsx: bloco inline do mapa removido; usa
+      `<RouteMap track={track} className="mb-6" />`. Imports de
+      react-leaflet/leaflet removidos. Import de useState do react também
+      removido (o estado `satelite` foi para dentro do RouteMap).
+    - Validação em produção OK (polyline, toggle, fit bounds, estado vazio).
+    - Commit: b8f5a13.
 
-3.5 Decisão de encerrar a sessão antes do Docker Desktop
-    - Contexto estimado nesta sessão: ~15-20k tokens (≈10-15% do limite),
-      ainda LONGE do gatilho de 70-80%. Portanto esta NÃO foi uma parada
-      forçada por limite — foi decisão de planejamento.
-    - Motivo: instalar Docker Desktop no Windows (WSL2, reboot, possível
-      troubleshooting de driver/Hyper-V) gera muito output de terminal e
-      pouco código. Melhor abrir a Sessão 13 já com Docker pronto e pytest
-      verde, para gastar contexto em código real (Perfil/Estatísticas).
-    - Registrado para não confundir "handoff preventivo por limite" com
-      "handoff de fechamento planejado". Ambos usam o mesmo formato.
+3.5 [Web] Segundo gráfico: Atividades × Distância
+    - components/WeeklyActivitiesChart.tsx (novo): eixo Y = contagem de
+      atividades (inteiro), domain dinâmico (mínimo 5), allowDecimals=false,
+      tooltip com pluralização ("1 atividade" / "N atividades").
+    - components/MonthlyActivitiesChart.tsx (novo): idem mensal, eixo X
+      MM/YYYY, tooltip "Mês de MM/YYYY".
+    - pages/ProfilePage.tsx: estado chartMetric ("distance" | "activities"),
+      segundo toggle visual (inline-flex, mesmo padrão do primeiro), 4
+      condições explícitas no render (chartMode × chartMetric), zero request
+      nova (weeklyQuery/monthlyQuery já trazem total_activities).
+    - Validação em produção OK (4 combinações).
+    - Commit: <hash-F> (ver seção 2).
 
-3.6 Reescrita deste handoff com foco em não-adivinhação de pastas
-    - Após a Sessão 12, o usuário relatou que chats novos perderam tempo
-      tentando "descobrir" a estrutura de pastas do repo. Este handoff
-      ganhou o bloco "ESTRUTURA DO REPO" + "REGRA DE OURO" na seção 0, e
-      um script de descoberta (`Get-ChildItem`) na seção 6, para que o
-      assistente novo peça a árvore real ANTES de qualquer edição.
+3.6 Estado final da sessão
+    - Working tree limpo, main == origin/main.
+    - npm run build: verde (827 modules, ProfilePage 16.30 kB / gzip 3.56).
+    - flutter analyze: no início da sessão verde (45.7s; sem mudanças no
+      mobile na Sessão 13).
+    - pytest -q: 111 passed (local).
 
 ===============================================================================
 4. CONTRATOS DO BACKEND RELEVANTES (referência)
@@ -273,23 +364,62 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
 
 - ActivityResponse NÃO inclui route nem coordinates (polyline só via /track).
 
+- GET /activities/stats/summary?activity_type=<opcional>
+  → StatsSummary:
+    {
+      "total_activities": 6,
+      "total_distance_m": 26443.22,
+      "total_duration_s": 18679,
+      "total_elevation_gain_m": 5411.6,
+      "total_calories": 1091,
+      "avg_pace_s_per_km": 706.38,
+      "avg_speed_mps": 1.42
+    }
+
+- GET /activities/stats/weekly?weeks=N&activity_type=<opcional>
+  → StatsWeeklyResponse:
+    {
+      "weeks": 8,
+      "items": [
+        {
+          "period_start": "2026-11-02",
+          "total_activities": 1,
+          "total_distance_m": 1000.0,
+          "total_duration_s": 600,
+          "total_calories": 41
+        },
+        ...
+      ]
+    }
+
+- GET /activities/stats/monthly?months=N&activity_type=<opcional>
+  → StatsMonthlyResponse: mesmo shape do weekly, mas period_start é sempre
+  o primeiro dia do mês ("YYYY-MM-01") e a chave é "months". Validado na
+  Sessão 13.
+
+- Todos os endpoints de stats são do current_user (não aceitam user_id).
+  A UI só mostra stats no próprio perfil (isSelf).
+
 ===============================================================================
 5. COMMITS PENDENTES / ESTADO DO REPO
 ===============================================================================
 
-- Sessões 9, 10, 11 e 12 commitadas localmente.
-- 894e4b5 (docs: handoff da Sessão 11) está LOCAL, NÃO pushado. origin/main
-  ainda está em bc0b9d9. PENDÊNCIA: rodar `git push` no início da Sessão 13.
-- docs/HANDOFF.md RESOLVIDO (não é mais dívida). Este handoff da Sessão 12
-  deve substituí-lo no início da Sessão 13 e ser commitado como
-  `docs: handoff da Sessão 12` (1 commit adicional, junto ou após o push).
+- Sessões 9, 10, 11, 12 e 13 commitadas e pushadas.
+- origin/main == main == HEAD no fim da Sessão 13.
+- docs/HANDOFF.md desta Sessão 13 deve substituir o anterior no início da
+  Sessão 14 e ser commitado como `docs: handoff da Sessão 13` (1 commit
+  adicional, junto ou após o push inicial da Sessão 14).
+- Nenhuma pendência conhecida de git.
 
 ===============================================================================
 6. SCRIPTS ÚTEIS (PowerShell)
 ===============================================================================
 
-# [Sessão 13 — primeira ação] Descoberta da estrutura do repo
-# Rodar e colar a saída no chat ANTES de qualquer edição de código.
+# [Sessão 14 — primeira ação] Abrir PowerShell via Win+R → "powershell"
+# (NÃO abrir de dentro do VS Code / Windows Terminal, para ler o PATH atual)
+# Depois:
+
+# [Sessão 14 — primeira ação] Descoberta da estrutura do repo
 cd D:\Rumo
 Get-ChildItem -Directory | Select-Object Name
 Get-ChildItem D:\Rumo\web\src -Directory | Select-Object Name
@@ -297,19 +427,31 @@ Get-ChildItem D:\Rumo\web\src\pages | Select-Object Name
 Get-ChildItem D:\Rumo\web\src\components | Select-Object Name
 Get-ChildItem D:\Rumo\mobile\lib -Directory | Select-Object Name
 Get-ChildItem D:\Rumo\backend -Directory | Select-Object Name
+Get-ChildItem D:\Rumo\backend\app -Directory | Select-Object Name
+Get-ChildItem D:\Rumo\backend\app\routers -File | Select-Object Name
+Get-ChildItem D:\Rumo\backend\tests -File | Select-Object Name
 
-# [Sessão 13 — primeira ação] Estado do repo
+# [Sessão 14 — primeira ação] Estado do repo
 cd D:\Rumo
 git push
 git log --oneline -5
 git status --short
 
-# [Sessão 13 — primeira ação] Sanidade de build
+# [Sessão 14 — primeira ação] Sanidade de build
 cd D:\Rumo\web
 npm run build
 
 cd D:\Rumo\mobile
 & "C:\Users\nasci\flutter\bin\flutter.bat" analyze
+
+# [Sessão 14 — primeira ação] Docker + pytest local
+docker version
+docker compose version
+cd D:\Rumo\backend
+docker compose -f docker-compose.test.yml up -d
+docker ps
+.\.venv\Scripts\Activate.ps1
+pytest -q
 
 # Login (produção)
 $body = "username=prod@rumo.com&password=senha12345"
@@ -320,7 +462,12 @@ $token = $login.access_token
 $feed = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/feed?limit=5" -Headers @{ Authorization = "Bearer $token" }
 $feed | ForEach-Object { Write-Host "id=$($_.id.Substring(0,8))  title=$($_.title)  bbox=$($_.bbox -join ',')" }
 
-# Track de uma atividade (produção)
+# Stats (produção)
+Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/summary" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
+Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/weekly?weeks=8" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
+Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/monthly?months=6" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
+
+# Track (produção)
 $t = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/$id/track" -Headers @{ Authorization = "Bearer $token" }
 
 # Build web
@@ -330,52 +477,55 @@ npm run build
 # Flutter analyze
 & "C:\Users\nasci\flutter\bin\flutter.bat" analyze
 
-# [Sessão 13] Subir Postgres/PostGIS de teste (após instalar Docker Desktop)
-cd D:\Rumo\backend
-docker compose -f docker-compose.test.yml up -d
-
-# [Sessão 13] Rodar pytest local
-cd D:\Rumo\backend
-pytest -q
-
 ===============================================================================
 7. DÍVIDAS TÉCNICAS
 ===============================================================================
 
-- PRÓXIMO PASSO BLOQUEANTE (Sessão 13): Docker Desktop NÃO instalado no
-  Windows local. pytest local em 94 erros de ConnectionRefusedError
-  (conftest.py aponta para docker-compose.test.yml, Postgres/PostGIS na 5433).
-  Os 17 testes que passam são só os que não tocam banco. WORKAROUND atual:
-  validar em produção (Render). RESOLVER: instalar Docker Desktop → reiniciar
-  → `cd D:\Rumo\backend && docker compose -f docker-compose.test.yml up -d`
-  → `pytest -q` verde ANTES de qualquer mudança que dependa de testes locais.
-- 894e4b5 (docs: handoff da Sessão 11) está local, não pushado. Rodar
-  `git push` no início da Sessão 13.
+- (RESOLVIDO na Sessão 13) Docker Desktop não instalado / pytest local não
+  rodava. Agora `pytest -q` local está verde (111 passed). O caminho do
+  docker.exe é C:\Users\nasci\AppData\Local\Programs\DockerDesktop\resources\bin
+  e está no PATH do usuário. Para reativar em sessão nova: abrir PowerShell
+  via Win+R → "powershell" (NÃO de dentro do VS Code / Windows Terminal).
+
+- (NOVO na Sessão 13) Quatro gráficos quase idênticos no perfil:
+  WeeklyChart, MonthlyChart, WeeklyActivitiesChart, MonthlyActivitiesChart.
+  ~85% de código duplicado (wrapper, eixos, tooltip, dot, altura). Próximo
+  passo natural: extrair `<PeriodChart metric="distance" | "activities"
+  period="weekly" | "monthly" />` e reduzir o ProfilePage em ~3 kB.
+  Não fazer em cima da hora — exige validação visual das 4 combinações.
+
+- Warnings do fitparse (biblioteca externa) durante pytest:
+  "datetime.utcfromtimestamp() is deprecated". São 3611 warnings em
+  tests/test_calories.py. Não quebram, mas poluem a saída. Se um dia
+  atualizar fitparse, somem. Baixa prioridade.
+
 - Web: miniatura do feed usa 1 tile OSM centralizado (bbox grande pode cortar
   bordas). Aceitável; se virar problema, evoluir para mosaico 2x2 ou
   staticmap.openstreetmap.de.
-- Web: toggle Mapa/Satélite está inline na ActivityDetailPage (não extraído
-  para componente próprio). Se o mapa for reutilizado em outra página, extrair
-  `RouteMap.tsx` com o estado do toggle encapsulado.
+
 - Mobile: sem inclinação/rotação 3D (flutter_map é 2D). Se 3D for requisito,
   avaliar maplibre_gl (decisão maior, pesada).
+
 - TimeoutException do app mobile não reproduzido desde a Sessão 9. Registrar
   se voltar (tela + log do flutter run).
-- (Resolvido na Sessão 12) docs/HANDOFF.md modificado no working tree.
-  Fechado em 894e4b5. Não é mais dívida.
-- (Mitigado na Sessão 12) Chats novos perdiam tempo tentando adivinhar a
-  estrutura de pastas do repo. Mitigação: bloco "ESTRUTURA DO REPO" + "REGRA
-  DE OURO" na seção 0 e script `Get-ChildItem` na seção 6. Se ainda assim
-  acontecer, reforçar a regra no início da sessão.
+
+- (Oportunidade) RouteMap.tsx foi extraído na Sessão 13. Agora é reutilizável
+  em qualquer página que precise renderizar uma rota. Se aparecer um segundo
+  uso, considerar React.lazy() para tirar o leaflet (163 kB) do chunk da
+  página que não mostra mapa.
+
+- Stats no perfil: /activities/stats/summary, /weekly e /monthly são só do
+  current_user. Se um dia o requisito for "ver stats de outro usuário",
+  precisa de novos endpoints (com privacidade, provavelmente via follow).
 
 ===============================================================================
-8. PRÓXIMOS PASSOS RECOMENDADOS (Sessão 13)
+8. PRÓXIMOS PASSOS RECOMENDADOS (Sessão 14)
 ===============================================================================
 
-PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 13 (antes de qualquer mudança de código):
+PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 14 (antes de qualquer mudança de código):
   1) Colar este handoff em docs/HANDOFF.md e commitar como
-     `docs: handoff da Sessão 12`.
-  2) No terminal:
+     `docs: handoff da Sessão 13`.
+  2) No terminal (PowerShell via Win+R → "powershell"):
         cd D:\Rumo
         git push
         git log --oneline -5
@@ -383,34 +533,66 @@ PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 13 (antes de qualquer mudança de códig
         cd web ; npm run build
         cd ..\mobile
         & "C:\Users\nasci\flutter\bin\flutter.bat" analyze
-     Confirmar com o usuário: push aceito, 894e4b5 em origin/main, build e
+     Confirmar com o usuário: push aceito, HEAD == origin/main, build e
      analyze verdes, working tree limpo.
-  3) DESCOBERTA DE ESTRUTURA (obrigatória — não adivinhar):
+  3) DOCKER + PYTEST LOCAL:
+        docker version
+        docker compose version
+        cd D:\Rumo\backend
+        docker compose -f docker-compose.test.yml up -d
+        docker ps
+        .\.venv\Scripts\Activate.ps1
+        pytest -q
+     Esperado: 111 passed.
+  4) DESCOBERTA DE ESTRUTURA (obrigatória — não adivinhar):
         cd D:\Rumo
         Get-ChildItem -Directory | Select-Object Name
         Get-ChildItem D:\Rumo\web\src -Directory | Select-Object Name
         Get-ChildItem D:\Rumo\web\src\pages | Select-Object Name
         Get-ChildItem D:\Rumo\web\src\components | Select-Object Name
         Get-ChildItem D:\Rumo\mobile\lib -Directory | Select-Object Name
-        Get-ChildItem D:\Rumo\backend -Directory | Select-Object Name
+        Get-ChildItem D:\Rumo\backend\app -Directory | Select-Object Name
+        Get-ChildItem D:\Rumo\backend\app\routers -File | Select-Object Name
+        Get-ChildItem D:\Rumo\backend\tests -File | Select-Object Name
      Colar as saídas no chat ANTES de pedir ou reescrever qualquer arquivo.
 
-ORDEM DE TRABALHO RECOMENDADA:
-1) Instalar Docker Desktop (passo bloqueante, interativo):
-   a) Baixar em https://www.docker.com/products/docker-desktop/ (canal stable).
-   b) Instalar com WSL2 como backend (padrão). Reiniciar quando solicitado.
-   c) Abrir Docker Desktop e confirmar que o engine está "running".
-   d) `docker version` e `docker compose version` no PowerShell devem responder.
-   e) `cd D:\Rumo\backend ; docker compose -f docker-compose.test.yml up -d`
-      — aguardar o Postgres/PostGIS na 5433 ficar healthy.
-   f) `pytest -q` — esperado: 111 testes passando (mesmo número da produção).
-   g) Se algo falhar: ver seção 7 (dívidas) e registrar o erro exato antes de
-      tentar workaround.
-2) Com pytest local verde, retomar trabalho de feature na ordem:
-   a) Perfil / Estatísticas na web. StatsSummary, StatsPeriod,
-      StatsWeeklyResponse, StatsMonthlyResponse já estão tipados em
-      web/src/types/api.ts. Falta UI (ProfilePage.tsx e componentes).
-   b) Refinamento visual do feed: revisar altura das miniaturas (mobile 120px,
-      web 96px) se ficarem altas demais. Ajuste de UX, não feature.
-3) Handoff preventivo em ~70-80% do contexto — antes do fim, parar e
-   entregar o HANDOFF completo da Sessão 13 neste mesmo formato.
+ORDEM DE TRABALHO RECOMENDADA (uma das duas rotas):
+
+ROTA A — Refatorar os 4 gráficos em 1 `<PeriodChart>` (dívida recém-criada)
+  Escopo médio, frontend. Reduzir duplicação antes que ela vire raiz.
+  Passos:
+    a) Ler os 4 arquivos atuais (WeeklyChart, MonthlyChart,
+       WeeklyActivitiesChart, MonthlyActivitiesChart).
+    b) Propor `components/PeriodChart.tsx` com props:
+         period: "weekly" | "monthly"
+         metric: "distance" | "activities"
+         items, isLoading, isError
+       Encapsula: label do eixo X (DD/MM vs MM/YYYY), título, tooltip,
+       conversão km (só metric="distance"), yMax dinâmico (contagem) e
+       allowDecimals (só activities).
+    c) Entregar PeriodChart.tsx completo.
+    d) Entregar ProfilePage.tsx usando `<PeriodChart ... />` em vez dos 4
+       componentes (as 4 combinações viram 1 chamada parametrizada).
+    e) Remover os 4 arquivos antigos (com confirmação explícita do usuário).
+    f) npm run build + validação visual das 4 combinações em produção.
+  Commit sugerido: `refactor(web): unifica gráficos do perfil em PeriodChart`.
+
+ROTA B — Feature nova de backend (requer escolha com o usuário)
+  Escopo médio-grande. Exemplos:
+    - Drill-down de stats por tipo de atividade no perfil (tabela com
+      uma linha por tipo, colunas: atividades, distância, tempo).
+      Backend: 1 novo endpoint `/activities/stats/by-type`.
+    - Comparação "este período vs. anterior" em cada gráfico.
+    - Stats públicas para perfis de terceiros (com privacidade via follow).
+  Requer: desenhar endpoint + schema + teste (agora VALIDÁVEL localmente,
+  com pytest verde). Depois, UI no front.
+
+  Rota A é a MINHA RECOMENDAÇÃO. O refactor é pequeno, fecha uma dívida
+  criada agora, e mantém o ritmo de "deixar o repo melhor do que estava".
+  A Rota B adiciona features, mas as dívidas acumulariam. Se o usuário
+  preferir feature nova, Rota B é viável — mas o assistente deve explicitar
+  que está adiando a dívida dos gráficos.
+
+  Em qualquer rota, handoff preventivo em ~70-80% do contexto — antes do
+  fim, parar e entregar o HANDOFF completo da Sessão 14 neste mesmo formato
+  (seções 0 a 8).
