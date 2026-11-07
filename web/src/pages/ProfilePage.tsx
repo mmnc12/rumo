@@ -7,6 +7,10 @@ import { StatsCards } from "../components/StatsCards";
 import { WeeklyChart } from "../components/WeeklyChart";
 // [Sessão 13] Gráfico mensal (novo componente, mesmo shape do weekly).
 import { MonthlyChart } from "../components/MonthlyChart";
+// [Sessão 13 — F] Gráficos de ATIVIDADES (contagem por período). Par dos
+// gráficos de distância acima; consomem o mesmo StatsPeriod.
+import { WeeklyActivitiesChart } from "../components/WeeklyActivitiesChart";
+import { MonthlyActivitiesChart } from "../components/MonthlyActivitiesChart";
 import { useUserActivities } from "../hooks/useActivities";
 import {
   useFollowers,
@@ -32,6 +36,8 @@ const TYPE_FILTERS: { label: string; value: ActivityType | undefined }[] = [
 
 // [Sessão 13] Modo do gráfico de evolução — semanal ou mensal.
 type ChartMode = "weekly" | "monthly";
+// [Sessão 13 — F] Métrica do gráfico — distância (km) ou contagem de atividades.
+type ChartMetric = "distance" | "activities";
 
 export default function ProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -42,6 +48,8 @@ export default function ProfilePage() {
   // [Sessão 13] Semanal continua sendo o default — comportamento atual
   // preservado. Usuário troca para mensal se quiser.
   const [chartMode, setChartMode] = useState<ChartMode>("weekly");
+  // [Sessão 13 — F] Distância continua sendo o default do segundo toggle.
+  const [chartMetric, setChartMetric] = useState<ChartMetric>("distance");
 
   const {
     data: profile,
@@ -185,8 +193,11 @@ export default function ProfilePage() {
               isError={summaryQuery.isError}
             />
 
-            {/* [Sessão 13] Toggle Semanal | Mensal + gráfico condicional. */}
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+            {/* [Sessão 13 + F] Dois toggles independentes:
+                  - Semanal | Mensal   → qual janela de tempo
+                  - Distância | Atividades → qual métrica no eixo Y
+                As 4 combinações usam os mesmos StatsPeriod, sem request nova. */}
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <div className="inline-flex rounded-lg bg-white p-1 shadow-sm">
                 <button
                   type="button"
@@ -211,17 +222,60 @@ export default function ProfilePage() {
                   Mensal
                 </button>
               </div>
+
+              <div className="inline-flex rounded-lg bg-white p-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setChartMetric("distance")}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                    chartMetric === "distance"
+                      ? "bg-rumo-500 text-white"
+                      : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  Distância
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartMetric("activities")}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                    chartMetric === "activities"
+                      ? "bg-rumo-500 text-white"
+                      : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  Atividades
+                </button>
+              </div>
             </div>
 
             <div className="mt-4">
-              {chartMode === "weekly" ? (
+              {/* [Sessão 13 + F] Renderiza um dos 4 gráficos conforme
+                  chartMode × chartMetric. Ordem das condições: primeiro
+                  período, depois métrica. */}
+              {chartMode === "weekly" && chartMetric === "distance" && (
                 <WeeklyChart
                   items={weeklyQuery.data?.items}
                   isLoading={weeklyQuery.isLoading}
                   isError={weeklyQuery.isError}
                 />
-              ) : (
+              )}
+              {chartMode === "weekly" && chartMetric === "activities" && (
+                <WeeklyActivitiesChart
+                  items={weeklyQuery.data?.items}
+                  isLoading={weeklyQuery.isLoading}
+                  isError={weeklyQuery.isError}
+                />
+              )}
+              {chartMode === "monthly" && chartMetric === "distance" && (
                 <MonthlyChart
+                  items={monthlyQuery.data?.items}
+                  isLoading={monthlyQuery.isLoading}
+                  isError={monthlyQuery.isError}
+                />
+              )}
+              {chartMode === "monthly" && chartMetric === "activities" && (
+                <MonthlyActivitiesChart
                   items={monthlyQuery.data?.items}
                   isLoading={monthlyQuery.isLoading}
                   isError={monthlyQuery.isError}
