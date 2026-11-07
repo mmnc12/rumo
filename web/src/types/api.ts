@@ -40,6 +40,9 @@ export interface Activity {
   cover_photo_url: string | null;
   /** Quantidade total de fotos (denormalizado, bloco 17b backend). */
   photo_count: number;
+  // [Sessão 11] Bounding box da rota em ordem GeoJSON
+  // [minLon, minLat, maxLon, maxLat]. `null` quando a atividade não tem rota.
+  bbox: [number, number, number, number] | null;
 }
 
 /**

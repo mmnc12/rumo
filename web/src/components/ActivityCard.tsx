@@ -1,3 +1,4 @@
+// [Sessão 11] miniatura estática (tile OSM) abaixo da row principal.
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -9,6 +10,7 @@ import {
   formatPace,
   formatRelativeDate,
 } from "../lib/format";
+import { bboxToOsmTileUrl } from "../lib/geo";
 import { useToggleLike } from "../hooks/useSocial";
 import type { Activity, UserPublic } from "../types/api";
 
@@ -36,6 +38,11 @@ export function ActivityCard({ activity, author }: ActivityCardProps) {
       onError: () => setLiked(!next), // rollback local se o backend falhar
     });
   }
+
+  // [Sessão 11] URL do tile estático só se houver bbox (rota).
+  const mapTileUrl = activity.bbox
+    ? bboxToOsmTileUrl(activity.bbox)
+    : null;
 
   return (
     <div>
@@ -102,6 +109,22 @@ export function ActivityCard({ activity, author }: ActivityCardProps) {
             <HeartIcon filled={liked} />
           </button>
         </div>
+
+        {/* [Sessão 11] Miniatura de mapa (tile estático OSM) só se houver rota.
+            Fica em largura total abaixo da row para não espremer o texto.
+            Está dentro do <Link> do card, então herda a navegação do pai
+            (sem <Link> aninhado). */}
+        {mapTileUrl && (
+          <div className="mt-3 h-24 overflow-hidden rounded-lg bg-gray-100">
+            <img
+              src={mapTileUrl}
+              alt={`Mapa da rota de ${title}`}
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-cover"
+            />
+          </div>
+        )}
       </Link>
     </div>
   );
