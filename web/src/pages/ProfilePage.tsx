@@ -5,6 +5,8 @@ import { AppHeader } from "../components/AppHeader";
 import { ActivityCard } from "../components/ActivityCard";
 import { StatsCards } from "../components/StatsCards";
 import { WeeklyChart } from "../components/WeeklyChart";
+// [Sessão 13] Gráfico mensal (novo componente, mesmo shape do weekly).
+import { MonthlyChart } from "../components/MonthlyChart";
 import { useUserActivities } from "../hooks/useActivities";
 import {
   useFollowers,
@@ -12,7 +14,8 @@ import {
   useIsFollowing,
   useUser,
 } from "../hooks/useProfile";
-import { useStatsSummary, useStatsWeekly } from "../hooks/useStats";
+// [Sessão 13] Hook mensal adicionado.
+import { useStatsSummary, useStatsWeekly, useStatsMonthly } from "../hooks/useStats";
 import { useFollowUser } from "../hooks/useSocial";
 import { ApiError } from "../api/client";
 import type { ActivityType, UserPublic } from "../types/api";
@@ -27,12 +30,18 @@ const TYPE_FILTERS: { label: string; value: ActivityType | undefined }[] = [
   { label: "Natação", value: "swim" },
 ];
 
+// [Sessão 13] Modo do gráfico de evolução — semanal ou mensal.
+type ChartMode = "weekly" | "monthly";
+
 export default function ProfilePage() {
   const { id } = useParams<{ id: string }>();
   const [tab, setTab] = useState<"followers" | "following">("followers");
   const [typeFilter, setTypeFilter] = useState<ActivityType | undefined>(
     undefined
   );
+  // [Sessão 13] Semanal continua sendo o default — comportamento atual
+  // preservado. Usuário troca para mensal se quiser.
+  const [chartMode, setChartMode] = useState<ChartMode>("weekly");
 
   const {
     data: profile,
@@ -66,6 +75,13 @@ export default function ProfilePage() {
   // Stats só no próprio perfil (endpoints /stats/* são do current_user)
   const summaryQuery = useStatsSummary(typeFilter, isSelf);
   const weeklyQuery = useStatsWeekly(8, typeFilter, isSelf);
+  // [Sessão 13] Monthly só dispara quando o modo mensal está ativo — evita
+  // request desnecessária enquanto o usuário nem olhou o gráfico mensal.
+  const monthlyQuery = useStatsMonthly(
+    6,
+    typeFilter,
+    isSelf && chartMode === "monthly"
+  );
 
   if (!id) {
     return (
@@ -169,12 +185,48 @@ export default function ProfilePage() {
               isError={summaryQuery.isError}
             />
 
+            {/* [Sessão 13] Toggle Semanal | Mensal + gráfico condicional. */}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+              <div className="inline-flex rounded-lg bg-white p-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setChartMode("weekly")}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                    chartMode === "weekly"
+                      ? "bg-rumo-500 text-white"
+                      : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  Semanal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartMode("monthly")}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                    chartMode === "monthly"
+                      ? "bg-rumo-500 text-white"
+                      : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  Mensal
+                </button>
+              </div>
+            </div>
+
             <div className="mt-4">
-              <WeeklyChart
-                items={weeklyQuery.data?.items}
-                isLoading={weeklyQuery.isLoading}
-                isError={weeklyQuery.isError}
-              />
+              {chartMode === "weekly" ? (
+                <WeeklyChart
+                  items={weeklyQuery.data?.items}
+                  isLoading={weeklyQuery.isLoading}
+                  isError={weeklyQuery.isError}
+                />
+              ) : (
+                <MonthlyChart
+                  items={monthlyQuery.data?.items}
+                  isLoading={monthlyQuery.isLoading}
+                  isError={monthlyQuery.isError}
+                />
+              )}
             </div>
           </section>
         )}

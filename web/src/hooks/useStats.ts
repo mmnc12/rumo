@@ -1,7 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getStatsSummary, getStatsWeekly } from "../api/stats";
-import type { StatsSummary, StatsWeeklyResponse } from "../types/api";
+import {
+  getStatsSummary,
+  getStatsWeekly,
+  getStatsMonthly,
+} from "../api/stats";
+import type {
+  StatsSummary,
+  StatsWeeklyResponse,
+  StatsMonthlyResponse,
+} from "../types/api";
 
 // ===== Query keys =====
 
@@ -11,6 +19,9 @@ export const statsKeys = {
     [...statsKeys.all, "summary", activityType ?? "all"] as const,
   weekly: (weeks: number, activityType?: string) =>
     [...statsKeys.all, "weekly", weeks, activityType ?? "all"] as const,
+  // [Sessão 13] Chave para o mensal — mesmo padrão do weekly.
+  monthly: (months: number, activityType?: string) =>
+    [...statsKeys.all, "monthly", months, activityType ?? "all"] as const,
 };
 
 // ===== Summary =====
@@ -50,6 +61,31 @@ export function useStatsWeekly(
   return useQuery<StatsWeeklyResponse>({
     queryKey: statsKeys.weekly(weeks, activityType),
     queryFn: () => getStatsWeekly(weeks, { activity_type: activityType }),
+    enabled,
+    staleTime: 60_000,
+    retry: 1,
+  });
+}
+
+// ===== Monthly =====
+
+// [Sessão 13] Hook mensal — espelho do useStatsWeekly. Default 6 meses
+// (mesma decisão do getStatsMonthly). `enabled` mantém a mesma semântica:
+// só dispara quando o ProfilePage está no próprio perfil.
+/**
+ * Resumo mensal dos últimos N meses.
+ *
+ * `enabled` controla se dispara (só no próprio perfil).
+ * staleTime 60s: idem summary/weekly.
+ */
+export function useStatsMonthly(
+  months = 6,
+  activityType?: string,
+  enabled = true
+) {
+  return useQuery<StatsMonthlyResponse>({
+    queryKey: statsKeys.monthly(months, activityType),
+    queryFn: () => getStatsMonthly(months, { activity_type: activityType }),
     enabled,
     staleTime: 60_000,
     retry: 1,

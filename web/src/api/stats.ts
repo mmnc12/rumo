@@ -4,7 +4,11 @@
  */
 
 import { apiFetch } from "./client";
-import type { StatsSummary, StatsWeeklyResponse } from "../types/api";
+import type {
+  StatsSummary,
+  StatsWeeklyResponse,
+  StatsMonthlyResponse,
+} from "../types/api";
 
 export interface StatsQuery {
   activity_type?: string;
@@ -34,4 +38,19 @@ export function getStatsWeekly(
   const qs = new URLSearchParams({ weeks: String(weeks) });
   if (params.activity_type) qs.set("activity_type", params.activity_type);
   return apiFetch<StatsWeeklyResponse>(`/activities/stats/weekly?${qs}`);
+}
+
+// [Sessão 13] Resumo mensal — espelho do weekly. Endpoint confirmado em
+// produção: GET /activities/stats/monthly?months=N[&activity_type=...].
+/**
+ * GET /activities/stats/monthly — resumo dos últimos N meses.
+ * Retorna uma lista ordenada (o backend decide a ordem; conferir na UI).
+ */
+export function getStatsMonthly(
+  months = 6,
+  params: StatsQuery = {}
+): Promise<StatsMonthlyResponse> {
+  const qs = new URLSearchParams({ months: String(months) });
+  if (params.activity_type) qs.set("activity_type", params.activity_type);
+  return apiFetch<StatsMonthlyResponse>(`/activities/stats/monthly?${qs}`);
 }
