@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../models/activity.dart';
@@ -126,30 +124,6 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
     setState(() {
       _activity = updated;
     });
-  }
-
-  /// Extrai o id do usuário atual a partir do JWT (`sub`), sem depender
-  /// de um getter específico do AuthService.
-  String? get _currentUserId {
-    final token = widget.auth.token;
-    if (token == null) return null;
-    try {
-      final parts = token.split('.');
-      if (parts.length != 3) return null;
-      final payload = parts[1];
-      final normalized = base64Url.normalize(payload);
-      final decoded = utf8.decode(base64Url.decode(normalized));
-      final data = jsonDecode(decoded);
-      if (data is Map<String, dynamic>) {
-        final sub = data['sub'];
-        if (sub is String) return sub;
-        final userId = data['user_id'];
-        if (userId is String) return userId;
-      }
-    } catch (_) {
-      // token inválido/expirado — sem id, esconde o botão de deletar.
-    }
-    return null;
   }
 
   Future<void> _submitComment() async {
@@ -428,7 +402,8 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
       );
     }
 
-    final currentUserId = _currentUserId;
+    // [Sessão 10] Id do usuário agora vem do AuthService (fonte única).
+    final currentUserId = widget.auth.currentUserId;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
