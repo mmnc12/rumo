@@ -4,13 +4,14 @@ import { Link, useParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { ActivityCard } from "../components/ActivityCard";
 import { StatsCards } from "../components/StatsCards";
-import { WeeklyChart } from "../components/WeeklyChart";
-// [Sessão 13] Gráfico mensal (novo componente, mesmo shape do weekly).
-import { MonthlyChart } from "../components/MonthlyChart";
-// [Sessão 13 — F] Gráficos de ATIVIDADES (contagem por período). Par dos
-// gráficos de distância acima; consomem o mesmo StatsPeriod.
-import { WeeklyActivitiesChart } from "../components/WeeklyActivitiesChart";
-import { MonthlyActivitiesChart } from "../components/MonthlyActivitiesChart";
+// [Sessão 14] Substitui os 4 gráficos por 1 componente parametrizado
+// (PeriodChart). Os tipos ChartPeriod/ChartMetric vêm do próprio componente
+// para evitar duplicação de union types no ProfilePage.
+import {
+  PeriodChart,
+  type ChartPeriod,
+  type ChartMetric,
+} from "../components/PeriodChart";
 import { useUserActivities } from "../hooks/useActivities";
 import {
   useFollowers,
@@ -18,7 +19,6 @@ import {
   useIsFollowing,
   useUser,
 } from "../hooks/useProfile";
-// [Sessão 13] Hook mensal adicionado.
 import { useStatsSummary, useStatsWeekly, useStatsMonthly } from "../hooks/useStats";
 import { useFollowUser } from "../hooks/useSocial";
 import { ApiError } from "../api/client";
@@ -34,10 +34,8 @@ const TYPE_FILTERS: { label: string; value: ActivityType | undefined }[] = [
   { label: "Natação", value: "swim" },
 ];
 
-// [Sessão 13] Modo do gráfico de evolução — semanal ou mensal.
-type ChartMode = "weekly" | "monthly";
-// [Sessão 13 — F] Métrica do gráfico — distância (km) ou contagem de atividades.
-type ChartMetric = "distance" | "activities";
+// [Sessão 14] ChartMode/ChartMetric agora vêm de PeriodChart (reexport).
+// Mantido o alias abaixo para deixar claro na leitura do componente.
 
 export default function ProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -45,9 +43,8 @@ export default function ProfilePage() {
   const [typeFilter, setTypeFilter] = useState<ActivityType | undefined>(
     undefined
   );
-  // [Sessão 13] Semanal continua sendo o default — comportamento atual
-  // preservado. Usuário troca para mensal se quiser.
-  const [chartMode, setChartMode] = useState<ChartMode>("weekly");
+  // [Sessão 13] Semanal continua sendo o default.
+  const [chartMode, setChartMode] = useState<ChartPeriod>("weekly");
   // [Sessão 13 — F] Distância continua sendo o default do segundo toggle.
   const [chartMetric, setChartMetric] = useState<ChartMetric>("distance");
 
@@ -83,8 +80,7 @@ export default function ProfilePage() {
   // Stats só no próprio perfil (endpoints /stats/* são do current_user)
   const summaryQuery = useStatsSummary(typeFilter, isSelf);
   const weeklyQuery = useStatsWeekly(8, typeFilter, isSelf);
-  // [Sessão 13] Monthly só dispara quando o modo mensal está ativo — evita
-  // request desnecessária enquanto o usuário nem olhou o gráfico mensal.
+  // [Sessão 13] Monthly só dispara quando o modo mensal está ativo.
   const monthlyQuery = useStatsMonthly(
     6,
     typeFilter,
@@ -110,9 +106,12 @@ export default function ProfilePage() {
     errorActivities instanceof ApiError && errorActivities.status === 403;
 
   // useInfiniteQuery entrega { pages: Activity[][], pageParams } — achatamos
-  // para renderizar numa lista só. Se o backend retornou 403, `pages` vem
-  // vazio, então o CTA "siga pra ver" continua funcionando.
+  // para renderizar numa lista só.
   const activities = activitiesData?.pages.flat() ?? [];
+
+  // [Sessão 14] Escolhe a query ativa com base no chartMode, uma única vez.
+  // As 4 combinações (period × metric) usam a mesma fonte de items.
+  const activeChartQuery = chartMode === "weekly" ? weeklyQuery : monthlyQuery;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -194,8 +193,8 @@ export default function ProfilePage() {
             />
 
             {/* [Sessão 13 + F] Dois toggles independentes:
-                  - Semanal | Mensal   → qual janela de tempo
-                  - Distância | Atividades → qual métrica no eixo Y
+                  - Semanal | Mensal   → janela de tempo
+                  - Distância | Atividades → métrica do eixo Y
                 As 4 combinações usam os mesmos StatsPeriod, sem request nova. */}
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <div className="inline-flex rounded-lg bg-white p-1 shadow-sm">
@@ -250,37 +249,15 @@ export default function ProfilePage() {
             </div>
 
             <div className="mt-4">
-              {/* [Sessão 13 + F] Renderiza um dos 4 gráficos conforme
-                  chartMode × chartMetric. Ordem das condições: primeiro
-                  período, depois métrica. */}
-              {chartMode === "weekly" && chartMetric === "distance" && (
-                <WeeklyChart
-                  items={weeklyQuery.data?.items}
-                  isLoading={weeklyQuery.isLoading}
-                  isError={weeklyQuery.isError}
-                />
-              )}
-              {chartMode === "weekly" && chartMetric === "activities" && (
-                <WeeklyActivitiesChart
-                  items={weeklyQuery.data?.items}
-                  isLoading={weeklyQuery.isLoading}
-                  isError={weeklyQuery.isError}
-                />
-              )}
-              {chartMode === "monthly" && chartMetric === "distance" && (
-                <MonthlyChart
-                  items={monthlyQuery.data?.items}
-                  isLoading={monthlyQuery.isLoading}
-                  isError={monthlyQuery.isError}
-                />
-              )}
-              {chartMode === "monthly" && chartMetric === "activities" && (
-                <MonthlyActivitiesChart
-                  items={monthlyQuery.data?.items}
-                  isLoading={monthlyQuery.isLoading}
-                  isError={monthlyQuery.isError}
-                />
-              )}
+              {/* [Sessão 14] Um único componente cobre as 4 combinações.
+                  items/isLoading/isError vêm da query ativa (weekly ou monthly). */}
+              <PeriodChart
+                period={chartMode}
+                metric={chartMetric}
+                items={activeChartQuery.data?.items}
+                isLoading={activeChartQuery.isLoading}
+                isError={activeChartQuery.isError}
+              />
             </div>
           </section>
         )}
