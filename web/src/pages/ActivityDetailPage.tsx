@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+// [Sessão 11 — fix] toggle Mapa/Satélite no mapa do detalhe (igual mobile).
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { MapContainer, Polyline, TileLayer, useMap } from "react-leaflet";
 import type { LatLngBoundsExpression } from "leaflet";
@@ -25,6 +26,18 @@ import {
   formatPace,
 } from "../lib/format";
 
+// [Sessão 11 — fix] Providers alinhados com o mobile (ActivityMap).
+// Ordem dos placeholders difere:
+//   OSM:   {z}/{x}/{y}
+//   Esri:  {z}/{y}/{x}
+const OSM_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const OSM_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+const ESRI_URL =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const ESRI_ATTRIBUTION =
+  "Esri, Maxar, Earthstar Geographics, and the GIS User Community";
+
 /** Ajusta o zoom do mapa pra enquadrar a rota inteira. */
 function FitBounds({ bbox }: { bbox: [number, number, number, number] }) {
   const map = useMap();
@@ -50,6 +63,9 @@ export default function ActivityDetailPage() {
   const { data: photos } = useActivityPhotos(id);
   const deleteMutation = useDeleteActivity();
   const deletePhoto = useDeletePhoto(id ?? "");
+
+  // [Sessão 11 — fix] Camada ativa: false = mapa (OSM), true = satélite (Esri).
+  const [satelite, setSatelite] = useState(false);
 
   async function handleDelete() {
     if (!id) return;
@@ -129,7 +145,7 @@ export default function ActivityDetailPage() {
         {/* Mapa */}
         {positions.length > 0 && track ? (
           <div
-            className="rounded-lg overflow-hidden shadow-sm mb-6"
+            className="relative rounded-lg overflow-hidden shadow-sm mb-6"
             style={{ height: "24rem" }}
           >
             <MapContainer
@@ -138,9 +154,12 @@ export default function ActivityDetailPage() {
               zoom={13}
               scrollWheelZoom
             >
+              {/* [Sessão 11 — fix] `key` força remount do TileLayer ao trocar
+                  de camada; sem isso o Leaflet mantém os tiles antigos em cache. */}
               <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                key={satelite ? "esri" : "osm"}
+                attribution={satelite ? ESRI_ATTRIBUTION : OSM_ATTRIBUTION}
+                url={satelite ? ESRI_URL : OSM_URL}
               />
               <Polyline
                 positions={positions}
@@ -148,6 +167,52 @@ export default function ActivityDetailPage() {
               />
               <FitBounds bbox={track.bbox} />
             </MapContainer>
+
+            {/* [Sessão 11 — fix] Toggle Mapa/Satélite (mesmo padrão do mobile).
+                z-[1000] alinha com os controles nativos do Leaflet (zoom etc.). */}
+            <button
+              type="button"
+              onClick={() => setSatelite((v) => !v)}
+              aria-label={satelite ? "Ver mapa" : "Ver satélite"}
+              title={satelite ? "Ver mapa" : "Ver satélite"}
+              className="absolute top-2 right-2 z-[1000] flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-md hover:bg-gray-50 transition"
+            >
+              {satelite ? (
+                // Ícone "mapa" (quadrado com linhas internas).
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-5 w-5 text-gray-800"
+                >
+                  <path d="M9 4 3 6v16l6-2 6 2 6-2V4l-6 2-6-2z" />
+                  <path d="M9 4v16" />
+                  <path d="M15 6v16" />
+                </svg>
+              ) : (
+                // Ícone "satélite" (antena + prato).
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-5 w-5 text-gray-800"
+                >
+                  <path d="M13 7 9 3 5 7l4 4" />
+                  <path d="m17 11 4 4-4 4-4-4" />
+                  <path d="m8 12 4 4 6-6-4-4Z" />
+                  <path d="m16 8 3-3" />
+                  <path d="M9 21a6 6 0 0 0-6-6" />
+                </svg>
+              )}
+            </button>
           </div>
         ) : (
           <div
