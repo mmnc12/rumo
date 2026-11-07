@@ -1,4 +1,6 @@
 // [Sessão 11] miniatura estática (tile OSM) abaixo da row principal.
+// [Sessão 16] miniatura virou mosaico 2×2 de tiles OSM (bboxToOsmTileGrid),
+//             para não cortar bordas do bbox em rotas grandes.
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -10,7 +12,7 @@ import {
   formatPace,
   formatRelativeDate,
 } from "../lib/format";
-import { bboxToOsmTileUrl } from "../lib/geo";
+import { bboxToOsmTileGrid } from "../lib/geo";
 import { useToggleLike } from "../hooks/useSocial";
 import type { Activity, UserPublic } from "../types/api";
 
@@ -39,10 +41,11 @@ export function ActivityCard({ activity, author }: ActivityCardProps) {
     });
   }
 
-  // [Sessão 11] URL do tile estático só se houver bbox (rota).
-  const mapTileUrl = activity.bbox
-    ? bboxToOsmTileUrl(activity.bbox)
-    : null;
+  // [Sessão 16 — fix] Mosaico 2×2 de tiles OSM só se houver bbox (rota).
+  // O mosaico cobre 2× a largura e 2× a altura do tile único anterior,
+  // alinhado com o bbox — rotas grandes não cortam mais as bordas.
+  // Sem importar react-leaflet: o feed continua sem o chunk do leaflet.
+  const mapGrid = activity.bbox ? bboxToOsmTileGrid(activity.bbox) : null;
 
   return (
     <div>
@@ -110,19 +113,22 @@ export function ActivityCard({ activity, author }: ActivityCardProps) {
           </button>
         </div>
 
-        {/* [Sessão 11] Miniatura de mapa (tile estático OSM) só se houver rota.
+        {/* [Sessão 16 — fix] Miniatura de mapa em mosaico 2×2 de tiles OSM.
             Fica em largura total abaixo da row para não espremer o texto.
             Está dentro do <Link> do card, então herda a navegação do pai
-            (sem <Link> aninhado). */}
-        {mapTileUrl && (
-          <div className="mt-3 h-24 overflow-hidden rounded-lg bg-gray-100">
-            <img
-              src={mapTileUrl}
-              alt={`Mapa da rota de ${title}`}
-              loading="lazy"
-              decoding="async"
-              className="h-full w-full object-cover"
-            />
+            (sem <Link> aninhado). Cada tile é um <img> — nada de leaflet. */}
+        {mapGrid && (
+          <div className="mt-3 grid h-24 grid-cols-2 grid-rows-2 overflow-hidden rounded-lg bg-gray-100">
+            {mapGrid.tiles.map((tile) => (
+              <img
+                key={`${tile.row}-${tile.col}`}
+                src={tile.url}
+                alt={`Mapa da rota de ${title}`}
+                loading="lazy"
+                decoding="async"
+                className="h-full w-full object-cover"
+              />
+            ))}
           </div>
         )}
       </Link>
