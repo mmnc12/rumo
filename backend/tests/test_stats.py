@@ -10,15 +10,23 @@ Filosofia: datas determinísticas (nada de datetime.now()) para eliminar
 flakiness de fuso/relógio. Todos os inserts usam o ORM com ActivityType
 enum nativo, e os filtros usam string (o que o router de fato recebe).
 
+Exceção [Sessão 17]: os testes de `period` (all|90d|1y) usam
+`datetime.now(timezone.utc) - timedelta(days=N)` porque o filtro
+depende de `now()` do banco. Para evitar flakiness, as margens entre
+"dentro" e "fora" da janela são ≥10 dias — folga absurdamente maior que
+qualquer desvio de relógio entre o processo de teste e o Postgres.
+
 Paths de rota: o router `activities.py` é incluído no main.py com
 `prefix="/activities"`. Como as rotas de stats já declaram `/stats/...`
 no próprio router, o path final é `/activities/stats/summary`, etc.
 
 [Sessão 14 — B1] Adicionados testes de get_by_type (drill-down por tipo)
 e da rota /activities/stats/by-type.
+
+[Sessão 17] Adicionados testes de `period` (all|90d|1y) — service e rota.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,6 +42,17 @@ from app.services import stats_service
 def _dt(year: int, month: int, day: int, hour: int = 10) -> datetime:
     """Datetime UTC determinístico — nunca usa now()."""
     return datetime(year, month, day, hour, 0, 0, tzinfo=timezone.utc)
+
+
+def _dt_ago(days: int, hour: int = 10) -> datetime:
+    """[Sessão 17] Datetime UTC relativo a now() — só para testes de `period`.
+
+    Usado exclusivamente porque o filtro `period` (all|90d|1y) é aplicado
+    em SQL via `now() - INTERVAL`. Fora dele, `_dt` (fixo) continua sendo
+    o padrão. Margem mínima de 10 dias entre "dentro" e "fora" da janela
+    elimina qualquer flakiness de relógio Python vs. Postgres.
+    """
+    return datetime.now(timezone.utc) - timedelta(days=days)
 
 
 async def _make_activity(
@@ -550,3 +569,119 @@ async def test_route_by_type_shape(client, db_session, test_user):
     assert data["items"][0]["total_activities"] == 1
     assert data["items"][0]["total_distance_m"] == pytest.approx(20000.0)
     assert data["items"][1]["activity_type"] == "run"
+
+
+# ===== get_by_type com period — service [Sessão 17] =====
+
+
+@pytest.mark.asyncio
+async def test_get_by_type_period_all_is_baseline(db_session, test_user):
+    """`period="all"` (default) preserva o comportamento original: inclui
+    atividades antigas e recentes, sem filtrar por data."""
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(100), calories=300)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.CYCLE,
+                         started_at=_dt_ago(30), calories=800)
+
+    result = await stats_service.get_by_type(db_session, test_user.id, period="all")
+
+    assert len(result) == 2
+    types = {r["activity_type"] for r in result}
+    assert types == {"run", "cycle"}
+
+
+@pytest.mark.asyncio
+async def test_get_by_type_period_90d_excludes_old(db_session, test_user):
+    """`period="90d"` inclui atividade de 30 dias atrás e exclui a de 100
+    dias atrás (fora da janela)."""
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(100), calories=300)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.CYCLE,
+                         started_at=_dt_ago(30), calories=800)
+
+    result = await stats_service.get_by_type(db_session, test_user.id, period="90d")
+
+    assert len(result) == 1
+    assert result[0]["activity_type"] == "cycle"
+    assert result[0]["total_activities"] == 1
+    assert result[0]["total_calories"] == 800
+
+
+@pytest.mark.asyncio
+async def test_get_by_type_period_1y_excludes_older_than_365d(
+    db_session, test_user
+):
+    """`period="1y"` inclui atividade de 300 dias atrás e exclui a de 400
+    dias atrás (fora da janela de 365 dias)."""
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(400), calories=300)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.CYCLE,
+                         started_at=_dt_ago(300), calories=800)
+
+    result = await stats_service.get_by_type(db_session, test_user.id, period="1y")
+
+    assert len(result) == 1
+    assert result[0]["activity_type"] == "cycle"
+    assert result[0]["total_activities"] == 1
+    assert result[0]["total_calories"] == 800
+
+
+@pytest.mark.asyncio
+async def test_get_by_type_period_1y_is_superset_of_90d(db_session, test_user):
+    """30d e 200d aparecem em `1y`, só 30d aparece em `90d`."""
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(30), calories=100)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.CYCLE,
+                         started_at=_dt_ago(200), calories=500)
+
+    one_year = await stats_service.get_by_type(
+        db_session, test_user.id, period="1y"
+    )
+    ninety_days = await stats_service.get_by_type(
+        db_session, test_user.id, period="90d"
+    )
+
+    assert {r["activity_type"] for r in one_year} == {"run", "cycle"}
+    assert {r["activity_type"] for r in ninety_days} == {"run"}
+
+
+# ===== Rota /activities/stats/by-type com period [Sessão 17] =====
+
+
+@pytest.mark.asyncio
+async def test_route_by_type_period_param(client, db_session, test_user):
+    """?period=90d filtra na rota — mesma semântica do service."""
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(100), calories=300)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.CYCLE,
+                         started_at=_dt_ago(30), calories=800)
+
+    response = await client.get(
+        "/activities/stats/by-type", params={"period": "90d"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 1
+    assert data["items"][0]["activity_type"] == "cycle"
+    assert data["items"][0]["total_calories"] == 800
+
+
+@pytest.mark.asyncio
+async def test_route_by_type_invalid_period_returns_422(
+    client, db_session, test_user
+):
+    """Valor fora de {all, 90d, 1y} → 422 (Literal do FastAPI)."""
+    response = await client.get(
+        "/activities/stats/by-type", params={"period": "30d"}
+    )
+    assert response.status_code == 422

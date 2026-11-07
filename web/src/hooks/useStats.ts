@@ -5,6 +5,7 @@ import {
   getStatsWeekly,
   getStatsMonthly,
   getStatsByType,
+  type StatsPeriod,
 } from "../api/stats";
 import type {
   StatsSummary,
@@ -25,7 +26,10 @@ export const statsKeys = {
   monthly: (months: number, activityType?: string) =>
     [...statsKeys.all, "monthly", months, activityType ?? "all"] as const,
   // [Sessão 14 — B1] Drill-down por tipo.
-  byType: () => [...statsKeys.all, "by-type"] as const,
+  // [Sessão 17] Chave inclui `period` para o React Query refazer a chamada
+  // quando o usuário troca o filtro de janela temporal.
+  byType: (period: StatsPeriod) =>
+    [...statsKeys.all, "by-type", period] as const,
 };
 
 // ===== Summary =====
@@ -96,17 +100,20 @@ export function useStatsMonthly(
 
 // ===== By type [Sessão 14 — B1] =====
 
+// [Sessão 17] Adicionado `period` como primeiro arg (default "all").
+// A query key inclui `period` — trocar de janela dispara refetch automaticamente.
 /**
  * Agregado por tipo de atividade do usuário logado.
  *
  * Sem filtro de tipo (o objetivo é justamente ver TODOS os tipos).
+ * `period` filtra por janela temporal: `all` (default), `90d`, `1y`.
  * `enabled` controla se dispara (só no próprio perfil).
  * staleTime 60s: idem summary/weekly/monthly.
  */
-export function useStatsByType(enabled = true) {
+export function useStatsByType(period: StatsPeriod = "all", enabled = true) {
   return useQuery<StatsByTypeResponse>({
-    queryKey: statsKeys.byType(),
-    queryFn: () => getStatsByType(),
+    queryKey: statsKeys.byType(period),
+    queryFn: () => getStatsByType(period),
     enabled,
     staleTime: 60_000,
     retry: 1,

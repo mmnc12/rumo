@@ -1,5 +1,6 @@
 """Endpoints de atividades (CRUD, estatísticas, curtidas, upload, track, busca)."""
 
+from typing import Literal
 from uuid import UUID
 
 from fastapi import (
@@ -83,17 +84,27 @@ async def stats_monthly(
 
 
 # [Sessão 14 — B1] Drill-down por tipo de atividade.
+# [Sessão 17] Adicionado param `period` (all|90d|1y) para janela temporal.
 @router.get("/stats/by-type", response_model=StatsByTypeResponse)
 async def stats_by_type(
+    period: Literal["all", "90d", "1y"] = Query(
+        default="all",
+        description="Janela temporal: 'all' (todos os tempos), '90d' (últimos 90 dias) ou '1y' (últimos 365 dias)",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Agrega as atividades do usuário por tipo (run/cycle/walk/...).
 
-    Sem filtros: o objetivo é justamente ver TODOS os tipos praticados
-    lado a lado. Ordenação no backend: atividades DESC, tipo ASC.
+    Sem filtro por tipo: o objetivo é ver TODOS os tipos praticados lado a lado.
+    Ordenação no backend: atividades DESC, tipo ASC.
+
+    `period` filtra por `start_time` (retroativo a partir de agora):
+    - `all` (default): todos os tempos — comportamento original.
+    - `90d`: últimas 90 dias corridos.
+    - `1y`: últimos 365 dias corridos.
     """
-    items = await stats_service.get_by_type(db, current_user.id)
+    items = await stats_service.get_by_type(db, current_user.id, period)
     return {"items": items}
 
 

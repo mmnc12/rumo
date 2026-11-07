@@ -24,6 +24,8 @@ import {
   // [Sessão 14 — B1] Drill-down por tipo de atividade.
   useStatsByType,
 } from "../hooks/useStats";
+// [Sessão 17] Tipo do filtro de janela temporal do drill-down por tipo.
+import type { StatsPeriod } from "../api/stats";
 import { useFollowUser } from "../hooks/useSocial";
 import { ApiError } from "../api/client";
 // [Sessão 15 — B1] Reaproveita formatadores de lib/format.ts em vez de
@@ -62,6 +64,13 @@ const TYPE_LABELS: Record<ActivityType, string> = {
 // é caixa-preta. Fora desses, a tabela mostra "—".
 const PACE_TYPES: ReadonlySet<ActivityType> = new Set(["run", "walk", "hike"]);
 
+// [Sessão 17] Rótulos pt-BR para o filtro de janela temporal do drill-down.
+const PERIOD_FILTERS: { label: string; value: StatsPeriod }[] = [
+  { label: "Todos", value: "all" },
+  { label: "90 dias", value: "90d" },
+  { label: "1 ano", value: "1y" },
+];
+
 export default function ProfilePage() {
   const { id } = useParams<{ id: string }>();
   const [tab, setTab] = useState<"followers" | "following">("followers");
@@ -72,6 +81,8 @@ export default function ProfilePage() {
   const [chartMode, setChartMode] = useState<ChartPeriod>("weekly");
   // [Sessão 13 — F] Distância continua sendo o default do segundo toggle.
   const [chartMetric, setChartMetric] = useState<ChartMetric>("distance");
+  // [Sessão 17] Filtro de janela temporal do drill-down por tipo.
+  const [byTypePeriod, setByTypePeriod] = useState<StatsPeriod>("all");
 
   const {
     data: profile,
@@ -112,7 +123,8 @@ export default function ProfilePage() {
     isSelf && chartMode === "monthly"
   );
   // [Sessão 14 — B1] Drill-down por tipo — sem filtro, sempre todos os tipos.
-  const byTypeQuery = useStatsByType(isSelf);
+  // [Sessão 17] Agora aceita janela temporal (`byTypePeriod`).
+  const byTypeQuery = useStatsByType(byTypePeriod, isSelf);
 
   if (!id) {
     return (
@@ -285,10 +297,34 @@ export default function ProfilePage() {
             {/* [Sessão 14 — B1] Tabela de drill-down por tipo de atividade.
                 Sempre mostra TODOS os tipos praticados (sem filtro) —
                 o typeFilter acima continua afetando só cards/gráficos. */}
+            {/* [Sessão 17] Header ganhou segmented control de janela temporal
+                (Todos / 90 dias / 1 ano). O filtro afeta apenas esta tabela. */}
             <div className="mt-6 rounded-lg bg-white p-4 shadow-sm">
-              <h3 className="mb-3 text-sm font-semibold text-gray-700">
-                Por tipo de atividade
-              </h3>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-gray-700">
+                  Por tipo de atividade
+                </h3>
+
+                <div className="inline-flex rounded-lg bg-gray-50 p-1">
+                  {PERIOD_FILTERS.map((p) => {
+                    const active = byTypePeriod === p.value;
+                    return (
+                      <button
+                        key={p.value}
+                        type="button"
+                        onClick={() => setByTypePeriod(p.value)}
+                        className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                          active
+                            ? "bg-rumo-500 text-white"
+                            : "text-gray-600 hover:bg-gray-100"
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
               {byTypeQuery.isLoading && (
                 <p className="text-sm text-gray-500">Carregando…</p>

@@ -1,5 +1,7 @@
 """Serviço de agregações/estatísticas de atividades."""
 
+from datetime import timedelta
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -12,6 +14,27 @@ def _apply_type_filter(stmt, activity_type: str | None):
     """Aplica filtro opcional por tipo de atividade."""
     if activity_type:
         stmt = stmt.where(Activity.activity_type == activity_type)
+    return stmt
+
+
+# [Sessão 17] Filtro opcional por janela temporal (all|90d|1y).
+def _apply_period_filter(stmt, period: Literal["all", "90d", "1y"]):
+    """Aplica filtro de janela temporal em `Activity.started_at`.
+
+    - `all`: sem filtro (todos os tempos).
+    - `90d`: atividades iniciadas nos últimos 90 dias corridos.
+    - `1y`:  atividades iniciadas nos últimos 365 dias corridos.
+
+    Usa `now() - INTERVAL` via `func.now() - timedelta`, que o
+    SQLAlchemy serializa como `now() - INTERVAL 'N days'` — sem SQL cru,
+    sem função específica de Postgres no Python. Se um dia o suporte a
+    outro banco entrar na pauta, essa expressão continua válida.
+    """
+    if period == "90d":
+        stmt = stmt.where(Activity.started_at >= func.now() - timedelta(days=90))
+    elif period == "1y":
+        stmt = stmt.where(Activity.started_at >= func.now() - timedelta(days=365))
+    # period == "all": nenhum filtro (comportamento original).
     return stmt
 
 
@@ -89,15 +112,22 @@ async def get_period_stats(
 
 
 # [Sessão 14 — B1] Drill-down por tipo de atividade.
+# [Sessão 17] Adicionado param `period` (all|90d|1y) para janela temporal.
 async def get_by_type(
     db: AsyncSession,
     user_id: UUID,
+    period: Literal["all", "90d", "1y"] = "all",
 ) -> list[dict]:
     """Agrega as atividades do usuário por tipo.
 
     Ordenação: total_activities DESC, activity_type ASC (desempate
     determinístico). Só tipos com >= 1 atividade aparecem (GROUP BY
     natural, sem "zero rows").
+
+    `period` filtra por `started_at` (retroativo a partir de now()):
+    - `all` (default): todos os tempos — comportamento original.
+    - `90d`: últimas 90 dias corridos.
+    - `1y`:  últimos 365 dias corridos.
 
     [Sessão 14 — fix] O desempate por tipo é feito em Python, não no
     ORDER BY do SQL. Motivo: `Activity.activity_type` é um Enum nativo
@@ -124,6 +154,9 @@ async def get_by_type(
         # O desempate é aplicado no `sorted()` abaixo.
         .order_by(func.count(Activity.id).desc())
     )
+
+    # [Sessão 17] Filtro de janela temporal aplicado antes do GROUP BY.
+    stmt = _apply_period_filter(stmt, period)
 
     rows = (await db.execute(stmt)).all()
 
