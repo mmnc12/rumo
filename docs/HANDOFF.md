@@ -1,13 +1,6 @@
 ===============================================================================
-HANDOFF — Rumo (backend + frontend + mobile) — gerado ao fim da Sessão 14
+HANDOFF — Rumo (backend + frontend + mobile) — gerado ao fim da Sessão 15
 ===============================================================================
-
-<!-- [Sessão 15] Este arquivo é o handoff da Sessão 14, sendo atualizado ao
-longo da Sessão 15. Os acréscimos da Sessão 15 estão marcados com
-<!-- [Sessão 15] --> no fonte. Quando a Sessão 15 fechar, o handoff final
-(substituindo este arquivo por inteiro) será commitado como
-`docs: handoff da Sessão 15`. Até lá, este arquivo serve como referência
-viva do estado do projeto. -->
 
 ===============================================================================
 0. LEIA PRIMEIRO — CONTEXTO OPERACIONAL (evita retrabalho no próximo chat)
@@ -38,7 +31,7 @@ O QUE É LOCAL vs O QUE É PRODUÇÃO
   (https://rumo-wheat.vercel.app). O backend de produção usa Postgres/PostGIS
   gerenciado. Testar via HTTP é sempre possível.
 - DOCKER: INSTALADO E FUNCIONAL no Windows local. `pytest -q` local verde
-  (118 passed ao fim da Sessão 14). Container de teste `rumo_postgres_test`
+  (118 passed ao fim da Sessão 15). Container de teste `rumo_postgres_test`
   na porta 5433. Para reativar numa sessão nova: (1) abrir Docker Desktop e
   esperar a baleia verde; (2) garantir que o terminal foi aberto via Win+R
   (fora do VS Code / Windows Terminal, que herdam PATH antigo); (3) `docker
@@ -46,7 +39,7 @@ O QUE É LOCAL vs O QUE É PRODUÇÃO
 
 ESTRUTURA DO REPO (referência — NÃO É PARA ASSUMIR, É PARA CONFERIR)
 --------------------------------------------------------------------
-Árvore de alto nível REAL, confirmada no início da Sessão 14:
+Árvore de alto nível REAL, confirmada no início da Sessão 15:
 
 D:\Rumo\
 ├── .vscode\
@@ -61,15 +54,19 @@ D:\Rumo\
 │   │   ├── routers\    # activities.py, auth.py, comments.py, feed.py,
 │   │   │               # notifications.py, photos.py, users.py, __init__.py
 │   │   ├── schemas\
-│   │   ├── services\   # stats_service.py (get_summary, get_period_stats,
-│   │   │               #                 get_by_type — NOVO S14)
+│   │   ├── services\   # activity_service.py, comment_service.py, errors.py,
+│   │   │               # feed_service.py, fit_service.py, follow_service.py,
+│   │   │               # gpx_service.py, like_service.py, notification_service.py,
+│   │   │               # photo_service.py, stats_service.py, user_service.py
 │   │   └── __pycache__\
 │   ├── samples\
 │   ├── scripts\
 │   ├── tests\          # conftest.py + test_calories.py + test_comment.py +
 │   │                   # test_follow.py + test_like.py + test_stats.py
 │   ├── _scratch\
-│   └── docker-compose.test.yml
+│   ├── docker-compose.test.yml
+│   ├── pytest.ini
+│   └── requirements.txt
 ├── docs\
 │   └── HANDOFF.md      # este arquivo
 ├── mobile\
@@ -81,28 +78,31 @@ D:\Rumo\
 └── web\
     └── src\
         ├── api\        # activities.ts, auth.ts, client.ts, notifications.ts,
-        │               # photos.ts, social.ts, stats.ts (getStatsByType — S14)
+        │               # photos.ts, social.ts, stats.ts (getStatsByType)
         ├── assets\
         ├── components\ # ActivityCard, ActivityResults, AppHeader,
         │               # CommentsSection, LikeButton, NotificationBell,
-        │               # PeriodChart (NOVO S14 — unifica 4 gráficos),
-        │               # PhotoGallery, PhotoUpload, ProtectedRoute,
-        │               # RouteMap, StatsCards, UserResults
+        │               # PeriodChart (unifica 4 gráficos), PhotoGallery,
+        │               # PhotoUpload, ProtectedRoute, RouteMap, StatsCards,
+        │               # UserResults
         ├── contexts\
         ├── hooks\      # useActivities, useActivitySearch, useAuth, useDebounce,
         │               # useNotifications, usePhotos, useProfile, useSocial,
-        │               # useStats (useStatsByType — S14), useUserSearch
-        ├── lib\        # format.ts, geo.ts
+        │               # useStats (useStatsByType), useUserSearch
+        ├── lib\        # format.ts (formatDistance/Duration/Pace/Speed/
+        │               # Calories/DateTime/RelativeDate/ActivityType/Emoji +
+        │               # formatElevation — S15), geo.ts
         ├── pages\      # ActivitiesPage, ActivityDetailPage, FeedPage,
         │               # LoginPage, NotificationsPage, ProfilePage,
         │               # RegisterPage, SearchPage, UploadPage
         └── types\      # api.ts (todos os tipos, StatsByType* — S14)
 
-DIVERGÊNCIAS vs handoff da Sessão 13 (registrar para não errar):
-- `web/src/components/` PERDEU 4 arquivos na Sessão 14:
-  WeeklyChart.tsx, MonthlyChart.tsx, WeeklyActivitiesChart.tsx,
-  MonthlyActivitiesChart.tsx. Foram unificados em `PeriodChart.tsx`.
-  Se algum deles reaparecer no disco, é resquício — perguntar antes de mexer.
+DIVERGÊNCIAS vs handoff da Sessão 14:
+- `backend/` NÃO tem `pyproject.toml`. Gerenciador de deps é
+  `requirements.txt` (fitparse removido, fitdecode>=0.11.0 no lugar — S15).
+- `backend/app/services/` tem `fit_service.py` reescrito para `fitdecode`.
+- `web/src/lib/format.ts` ganhou `formatElevation` (S15).
+- `web/src/components/StatsCards.tsx` usa `formatElevation` (S15).
 
 Se um arquivo específico for necessário, o pedido correto é:
     Get-Content -Encoding UTF8 <caminho completo>
@@ -137,7 +137,7 @@ COMO RODAR DOCKER E PYTEST LOCAL (Windows deste usuário)
       4. `docker compose -f docker-compose.test.yml up -d`
       5. `docker ps` (rumo_postgres_test Up healthy na 5433)
       6. `.\.venv\Scripts\Activate.ps1` (prompt vira `(.venv)`)
-      7. `pytest -q` — esperado: **118 passed** (verde ao fim da Sessão 14)
+      7. `pytest -q` — esperado: **118 passed, 0 warnings** (verde ao fim da Sessão 15)
 - Se `Activate.ps1` der erro de política:
     Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
@@ -178,13 +178,14 @@ O QUE O ASSISTENTE PRECISA PEDIR AO USUÁRIO (não tem acesso a arquivos)
   mojibake. É artefato de codepage do pipe, NÃO corrupção do arquivo.
 - ATENÇÃO — `git log --oneline` no PowerShell às vezes cola a última linha
   com o prompt seguinte. Não é corrupção; é formatação.
+- ATENÇÃO — `git log` sem `--no-pager` abre o `less` e trava o terminal.
+  SEMPRE usar `git --no-pager log ...` ou prefixar com `$env:PAGER=""`.
 
 ACORDOS DE TRABALHO (válidos em todas as sessões)
 --------------------------------------------------
 1. SEMPRE seguir a recomendação do assistente. Quando houver decisão
    pendente, executar a recomendada salvo instrução explícita em contrário.
-   (O usuário reforçou isso no início da Sessão 14 e de novo no início da
-   Sessão 15.)
+   (O usuário reforçou isso no início da Sessão 15.)
 2. SEMPRE entregar o CÓDIGO COMPLETO ao atualizar um arquivo — nunca diff
    parcial, nunca "// resto igual". Preservar imports, comentários e trechos
    que já funcionam. Destacar o trecho alterado com comentário curto acima
@@ -201,12 +202,11 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
 1. TL;DR PARA QUEM CHEGA AGORA
 ===============================================================================
 
-- Backend: 118 testes passando LOCALMENTE (pytest -q verde na Sessão 14).
-  Antes da Sessão 13 era só produção; desde a 13 é local também (Docker
-  Desktop + venv ativa + container de teste na 5433). Activity.route é
-  PostGIS LINESTRING. GET /activities/{id}/track devolve TrackResponse com
-  coordinates em ordem GeoJSON [lon, lat], bbox [minLon,minLat,maxLon,maxLat],
-  n_points, simplified. Responde 404 quando route é NULL.
+- Backend: 118 testes passando LOCALMENTE (pytest -q verde na Sessão 15),
+  0 warnings. Activity.route é PostGIS LINESTRING. GET /activities/{id}/track
+  devolve TrackResponse com coordinates em ordem GeoJSON [lon, lat],
+  bbox [minLon,minLat,maxLon,maxLat], n_points, simplified. Responde 404
+  quando route é NULL.
 - ActivityResponse (feed/lista/detalhe/busca) inclui
   `bbox: list[float] | None`, calculado via ST_XMin/YMin/XMax/YMax do PostGIS
   no mesmo SELECT (sem N+1). `None` quando route é NULL.
@@ -214,51 +214,55 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
   * GET /activities/stats/summary — StatsSummary (totais gerais).
   * GET /activities/stats/weekly?weeks=N — StatsWeeklyResponse.
   * GET /activities/stats/monthly?months=N — StatsMonthlyResponse.
-  * GET /activities/stats/by-type — StatsByTypeResponse (NOVO S14).
+  * GET /activities/stats/by-type — StatsByTypeResponse (S14).
   Os 3 primeiros aceitam `activity_type` opcional como filtro. O by-type
   NÃO aceita filtro (o objetivo é ver todos os tipos lado a lado).
 - Frontend Web: React 19 + Vite 8 + TypeScript + Tailwind; react-leaflet
   (RouteMap no detalhe) + recharts (gráficos no perfil).
 - Mobile: mapa de rota no detalhe (flutter_map, OSM/Esri satélite),
-  alternância Mapa/Satélite, miniatura estática no feed. Sem mudanças na S14.
-- [Sessão 14 — entregas]
-  * Rota A: 4 gráficos do perfil unificados em `PeriodChart.tsx`
-    (parâmetros `period: "weekly"|"monthly"` × `metric: "distance"|"activities"`).
-    Eliminou WeeklyChart, MonthlyChart, WeeklyActivitiesChart e
-    MonthlyActivitiesChart. ProfilePage reduziu de 16.30 kB → 11.73 kB.
-  * Rota B1: drill-down de stats por tipo de atividade.
-    - Backend: `get_by_type` em stats_service.py; schemas
-      StatsByTypeItem/StatsByTypeResponse; rota GET /activities/stats/by-type.
-      7 testes novos (5 service + 2 rota) — 118 passed.
-    - Web: tipos StatsByTypeItem/StatsByTypeResponse em types/api.ts;
-      getStatsByType em api/stats.ts; useStatsByType em hooks/useStats.ts;
-      tabela "Por tipo de atividade" em ProfilePage.tsx (abaixo do gráfico).
-    - Validação em produção: endpoint respondeu other=3, walk=3 (ordenação
-      por atividades DESC e desempate alfabético funcionando).
-
-<!-- [Sessão 15] Entregas da Sessão 15 até o momento (em andamento): -->
-- [Sessão 15 — entregas até agora]
+  alternância Mapa/Satélite, miniatura estática no feed. Sem mudanças na S15.
+- [Sessão 15 — entregas]
   * Rota A(a) — silenciar warnings do fitparse: `pytest.ini` ganhou
     `filterwarnings = ignore::DeprecationWarning:fitparse\.processors`,
     apagando os 3611 warnings (2 únicos, deduplicados) do parsing de .FIT
-    sem esconder warnings de outras libs (validado com `-W default::` no
-    CLI: só os do fitparse voltaram). `tests/conftest.py` teve o bloco
-    `warnings.filterwarnings` revertido (não funciona no pytest — o plugin
-    reseta a lista antes de cada teste); a docstring foi mantida e
-    atualizada para registrar a decisão e a dívida do fitdecode.
-    Commit fa4fcc4.
-  * Rota A(b) — coluna "Pace médio" no drill-down por tipo:
-    `ProfilePage.tsx` ganhou a coluna (entre Tempo e Calorias), com regra
+    sem esconder warnings de outras libs. Commit fa4fcc4.
+    (SUPERADA na própria S15: fitparse foi removido — ver abaixo.)
+  * Rota A(b) — coluna "Pace médio" no drill-down por tipo: `ProfilePage.tsx`
+    ganhou a coluna (entre Tempo e Calorias), com regra
     `PACE_TYPES = {run, walk, hike}` → `formatPace()`, senão `"—"`. O pace
     é calculado no front (`total_duration_s / (total_distance_m / 1000)`),
     com guarda para `total_distance_m <= 0`. De brinde, foram removidas as
     duas funções inline duplicadas (`formatDistance`, `formatDuration`) que
-    existiam desde a S14 — agora vêm de `lib/format.ts`. Isso alinha a
-    tabela ao padrão pt-BR do resto do app (`3,2 km`, `1h 05min`).
-    Commit 053239c.
-  * Rota A(c) — documentar a decisão dos enums nativos do Postgres:
-    este acréscimo no handoff (seção 7, "Armadilha conhecida"). Próximo
-    commit, junto com esta atualização.
+    existiam desde a S14 — agora vêm de `lib/format.ts`. Commit 053239c.
+  * Rota A(c) — documentar a decisão dos enums nativos do Postgres: seção 7,
+    "Armadilha conhecida". Commit d7d756e.
+  * Rota A(a) — migração `fitparse` → `fitdecode` (a dívida real):
+    - `app/services/fit_service.py` reescrito com `fitdecode.FitReader`
+      (iteração por frames `FIT_FRAME_DATA`, `frame.get_value(...)` em vez de
+      `FitFile.get_messages(...)`). Assinatura pública (`parse_fit`,
+      `map_fit_sport`) e formato de retorno (`gpx_type`, `track_points` como
+      `[[lat, lon, ele, unix_ts], ...]`) preservados.
+    - CRC desabilitado (`check_crc=fitdecode.CrcCheck.DISABLED`) para manter
+      a tolerância do fitparse a arquivos com CRC inválido.
+    - `requirements.txt`: `fitparse>=1.2.0` → `fitdecode>=0.11.0`.
+    - `pytest.ini`: filtro `filterwarnings` removido (não é mais necessário
+      — os warnings desapareceram na origem).
+    - `fitparse` desinstalado do venv. Nenhum `.py` do projeto importa mais.
+    - Validação: 118 passed, 0 warnings (por ausência real, não por filtro).
+    - Commit 3cf7668.
+  * Rota A(b) — coluna "Elevação" no drill-down por tipo:
+    - `lib/format.ts`: +`formatElevation` (metros sempre, nunca km; milhar
+      pt-BR: "1.234 m"; null → "—").
+    - `pages/ProfilePage.tsx`: coluna "Elevação" entre "Distância" e "Tempo".
+    - `types/api.ts`: sem mudança (`total_elevation_gain_m` já existia desde
+      a S14).
+    - Commit fdac345.
+  * Rota A(b-extra) — `StatsCards.tsx` usa `formatElevation` em vez de
+    formatar inline. Alinha com `formatDistance`/`formatDuration`/
+    `formatCalories`. 0 m agora mostra "0 m" (dado real) em vez de "—".
+    Commit 4cfd099.
+  * Estado final: working tree limpo, HEAD == origin/main == 4cfd099,
+    pytest 118 passed / 0 warnings, npm run build verde (824 modules).
 
 ===============================================================================
 2. PRODUÇÃO E AMBIENTE
@@ -274,97 +278,76 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
 - Docker Desktop: 4.93.0 (engine 29.8.1, compose v5.5.1)
 - SO: Windows, PowerShell 5.1
 - Venv backend: D:\Rumo\backend\.venv (ativa com .\.venv\Scripts\Activate.ps1)
-- Git (estado ao fim da Sessão 15 — CONFIRMAR com git log + git status no
-  início da Sessão 16):
-    053239c  (HEAD -> main, origin/main) feat(web): coluna de pace medio no drill-down por tipo
+- Git (estado ao fim da Sessão 15):
+    4cfd099  (HEAD -> main, origin/main) refactor(web): StatsCards usa formatElevation em vez de inline
+    fdac345  feat(web): coluna de elevacao no drill-down por tipo
+    3cf7668  refactor(backend): migra parsing de .FIT de fitparse para fitdecode
+    d7d756e  docs: registra entregas da Sessao 15 (A-a, A-b) e decisao sobre enums
+    053239c  feat(web): coluna de pace medio no drill-down por tipo
     fa4fcc4  test(backend): silencia deprecation do fitparse via filterwarnings no pytest.ini
-    31f6c6c  docs: handoff da Sessão 14
-    c0ad55d  feat: drill-down de stats por tipo de atividade
-    a27572c  refactor(web): unifica graficos do perfil em PeriodChart
 - Todos os commits da Sessão 15 estão em origin/main (pushados).
-- Render e Vercel deployam automático a cada push em main. O endpoint
-  /activities/stats/by-type já está no ar e foi validado em produção na S14.
+- Render e Vercel deployam automático a cada push em main. Os endpoints
+  /activities/stats/by-type e as colunas novas (Elevação, Pace médio) já
+  estão no ar.
 
 ===============================================================================
-3. O QUE FOI FEITO NA SESSÃO 14
+3. O QUE FOI FEITO NA SESSÃO 15
 ===============================================================================
 
-3.1 Validação de estado inicial (Sessão 14)
-    - Push OK (origin/main em 3474d9b).
+3.1 Validação de estado inicial (Sessão 15)
+    - Push OK (origin/main em d7d756e).
     - Working tree limpo.
-    - npm run build verde (827 modules, 3.34s).
-    - flutter analyze: No issues found (60.1s).
+    - npm run build verde (824 modules, 2.14s).
+    - flutter analyze: No issues found (3.3s).
     - docker version OK, compose v5.5.1 OK.
     - rumo_postgres_test Up healthy na 5433.
-    - pytest -q: 111 passed.
+    - pytest -q: 118 passed, 0 warnings.
     - Descoberta de estrutura via Get-ChildItem — sem divergências vs handoff
-      da Sessão 13.
+      da Sessão 14, exceto por 2 arquivos lixo (`rc*` com caractere inválido)
+      no working tree, removidos antes do primeiro commit.
 
-3.2 [Web] Rota A — unificar 4 gráficos em PeriodChart
-    - Lidos os 4 arquivos: WeeklyChart, MonthlyChart, WeeklyActivitiesChart,
-      MonthlyActivitiesChart (~85% idênticos, diferenças: label X, tooltip,
-      título, dataKey, allowDecimals, domain do eixo Y).
-    - Criado components/PeriodChart.tsx parametrizado por
-      (period × metric). Encapsula: loading, erro, vazio, label X
-      (DD/MM vs MM/YYYY), título, conversão km, yMax dinâmico,
-      allowDecimals, tooltip formatado, cor/dot/altura.
-    - ProfilePage.tsx: 4 condições explícitas → 1 chamada parametrizada.
-    - Tipos ChartPeriod/ChartMetric exportados do próprio PeriodChart
-      (ProfilePage importa direto, sem duplicar union types).
-    - FIX de tipos do TypeScript na Sessão 14:
-      * `domain={[0, yMax]}` — yMax passou a ser `number | null` e domain
-        vira `[0, yMax]` só quando `!== null`. O tipo `AxisDomain` do recharts
-        não aceita `[number, number | undefined]`.
-      * `formatter` — recharts tipa `value` como `ValueType | undefined`;
-        assinatura passou a aceitar `unknown` e fazer `Number(value ?? 0)`.
-    - Validação em produção: 4 combinações OK (usuário confirmou).
-    - 4 arquivos antigos removidos. Commit: a27572c.
-    - Resultado: ProfilePage 16.30 kB → 11.73 kB (−4.57 kB), build 3.34s→2.03s.
+3.2 [Backend] Rota A(a) — migração fitparse → fitdecode
+    - Lido `app/services/fit_service.py` (parser atual).
+    - `fit_service.py` reescrito com `fitdecode.FitReader`:
+      * Iteração por frames `FIT_FRAME_DATA` com `frame.name` em
+        {"record", "session"}.
+      * `frame.get_value("timestamp")` já devolve `datetime` UTC aware
+        (sem `utcfromtimestamp`).
+      * `check_crc=fitdecode.CrcCheck.DISABLED` para manter tolerância
+        do fitparse.
+      * Demais campos (`position_lat/long`, `altitude`, `distance`,
+        `total_timer_time`, `sport`) via `frame.get_value(...)`.
+      * API pública e formato de retorno preservados.
+    - `requirements.txt`: `fitparse>=1.2.0` → `fitdecode>=0.11.0`.
+    - `pytest.ini`: bloco `filterwarnings` + comentário-dívida removidos.
+    - `pip install fitdecode`, `pip uninstall fitparse`.
+    - Validação: 118 passed, 0 warnings.
+    - Commit: 3cf7668.
 
-3.3 [Backend] Rota B1 — drill-down por tipo de atividade
-    - schemas/stats.py: +StatsByTypeItem, +StatsByTypeResponse.
-    - services/stats_service.py: +get_by_type (GROUP BY activity_type).
-    - routers/activities.py: +GET /stats/by-type (declarado depois de
-      /stats/monthly e antes de /{activity_id}).
-    - tests/test_stats.py: +7 testes.
-      * FALHA inicial: `test_get_by_type_tie_breaks_by_type_asc` e
-        `test_route_by_type_shape` esperavam "cycle" antes de "run"
-        (desempate alfabético), mas o SQL devolveu "run" antes de "cycle".
-      * CAUSA: `Activity.activity_type` é Enum NATIVO do Postgres, e ORDER BY
-        em coluna Enum ordena pela ORDEM DE DECLARAÇÃO do tipo, não pela
-        string. A ordem declarada é (run, walk, cycle, hike, swim, other).
-      * FIX: removido tie-break do SQL; ordenação final em Python com
-        `items.sort(key=lambda r: (-r["total_activities"], r["activity_type"]))`.
-        Universo é ≤ 6 linhas → custo irrelevante, comportamento previsível,
-        desacoplado do enum nativo. Comentário explicativo no código.
-      * Resultado: 118 passed (111 originais + 7 novos).
+3.3 [Web] Rota A(b) — coluna "Elevação" no drill-down
+    - `lib/format.ts`: +`formatElevation` (metros sempre, nunca km;
+      milhar pt-BR).
+    - `ProfilePage.tsx`: +coluna "Elevação" entre "Distância" e "Tempo";
+      +import de `formatElevation`; +`<td>` com
+      `formatElevation(item.total_elevation_gain_m)`.
+    - `types/api.ts`: sem mudança (`total_elevation_gain_m` já existia).
+    - npm run build: 824 modules (era 824), ProfilePage 14.40 kB.
+    - Commit: fdac345.
 
-3.4 [Web] Rota B1 — tabela por tipo no ProfilePage
-    - types/api.ts: +StatsByTypeItem, +StatsByTypeResponse.
-    - api/stats.ts: +getStatsByType() (sem params — o backend já ordena).
-    - hooks/useStats.ts: +statsKeys.byType(), +useStatsByType(enabled).
-    - pages/ProfilePage.tsx: +seção "Por tipo de atividade" abaixo do gráfico.
-      Tabela com Tipo | Atividades | Distância | Tempo | Calorias.
-      Helper formatDistance (m se < 1000, km com 1 decimal se >= 1000) e
-      formatDuration (Xh Ymin se >= 1h, senão Ymin) — inline porque só essa
-      tabela usa. TYPE_LABELS mapeia enum → pt-BR.
-      byTypeQuery usa isSelf como enabled (não aparece em perfis de terceiros).
-    - Build: 824 modules (era 827), ProfilePage 11.73 kB → 14.03 kB.
+3.4 [Web] Rota A(b-extra) — `StatsCards` usa `formatElevation`
+    - `StatsCards.tsx`: formatação inline (`${Math.round(...)} m`) trocada
+      por `formatElevation(data.total_elevation_gain_m)`.
+    - Alinha com `formatDistance`/`formatDuration`/`formatCalories`.
+    - 0 m agora mostra "0 m" (dado real) em vez de "—" (ausência).
+    - npm run build: verde, 1.66s.
+    - Commit: 4cfd099.
 
-3.5 Validação em produção (B1)
-    - Endpoint GET /activities/stats/by-type na conta prod@rumo.com retornou:
-        items: [
-          { activity_type: "other", total_activities: 3, total_distance_m: 10800.0, ... },
-          { activity_type: "walk",  total_activities: 3, total_distance_m: 15643.22, ... }
-        ]
-    - Ordenação: other < walk no empate (alfabético ASC) — CONFIRMADO em prod.
-    - Valores de calories/duration/elevation consistentes com o summary.
-
-3.6 Estado final da sessão
-    - Working tree limpo, main == origin/main == c0ad55d.
+3.5 Estado final da sessão
+    - Working tree limpo, main == origin/main == 4cfd099.
     - npm run build: verde (824 modules).
-    - pytest -q: 118 passed (local).
-    - ruff check tests/test_stats.py: All checks passed.
+    - pytest -q: 118 passed, 0 warnings (local).
+    - flutter analyze: No issues found.
+    - Nenhuma pendência de git.
 
 ===============================================================================
 4. CONTRATOS DO BACKEND RELEVANTES (referência)
@@ -424,12 +407,12 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
   → StatsMonthlyResponse: mesmo shape do weekly, mas period_start é sempre
   o primeiro dia do mês ("YYYY-MM-01") e a chave é "months".
 
-- GET /activities/stats/by-type  (NOVO S14 — sem query params)
+- GET /activities/stats/by-type  (S14 — sem query params)
   → StatsByTypeResponse:
     {
       "items": [
         {
-          "activity_type": "run",  // string ("run", "walk", "cycle", "hike", "swim", "other")
+          "activity_type": "run",  // string
           "total_activities": 12,
           "total_distance_m": 84000.0,
           "total_duration_s": 25200,
@@ -451,25 +434,20 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
 5. COMMITS PENDENTES / ESTADO DO REPO
 ===============================================================================
 
-<!-- [Sessão 15] Bloco atualizado: A(a) e A(b) já pushadas; A(c) neste commit. -->
-- Sessões 9, 10, 11, 12, 13, 14 e 15 (parcial) commitadas e pushadas.
-- origin/main == main == HEAD no momento do commit desta atualização
-  (fa4fcc4 → 053239c → este commit de docs).
-- A(a) commit fa4fcc4: silencia warnings do fitparse via pytest.ini.
-- A(b) commit 053239c: coluna de pace médio no drill-down por tipo.
-- A(c) (este commit): documenta a armadilha dos enums nativos + atualiza
-  o handoff com o que a Sessão 15 produziu até agora.
+- Sessões 9, 10, 11, 12, 13, 14 e 15 commitadas e pushadas.
+- origin/main == main == HEAD == 4cfd099.
+- Sessão 15 fechada com este handoff (commit `docs: handoff da Sessão 15`).
 - Nenhuma pendência conhecida de git.
 
 ===============================================================================
 6. SCRIPTS ÚTEIS (PowerShell)
 ===============================================================================
 
-# [Sessão 15 — primeira ação] Abrir PowerShell via Win+R → "powershell"
+# [Sessão 16 — primeira ação] Abrir PowerShell via Win+R → "powershell"
 # (NÃO abrir de dentro do VS Code / Windows Terminal)
 # Depois:
 
-# [Sessão 15 — primeira ação] Descoberta da estrutura do repo
+# [Sessão 16 — primeira ação] Descoberta da estrutura do repo
 cd D:\Rumo
 Get-ChildItem -Directory | Select-Object Name
 Get-ChildItem D:\Rumo\web\src -Directory | Select-Object Name
@@ -481,20 +459,20 @@ Get-ChildItem D:\Rumo\backend\app -Directory | Select-Object Name
 Get-ChildItem D:\Rumo\backend\app\routers -File | Select-Object Name
 Get-ChildItem D:\Rumo\backend\tests -File | Select-Object Name
 
-# [Sessão 15 — primeira ação] Estado do repo
+# [Sessão 16 — primeira ação] Estado do repo (sem abrir o less)
 cd D:\Rumo
 git push
-git log --oneline -5
+git --no-pager log --oneline -8
 git status --short
 
-# [Sessão 15 — primeira ação] Sanidade de build
+# [Sessão 16 — primeira ação] Sanidade de build
 cd D:\Rumo\web
 npm run build
 
 cd D:\Rumo\mobile
 & "C:\Users\nasci\flutter\bin\flutter.bat" analyze
 
-# [Sessão 15 — primeira ação] Docker + pytest local
+# [Sessão 16 — primeira ação] Docker + pytest local
 docker version
 docker compose version
 cd D:\Rumo\backend
@@ -502,6 +480,10 @@ docker compose -f docker-compose.test.yml up -d
 docker ps
 .\.venv\Scripts\Activate.ps1
 pytest -q
+
+# Verificar que fitdecode está instalado e fitparse NÃO
+python -c "import fitdecode; print('fitdecode OK:', fitdecode.__version__)"
+python -c "import fitparse" 2>&1   # esperado: ModuleNotFoundError
 
 # Login (produção)
 $body = "username=prod@rumo.com&password=senha12345"
@@ -541,8 +523,6 @@ ruff check .
   (~85% de duplicação). Unificados em PeriodChart.tsx parametrizado por
   (period × metric). Commit a27572c.
 
-<!-- [Sessão 15] Item abaixo reescrito: era "dívida em aberto", virou
-"armadilha conhecida" com decisão tomada e regra acionável. -->
 - (ARMADILHA CONHECIDA — decisão tomada na Sessão 14, documentada na S15)
   Enums nativos do Postgres ordenam pela ORDEM DE DECLARAÇÃO, não pela
   string. `Activity.activity_type` é Enum nativo com ordem declarada
@@ -561,20 +541,12 @@ ruff check .
   banco, esta regra some — mas a migração é de baixa prioridade e não
   deve ser feita sem necessidade.
 
-<!-- [Sessão 15] Item abaixo marcado como RESOLVIDO. -->
-- (RESOLVIDA na Sessão 15) Warnings do fitparse (biblioteca externa) durante
-  pytest: `datetime.utcfromtimestamp() is deprecated`. Eram 3611 warnings
-  brutos (2 únicos, deduplicados) em tests/test_calories.py.
-  RESOLUÇÃO: filtro em `pytest.ini`:
-      filterwarnings =
-          ignore::DeprecationWarning:fitparse\.processors
-  Cirúrgico por módulo — não esconde warnings de outras libs (validado com
-  `-W default::` no CLI: só os do fitparse voltaram). Commit fa4fcc4.
-  DÍVIDA REMANESCENTE: a correção real é migrar de fitparse (última release
-  1.2.0, de 2020, dormente) para fitdecode (ativo, mantido, sem
-  utcfromtimestamp). Reescreve o parsing de .FIT no upload e os testes de
-  calorias. Merece sessão dedicada. Quando migrar, remover o filtro do
-  pytest.ini.
+- (RESOLVIDA na Sessão 15) fitparse (biblioteca externa, última release
+  1.2.0 em 2020, dormente) era a fonte de 3611 warnings
+  `datetime.utcfromtimestamp() is deprecated` no pytest. RESOLUÇÃO:
+  migração para `fitdecode` (ativo, mantido, sem `utcfromtimestamp`).
+  `fit_service.py` reescrito, `requirements.txt` atualizado, `pytest.ini`
+  sem filtro, fitparse desinstalado. Commit 3cf7668.
 
 - Web: miniatura do feed usa 1 tile OSM centralizado (bbox grande pode
   cortar bordas). Aceitável; se virar problema, evoluir para mosaico 2×2
@@ -589,19 +561,11 @@ ruff check .
 - (Oportunidade) RouteMap.tsx é reutilizável em qualquer página que
   renderize uma rota. Hoje só é usado em ActivityDetailPage. Se aparecer
   um segundo uso, considerar React.lazy() para tirar o leaflet (163 kB)
-  do chunk da página que não mostra mapa. Ganho hoje é marginal (leaflet
-  já está em chunk separado por conta do bundle splitting do Vite).
+  do chunk da página que não mostra mapa. Ganho hoje é marginal.
 
-<!-- [Sessão 15] Item abaixo: "Coluna Pace médio" foi entregue (A-b).
-O restante (filtro por período) continua como oportunidade. -->
-- (OPORTUNIDADE) Drill-down de stats por tipo poderia ganhar, no futuro:
-  * (RESOLVIDO na Sessão 15) Coluna "Pace médio". Implementada em
-    ProfilePage.tsx com regra `PACE_TYPES = {run, walk, hike}`;
-    `cycle/swim/other` mostram "—". Cálculo no front
-    (`total_duration_s / (total_distance_m / 1000)`), com guarda para
-    `total_distance_m <= 0`. De brinde, removidas as duas funções inline
-    duplicadas (`formatDistance`, `formatDuration`) que a S14 tinha
-    deixado no arquivo — agora vêm de `lib/format.ts`. Commit 053239c.
+- (Oportunidade) Drill-down de stats por tipo poderia ganhar, no futuro:
+  * (RESOLVIDO na Sessão 15) Coluna "Pace médio". Commit 053239c.
+  * (RESOLVIDO na Sessão 15) Coluna "Elevação". Commit fdac345.
   * Filtro por período (ex.: "últimos 90 dias"). Hoje mostra "todos os
     tempos" — o que é o que o usuário quer no drill-down, mas vale
     considerar se surgir demanda.
@@ -612,23 +576,20 @@ O restante (filtro por período) continua como oportunidade. -->
   privacidade, provavelmente via follow).
 
 ===============================================================================
-8. PRÓXIMOS PASSOS RECOMENDADOS (Sessão 15 e além)
+8. PRÓXIMOS PASSOS RECOMENDADOS (Sessão 16 e além)
 ===============================================================================
-
-<!-- [Sessão 15] Bloco atualizado: primeira ação já cumprida; Rota A(a) e
-A(b) já entregues; sobra A(c) (este commit) e depois Rota B. -->
 
 PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 16 (antes de qualquer mudança de código):
   1) No terminal (PowerShell via Win+R → "powershell"):
         cd D:\Rumo
         git push
-        git log --oneline -5
+        git --no-pager log --oneline -8
         git status --short
         cd web ; npm run build
         cd ..\mobile
         & "C:\Users\nasci\flutter\bin\flutter.bat" analyze
-     Confirmar com o usuário: push aceito, HEAD == origin/main, build e
-     analyze verdes, working tree limpo.
+     Confirmar com o usuário: push aceito, HEAD == origin/main == 4cfd099
+     (ou o commit do handoff), build e analyze verdes, working tree limpo.
   2) DOCKER + PYTEST LOCAL:
         docker version
         docker compose version
@@ -637,8 +598,11 @@ PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 16 (antes de qualquer mudança de códig
         docker ps
         .\.venv\Scripts\Activate.ps1
         pytest -q
-     Esperado: 118 passed, 0 warnings (graças ao filtro do pytest.ini).
-  3) DESCOBERTA DE ESTRUTURA (obrigatória — não adivinhar):
+     Esperado: 118 passed, 0 warnings.
+  3) Verificar que a migração do fitdecode está ativa:
+        python -c "import fitdecode; print('fitdecode OK:', fitdecode.__version__)"
+        python -c "import fitparse" 2>&1   # esperado: ModuleNotFoundError
+  4) DESCOBERTA DE ESTRUTURA (obrigatória — não adivinhar):
         cd D:\Rumo
         Get-ChildItem -Directory | Select-Object Name
         Get-ChildItem D:\Rumo\web\src -Directory | Select-Object Name
@@ -650,26 +614,20 @@ PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 16 (antes de qualquer mudança de códig
         Get-ChildItem D:\Rumo\backend\tests -File | Select-Object Name
      Colar as saídas no chat ANTES de pedir ou reescrever qualquer arquivo.
 
-ESTADO DA ROTA A (Sessão 15):
-  (a) fitparse warnings → FEITO (fa4fcc4).
-  (b) Pace médio no drill-down → FEITO (053239c).
-  (c) Documentar decisão dos enums → FEITO (este commit).
-  Rota A fechada. Sugestões de continuação abaixo.
+ESTADO DA ROTA A+ (Sessão 15): FECHADA.
+  (a) migração fitparse → fitdecode → FEITO (3cf7668).
+  (b) coluna "Elevação" → FEITO (fdac345).
+  (b-extra) StatsCards usa formatElevation → FEITO (4cfd099).
+  (c) decisão dos enums documentada → FEITO (d7d756e).
 
-ROTA A+ — Continuar o padrão "deixar o repo melhor do que estava"
-  Sugestões de baixo risco para as próximas sessões:
-    a) Migrar fitparse → fitdecode (elimina o filtro do pytest.ini e a
-       dependência dormente). Requer: ler o código de parsing de .FIT
-       (provavelmente em backend/app/services/ ou no router de upload),
-       ler tests/test_calories.py, escolher API do fitdecode, reescrever,
-       rodar pytest completo. Sessão dedicada.
-    b) Adicionar coluna "Elevação" (ou "Elev. gain") no drill-down por tipo.
-       O dado já está no contrato (`total_elevation_gain_m`), só falta
-       exibir. Custo: 1 linha no header + 1 na linha + formatador
-       (`formatElevation`? reusar `formatDistance`? decidir).
-    c) Documentar no `docs/HANDOFF.md` (ou num futuro README) as rotas de
-       API em formato de "cheat sheet" (hoje a seção 4 já cobre, mas é
-       verbose — um sumário de 1 linha por endpoint ajudaria).
+ROTA A+ — Sugestões de continuação para a Sessão 16 (baixo risco):
+  a) Miniatura do feed: evoluir de 1 tile OSM para mosaico 2×2 ou usar
+     staticmap.openstreetmap.de. Requer ler `RouteMap`/`ActivityCard` do
+     web e o widget equivalente do mobile. Ganho visual; custo médio.
+  b) RouteMap com React.lazy() — prepara o terreno para segundo uso do
+     mapa (hoje só ActivityDetailPage usa). Ganho marginal hoje.
+  c) Cheat sheet de endpoints no HANDOFF ou num futuro README
+     (seção 4 já cobre, mas é verbosa).
 
 ROTA B — Feature nova (requer escolha com o usuário)
   Escopo médio-grande. Exemplos:
@@ -684,12 +642,10 @@ ROTA B — Feature nova (requer escolha com o usuário)
   Requer: desenhar contrato + schema + teste (validável localmente, com
   pytest verde) + UI no front.
 
-  A minha recomendação para a Sessão 16 é a ROTA A+ (a ou b, nesta ordem
-  de preferência). A Sessão 15 foi de consolidação — terminou limpa, com
-  0 warnings no pytest e uma armadilha documentada. A dívida do fitdecode
-  é a próxima "pedra no sapato" real; a coluna de elevação é ganho visível
-  com custo de 10 minutos. Se o usuário preferir feature nova, Rota B é
-  viável — mas o assistente deve explicitar que está adiando dívidas.
+  A recomendação para a Sessão 16 é começar pela ROTA A+ (a) — miniatura
+  do feed —, que é a dívida visual mais concreta e de escopo bem delimitado.
+  Se o usuário preferir feature nova, Rota B é viável — mas o assistente
+  deve explicitar que está adiando dívidas.
 
   Em qualquer rota, handoff preventivo em ~70-80% do contexto — antes do
   fim, parar e entregar o HANDOFF completo da Sessão 16 neste mesmo formato
