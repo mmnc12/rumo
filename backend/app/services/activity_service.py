@@ -25,7 +25,7 @@ _VALID_ACTIVITY_TYPES = {t.value for t in ActivityType}
 
 
 # ---------------------------------------------------------------------------
-# Contagens embutidas (likes / comments / liked_by_me)
+# Contagens embutidas (likes / comments / liked_by_me) + bbox
 # ---------------------------------------------------------------------------
 #
 # Para evitar N+1 no cliente, embutimos 3 contagens em cada Activity que
@@ -42,6 +42,10 @@ _VALID_ACTIVITY_TYPES = {t.value for t in ActivityType}
 #
 # liked_by_me é sempre False se user_id for None — mas todos os callers
 # passam user_id, então na prática sempre é calculado.
+#
+# [Sessão 10] Além das contagens, também embutimos `bbox` (4 colunas
+# PostGIS) para o card do feed desenhar miniatura de mapa sem um request
+# extra ao /track. Ver _bbox_columns() / _bbox_from_row() abaixo.
 
 
 def _count_likes_subq():
@@ -74,16 +78,54 @@ def _liked_by_me_subq(user_id):
     )
 
 
+def _bbox_columns():
+    """4 colunas PostGIS que dão os limites da rota (NULL se route=NULL).
+
+    [Sessão 10] Reutilizadas em todos os SELECTs que montam ActivityResponse
+    (lista, busca, detalhe, feed). Se `Activity.route IS NULL`, PostGIS
+    devolve NULL nas 4 (ST_XMin(NULL) = NULL), então bbox vira None no
+    cliente, sem erro.
+    """
+    return (
+        func.ST_XMin(Activity.route).label("bbox_min_lon"),
+        func.ST_YMin(Activity.route).label("bbox_min_lat"),
+        func.ST_XMax(Activity.route).label("bbox_max_lon"),
+        func.ST_YMax(Activity.route).label("bbox_max_lat"),
+    )
+
+
+def _bbox_from_row(
+    min_lon,
+    min_lat,
+    max_lon,
+    max_lat,
+) -> list[float] | None:
+    """Converte as 4 colunas PostGIS em bbox GeoJSON, ou None se não houver rota.
+
+    Ordem GeoJSON: [minLon, minLat, maxLon, maxLat] — mesma do TrackResponse.
+    """
+    if min_lon is None or min_lat is None or max_lon is None or max_lat is None:
+        return None
+    return [float(min_lon), float(min_lat), float(max_lon), float(max_lat)]
+
+
 def _attach_counts(
     activity: Activity,
     likes: int,
     comments: int,
     liked_by_me: int,
+    bbox: list[float] | None = None,
 ) -> Activity:
-    """Anexa as contagens como atributos dinâmicos lidos pelo Pydantic."""
+    """Anexa contagens e bbox como atributos dinâmicos lidos pelo Pydantic.
+
+    [Sessão 10] `bbox` é opcional para não quebrar callers antigos que
+    ainda não passam as colunas PostGIS (nenhum hoje, mas mantém a
+    assinatura retrocompatível).
+    """
     activity.likes_count = int(likes or 0)
     activity.comments_count = int(comments or 0)
     activity.liked_by_me = bool(liked_by_me and int(liked_by_me) > 0)
+    activity.bbox = bbox
     return activity
 
 
@@ -425,15 +467,16 @@ async def list_activities(
 ) -> list[Activity]:
     """Lista atividades do usuário, ordenadas por started_at DESC.
 
-    Embutе likes_count / comments_count / liked_by_me via subqueries
-    correlacionadas para o cliente não precisar de requests extras.
+    Embute likes_count / comments_count / liked_by_me / bbox via subqueries
+    correlacionadas e funções PostGIS no próprio SELECT (sem N+1).
     """
     likes_sq = _count_likes_subq().label("likes_count")
     comments_sq = _count_comments_subq().label("comments_count")
     liked_sq = _liked_by_me_subq(user_id).label("liked_by_me_raw")
+    bbox_cols = _bbox_columns()
 
     stmt = (
-        select(Activity, likes_sq, comments_sq, liked_sq)
+        select(Activity, likes_sq, comments_sq, liked_sq, *bbox_cols)
         .where(Activity.user_id == user_id)
         .order_by(Activity.started_at.desc())
         .limit(limit)
@@ -442,8 +485,9 @@ async def list_activities(
     result = await db.execute(stmt)
 
     activities: list[Activity] = []
-    for activity, likes, comments, liked in result.all():
-        activities.append(_attach_counts(activity, likes, comments, liked))
+    for activity, likes, comments, liked, *bbox_raw in result.all():
+        bbox = _bbox_from_row(*bbox_raw)
+        activities.append(_attach_counts(activity, likes, comments, liked, bbox))
     return activities
 
 
@@ -467,8 +511,8 @@ async def search_activities(
     Carrega `user` com selectinload porque o router serializa com
     FeedItemResponse (author aninhado) — async quebra lazy load.
 
-    Também embute as contagens (likes/comments/liked_by_me) via
-    subqueries correlacionadas.
+    Também embute as contagens (likes/comments/liked_by_me) e bbox via
+    subqueries correlacionadas / funções PostGIS.
     """
     clean_q = q.strip()
     if not clean_q:
@@ -480,9 +524,10 @@ async def search_activities(
     likes_sq = _count_likes_subq().label("likes_count")
     comments_sq = _count_comments_subq().label("comments_count")
     liked_sq = _liked_by_me_subq(user_id).label("liked_by_me_raw")
+    bbox_cols = _bbox_columns()
 
     stmt = (
-        select(Activity, likes_sq, comments_sq, liked_sq)
+        select(Activity, likes_sq, comments_sq, liked_sq, *bbox_cols)
         .where(
             or_(
                 Activity.title.ilike(pattern),
@@ -503,8 +548,9 @@ async def search_activities(
 
     result = await db.execute(stmt)
     activities: list[Activity] = []
-    for activity, likes, comments, liked in result.all():
-        activities.append(_attach_counts(activity, likes, comments, liked))
+    for activity, likes, comments, liked, *bbox_raw in result.all():
+        bbox = _bbox_from_row(*bbox_raw)
+        activities.append(_attach_counts(activity, likes, comments, liked, bbox))
     return activities
 
 
@@ -526,15 +572,16 @@ async def get_activity(
     Carrega `user` com selectinload para que ActivityDetailResponse
     consiga serializar `author` sem lazy load (async quebra lazy load).
 
-    Embutе as contagens (likes/comments/liked_by_me) via subqueries
-    correlacionadas.
+    Embute as contagens (likes/comments/liked_by_me) e bbox via
+    subqueries correlacionadas / funções PostGIS.
     """
     likes_sq = _count_likes_subq().label("likes_count")
     comments_sq = _count_comments_subq().label("comments_count")
     liked_sq = _liked_by_me_subq(user_id).label("liked_by_me_raw")
+    bbox_cols = _bbox_columns()
 
     stmt = (
-        select(Activity, likes_sq, comments_sq, liked_sq)
+        select(Activity, likes_sq, comments_sq, liked_sq, *bbox_cols)
         .options(selectinload(Activity.user))
         .where(Activity.id == activity_id)
     )
@@ -544,17 +591,18 @@ async def get_activity(
     if row is None:
         raise NotFoundError("Atividade não encontrada")
 
-    activity, likes, comments, liked = row
+    activity, likes, comments, liked, *bbox_raw = row
+    bbox = _bbox_from_row(*bbox_raw)
 
     if activity.user_id == user_id:
-        return _attach_counts(activity, likes, comments, liked)
+        return _attach_counts(activity, likes, comments, liked, bbox)
 
     if allow_following:
         following = await follow_service.is_following(
             db, user_id, activity.user_id
         )
         if following:
-            return _attach_counts(activity, likes, comments, liked)
+            return _attach_counts(activity, likes, comments, liked, bbox)
 
     raise NotFoundError("Atividade não encontrada")
 

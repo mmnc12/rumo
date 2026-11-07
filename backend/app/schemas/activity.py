@@ -64,6 +64,13 @@ class ActivityResponse(BaseModel):
     liked_by_me: bool = False
     comments_count: int = 0
 
+    # [Sessão 10] Bounding box da rota [minLon, minLat, maxLon, maxLat]
+    # (ordem GeoJSON). Preenchido pelo service via ST_XMin/YMin/XMax/YMax.
+    # `None` quando a atividade não tem rota — o card do feed usa isso
+    # para decidir se desenha a miniatura do mapa (evita request ao /track
+    # só para descobrir que não há rota).
+    bbox: list[float] | None = None
+
 
 class ActivityDetailResponse(ActivityResponse):
     """Detalhe de uma atividade, com autor aninhado.
