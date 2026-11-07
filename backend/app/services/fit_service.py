@@ -1,4 +1,11 @@
-"""Parser de arquivos FIT (Garmin/ANT) e cálculo de métricas de atividade."""
+"""Parser de arquivos FIT (Garmin/ANT) e cálculo de métricas de atividade.
+
+[Sessão 15] Migrado de `fitparse` (dormente desde 2020) para `fitdecode`
+(ativo, mantido, thread-safe, sem `datetime.utcfromtimestamp`).
+A API pública (`parse_fit`, `map_fit_sport`) e o formato de retorno
+(`gpx_type`, `track_points` como [[lat, lon, ele, unix_ts], ...]) foram
+preservados para não quebrar `activity_service.py` nem os testes.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +13,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any
 
-import fitparse
+import fitdecode
 
 from app.services.errors import BadRequestError
 from app.services.gpx_service import haversine_m
@@ -137,6 +144,13 @@ def parse_fit(file_bytes: bytes) -> dict[str, Any]:
     como workouts e courses — o Rumo só aceita atividade.
 
     Levanta BadRequestError se o arquivo for inválido/vazio/sem records.
+
+    [Sessão 15] Migrado para fitdecode. A API mudou de
+    `fitparse.FitFile(BytesIO).get_messages("record")` para
+    `fitdecode.FitReader(BytesIO)` + iteração por frames. O CRC é
+    desabilitado (`CrcCheck.DISABLED`) porque o fitparse era tolerante
+    a CRC ruim por padrão e o fitdecode, por padrão, valida — arquivos
+    reais de dispositivos antigos podem ter CRC inválido.
     """
     if len(file_bytes) > _MAX_FILE_SIZE_BYTES:
         raise BadRequestError(
@@ -144,12 +158,26 @@ def parse_fit(file_bytes: bytes) -> dict[str, Any]:
         )
 
     try:
-        fit = fitparse.FitFile(BytesIO(file_bytes))
-        records = list(fit.get_messages("record"))
+        # Coleta todos os frames de dados de uma vez (lista), separando
+        # por nome de mensagem. O fitdecode entrega header/definition/CRC
+        # também, mas só FIT_FRAME_DATA interessa.
+        record_frames: list[fitdecode.FitDataMessage] = []
+        session_frames: list[fitdecode.FitDataMessage] = []
+        with fitdecode.FitReader(
+            BytesIO(file_bytes),
+            check_crc=fitdecode.CrcCheck.DISABLED,
+        ) as fit:
+            for frame in fit:
+                if frame.frame_type != fitdecode.FIT_FRAME_DATA:
+                    continue
+                if frame.name == "record":
+                    record_frames.append(frame)
+                elif frame.name == "session":
+                    session_frames.append(frame)
     except Exception as exc:
         raise BadRequestError(f"FIT inválido: {exc}") from exc
 
-    if len(records) < 2:
+    if len(record_frames) < 2:
         raise BadRequestError(
             "FIT não contém registros de atividade suficientes "
             "(workouts e courses não são aceitos)"
@@ -157,11 +185,20 @@ def parse_fit(file_bytes: bytes) -> dict[str, Any]:
 
     # Coleta pontos com timestamp, em ordem
     points: list[dict[str, Any]] = []
-    for record in records:
-        data = {f.name: f.value for f in record}
-        if data.get("timestamp") is None:
+    for frame in record_frames:
+        if not frame.has_field("timestamp"):
             continue
-        points.append(data)
+        ts = frame.get_value("timestamp")
+        if ts is None:
+            continue
+        # fitdecode devolve datetime UTC aware; demais campos via get_value
+        points.append({
+            "timestamp": ts,
+            "position_lat": frame.get_value("position_lat") if frame.has_field("position_lat") else None,
+            "position_long": frame.get_value("position_long") if frame.has_field("position_long") else None,
+            "altitude": frame.get_value("altitude") if frame.has_field("altitude") else None,
+            "distance": frame.get_value("distance") if frame.has_field("distance") else None,
+        })
 
     if len(points) < 2:
         raise BadRequestError("FIT não contém timestamps nos registros")
@@ -174,11 +211,12 @@ def parse_fit(file_bytes: bytes) -> dict[str, Any]:
     # Garmin/Polar gravam total_timer_time < total_elapsed_time quando há pausa.
     duration_s: int
     session_timer_time: float | None = None
-    for session in fit.get_messages("session"):
-        value = session.get_value("total_timer_time")
-        if value is not None and value > 0:
-            session_timer_time = float(value)
-            break
+    for session in session_frames:
+        if session.has_field("total_timer_time"):
+            value = session.get_value("total_timer_time")
+            if value is not None and value > 0:
+                session_timer_time = float(value)
+                break
 
     if session_timer_time is not None:
         duration_s = int(session_timer_time)
@@ -246,11 +284,12 @@ def parse_fit(file_bytes: bytes) -> dict[str, Any]:
     # Tipo da atividade: `sport` da mensagem `session`
     # (fallback: `sport` do primeiro record, se existir — raro).
     fit_sport = None
-    for session in fit.get_messages("session"):
-        sport = session.get_value("sport")
-        if sport:
-            fit_sport = str(sport).strip().lower()
-            break
+    for session in session_frames:
+        if session.has_field("sport"):
+            sport = session.get_value("sport")
+            if sport:
+                fit_sport = str(sport).strip().lower()
+                break
 
     # Título: FIT não tem campo de nome de atividade padronizado.
     # O `session` pode ter `sport_profile_name` (ex: "Running"), mas não

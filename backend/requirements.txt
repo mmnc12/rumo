@@ -39,7 +39,7 @@ httpx==0.28.1
 
 # GPX / FIT
 gpxpy==1.6.2
-fitparse>=1.2.0
+fitdecode>=0.11.0
 
 cloudinary>=1.41.0
 
