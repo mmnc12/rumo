@@ -2,6 +2,13 @@
 HANDOFF — Rumo (backend + frontend + mobile) — gerado ao fim da Sessão 14
 ===============================================================================
 
+<!-- [Sessão 15] Este arquivo é o handoff da Sessão 14, sendo atualizado ao
+longo da Sessão 15. Os acréscimos da Sessão 15 estão marcados com
+<!-- [Sessão 15] --> no fonte. Quando a Sessão 15 fechar, o handoff final
+(substituindo este arquivo por inteiro) será commitado como
+`docs: handoff da Sessão 15`. Até lá, este arquivo serve como referência
+viva do estado do projeto. -->
+
 ===============================================================================
 0. LEIA PRIMEIRO — CONTEXTO OPERACIONAL (evita retrabalho no próximo chat)
 ===============================================================================
@@ -176,7 +183,8 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
 --------------------------------------------------
 1. SEMPRE seguir a recomendação do assistente. Quando houver decisão
    pendente, executar a recomendada salvo instrução explícita em contrário.
-   (O usuário reforçou isso no início da Sessão 14.)
+   (O usuário reforçou isso no início da Sessão 14 e de novo no início da
+   Sessão 15.)
 2. SEMPRE entregar o CÓDIGO COMPLETO ao atualizar um arquivo — nunca diff
    parcial, nunca "// resto igual". Preservar imports, comentários e trechos
    que já funcionam. Destacar o trecho alterado com comentário curto acima
@@ -228,6 +236,30 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
     - Validação em produção: endpoint respondeu other=3, walk=3 (ordenação
       por atividades DESC e desempate alfabético funcionando).
 
+<!-- [Sessão 15] Entregas da Sessão 15 até o momento (em andamento): -->
+- [Sessão 15 — entregas até agora]
+  * Rota A(a) — silenciar warnings do fitparse: `pytest.ini` ganhou
+    `filterwarnings = ignore::DeprecationWarning:fitparse\.processors`,
+    apagando os 3611 warnings (2 únicos, deduplicados) do parsing de .FIT
+    sem esconder warnings de outras libs (validado com `-W default::` no
+    CLI: só os do fitparse voltaram). `tests/conftest.py` teve o bloco
+    `warnings.filterwarnings` revertido (não funciona no pytest — o plugin
+    reseta a lista antes de cada teste); a docstring foi mantida e
+    atualizada para registrar a decisão e a dívida do fitdecode.
+    Commit fa4fcc4.
+  * Rota A(b) — coluna "Pace médio" no drill-down por tipo:
+    `ProfilePage.tsx` ganhou a coluna (entre Tempo e Calorias), com regra
+    `PACE_TYPES = {run, walk, hike}` → `formatPace()`, senão `"—"`. O pace
+    é calculado no front (`total_duration_s / (total_distance_m / 1000)`),
+    com guarda para `total_distance_m <= 0`. De brinde, foram removidas as
+    duas funções inline duplicadas (`formatDistance`, `formatDuration`) que
+    existiam desde a S14 — agora vêm de `lib/format.ts`. Isso alinha a
+    tabela ao padrão pt-BR do resto do app (`3,2 km`, `1h 05min`).
+    Commit 053239c.
+  * Rota A(c) — documentar a decisão dos enums nativos do Postgres:
+    este acréscimo no handoff (seção 7, "Armadilha conhecida"). Próximo
+    commit, junto com esta atualização.
+
 ===============================================================================
 2. PRODUÇÃO E AMBIENTE
 ===============================================================================
@@ -242,14 +274,14 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
 - Docker Desktop: 4.93.0 (engine 29.8.1, compose v5.5.1)
 - SO: Windows, PowerShell 5.1
 - Venv backend: D:\Rumo\backend\.venv (ativa com .\.venv\Scripts\Activate.ps1)
-- Git (estado ao fim da Sessão 14 — CONFIRMAR com git log + git status no
-  início da Sessão 15):
-    c0ad55d  (HEAD -> main, origin/main) feat: drill-down de stats por tipo de atividade
+- Git (estado ao fim da Sessão 15 — CONFIRMAR com git log + git status no
+  início da Sessão 16):
+    053239c  (HEAD -> main, origin/main) feat(web): coluna de pace medio no drill-down por tipo
+    fa4fcc4  test(backend): silencia deprecation do fitparse via filterwarnings no pytest.ini
+    31f6c6c  docs: handoff da Sessão 14
+    c0ad55d  feat: drill-down de stats por tipo de atividade
     a27572c  refactor(web): unifica graficos do perfil em PeriodChart
-    3474d9b  docs: handoff da Sessão 13
-    aa78e89  feat(web): segundo gráfico de atividades por período no perfil
-    b8f5a13  refactor(web): extrai RouteMap do ActivityDetailPage
-- Todos os commits da Sessão 14 estão em origin/main (pushados).
+- Todos os commits da Sessão 15 estão em origin/main (pushados).
 - Render e Vercel deployam automático a cada push em main. O endpoint
   /activities/stats/by-type já está no ar e foi validado em produção na S14.
 
@@ -419,11 +451,14 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
 5. COMMITS PENDENTES / ESTADO DO REPO
 ===============================================================================
 
-- Sessões 9, 10, 11, 12, 13 e 14 commitadas e pushadas.
-- origin/main == main == HEAD no fim da Sessão 14 (c0ad55d).
-- docs/HANDOFF.md desta Sessão 14 deve substituir o anterior no início da
-  Sessão 15 e ser commitado como `docs: handoff da Sessão 14` (1 commit
-  adicional, junto ou após o push inicial da Sessão 15).
+<!-- [Sessão 15] Bloco atualizado: A(a) e A(b) já pushadas; A(c) neste commit. -->
+- Sessões 9, 10, 11, 12, 13, 14 e 15 (parcial) commitadas e pushadas.
+- origin/main == main == HEAD no momento do commit desta atualização
+  (fa4fcc4 → 053239c → este commit de docs).
+- A(a) commit fa4fcc4: silencia warnings do fitparse via pytest.ini.
+- A(b) commit 053239c: coluna de pace médio no drill-down por tipo.
+- A(c) (este commit): documenta a armadilha dos enums nativos + atualiza
+  o handoff com o que a Sessão 15 produziu até agora.
 - Nenhuma pendência conhecida de git.
 
 ===============================================================================
@@ -506,18 +541,40 @@ ruff check .
   (~85% de duplicação). Unificados em PeriodChart.tsx parametrizado por
   (period × metric). Commit a27572c.
 
-- (NOVA na Sessão 14) Enums nativos do Postgres ordenam pela ordem de
-  declaração, não pela string. Foi corrigido em get_by_type com sort em
-  Python. Se aparecer outro lugar com ORDER BY em coluna Enum, atenção —
-  o comportamento vai surpreender. Considerar padronizar: ou trocar enums
-  nativos por VARCHAR+check no banco, ou centralizar o sort em Python.
-  Baixa prioridade; documentar antes de agir.
+<!-- [Sessão 15] Item abaixo reescrito: era "dívida em aberto", virou
+"armadilha conhecida" com decisão tomada e regra acionável. -->
+- (ARMADILHA CONHECIDA — decisão tomada na Sessão 14, documentada na S15)
+  Enums nativos do Postgres ordenam pela ORDEM DE DECLARAÇÃO, não pela
+  string. `Activity.activity_type` é Enum nativo com ordem declarada
+  (run, walk, cycle, hike, swim, other). Portanto, `ORDER BY activity_type`
+  no SQL devolve nessa ordem — não em ordem alfabética.
+  DECISÃO: para `get_by_type` (stats_service.py), o desempate final é feito
+  em Python com
+      items.sort(key=lambda r: (-r["total_activities"], r["activity_type"]))
+  Justificativa: universo ≤ 6 linhas → custo irrelevante, comportamento
+  previsível, desacoplado do enum nativo. Há comentário explicativo no
+  código.
+  REGRA PARA O FUTURO: qualquer novo `ORDER BY` em coluna Enum DEVE
+  (a) fazer o sort final em Python, ou (b) ser explicitamente testado
+  contra a ordem de declaração do enum. Não confiar em ORDER BY direto
+  em coluna Enum. Se um dia for trocar enums nativos por VARCHAR+check no
+  banco, esta regra some — mas a migração é de baixa prioridade e não
+  deve ser feita sem necessidade.
 
-- Warnings do fitparse (biblioteca externa) durante pytest:
-  "datetime.utcfromtimestamp() is deprecated". São 3611 warnings em
-  tests/test_calories.py. Não quebram, mas poluem a saída. Se um dia
-  atualizar fitparse, somem. Baixa prioridade. (Rota C candidata: subir
-  versão do fitparse numa sessão futura.)
+<!-- [Sessão 15] Item abaixo marcado como RESOLVIDO. -->
+- (RESOLVIDA na Sessão 15) Warnings do fitparse (biblioteca externa) durante
+  pytest: `datetime.utcfromtimestamp() is deprecated`. Eram 3611 warnings
+  brutos (2 únicos, deduplicados) em tests/test_calories.py.
+  RESOLUÇÃO: filtro em `pytest.ini`:
+      filterwarnings =
+          ignore::DeprecationWarning:fitparse\.processors
+  Cirúrgico por módulo — não esconde warnings de outras libs (validado com
+  `-W default::` no CLI: só os do fitparse voltaram). Commit fa4fcc4.
+  DÍVIDA REMANESCENTE: a correção real é migrar de fitparse (última release
+  1.2.0, de 2020, dormente) para fitdecode (ativo, mantido, sem
+  utcfromtimestamp). Reescreve o parsing de .FIT no upload e os testes de
+  calorias. Merece sessão dedicada. Quando migrar, remover o filtro do
+  pytest.ini.
 
 - Web: miniatura do feed usa 1 tile OSM centralizado (bbox grande pode
   cortar bordas). Aceitável; se virar problema, evoluir para mosaico 2×2
@@ -535,9 +592,16 @@ ruff check .
   do chunk da página que não mostra mapa. Ganho hoje é marginal (leaflet
   já está em chunk separado por conta do bundle splitting do Vite).
 
-- (Oportunidade) Drill-down de stats por tipo poderia ganhar, no futuro:
-  * Coluna "Pace médio" (calculável por tipo, mas pouco útil comparar
-    entre run/cycle — decidir com o usuário).
+<!-- [Sessão 15] Item abaixo: "Coluna Pace médio" foi entregue (A-b).
+O restante (filtro por período) continua como oportunidade. -->
+- (OPORTUNIDADE) Drill-down de stats por tipo poderia ganhar, no futuro:
+  * (RESOLVIDO na Sessão 15) Coluna "Pace médio". Implementada em
+    ProfilePage.tsx com regra `PACE_TYPES = {run, walk, hike}`;
+    `cycle/swim/other` mostram "—". Cálculo no front
+    (`total_duration_s / (total_distance_m / 1000)`), com guarda para
+    `total_distance_m <= 0`. De brinde, removidas as duas funções inline
+    duplicadas (`formatDistance`, `formatDuration`) que a S14 tinha
+    deixado no arquivo — agora vêm de `lib/format.ts`. Commit 053239c.
   * Filtro por período (ex.: "últimos 90 dias"). Hoje mostra "todos os
     tempos" — o que é o que o usuário quer no drill-down, mas vale
     considerar se surgir demanda.
@@ -548,13 +612,14 @@ ruff check .
   privacidade, provavelmente via follow).
 
 ===============================================================================
-8. PRÓXIMOS PASSOS RECOMENDADOS (Sessão 15)
+8. PRÓXIMOS PASSOS RECOMENDADOS (Sessão 15 e além)
 ===============================================================================
 
-PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 15 (antes de qualquer mudança de código):
-  1) Colar este handoff em docs/HANDOFF.md e commitar como
-     `docs: handoff da Sessão 14`.
-  2) No terminal (PowerShell via Win+R → "powershell"):
+<!-- [Sessão 15] Bloco atualizado: primeira ação já cumprida; Rota A(a) e
+A(b) já entregues; sobra A(c) (este commit) e depois Rota B. -->
+
+PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 16 (antes de qualquer mudança de código):
+  1) No terminal (PowerShell via Win+R → "powershell"):
         cd D:\Rumo
         git push
         git log --oneline -5
@@ -564,7 +629,7 @@ PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 15 (antes de qualquer mudança de códig
         & "C:\Users\nasci\flutter\bin\flutter.bat" analyze
      Confirmar com o usuário: push aceito, HEAD == origin/main, build e
      analyze verdes, working tree limpo.
-  3) DOCKER + PYTEST LOCAL:
+  2) DOCKER + PYTEST LOCAL:
         docker version
         docker compose version
         cd D:\Rumo\backend
@@ -572,8 +637,8 @@ PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 15 (antes de qualquer mudança de códig
         docker ps
         .\.venv\Scripts\Activate.ps1
         pytest -q
-     Esperado: 118 passed.
-  4) DESCOBERTA DE ESTRUTURA (obrigatória — não adivinhar):
+     Esperado: 118 passed, 0 warnings (graças ao filtro do pytest.ini).
+  3) DESCOBERTA DE ESTRUTURA (obrigatória — não adivinhar):
         cd D:\Rumo
         Get-ChildItem -Directory | Select-Object Name
         Get-ChildItem D:\Rumo\web\src -Directory | Select-Object Name
@@ -585,21 +650,26 @@ PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 15 (antes de qualquer mudança de códig
         Get-ChildItem D:\Rumo\backend\tests -File | Select-Object Name
      Colar as saídas no chat ANTES de pedir ou reescrever qualquer arquivo.
 
-ORDEM DE TRABALHO RECOMENDADA (uma das duas rotas):
+ESTADO DA ROTA A (Sessão 15):
+  (a) fitparse warnings → FEITO (fa4fcc4).
+  (b) Pace médio no drill-down → FEITO (053239c).
+  (c) Documentar decisão dos enums → FEITO (este commit).
+  Rota A fechada. Sugestões de continuação abaixo.
 
-ROTA A — Continuar o padrão "deixar o repo melhor do que estava" (dívidas
-         pequenas, escopo curto)
-  Sugestões:
-    a) Atualizar fitparse para eliminar os 3611 warnings do pytest
-       (ruído zero). Requer: ver requirements/pyproject, testar upgrade,
-       rodar pytest completo. Ganho: saída limpa, mais fácil detectar
-       warnings reais.
-    b) Adicionar coluna "Pace médio" no drill-down por tipo (com decisão
-       do usuário sobre comparabilidade — pace de pedal não é comparável
-       com corrida; talvez mostrar só para tipos "humanos").
-    c) Documentar no HANDOFF/README a decisão sobre enums nativos do
-       Postgres e o sort em Python (evita armadilha em sessões futuras).
-  Rota A é de baixo risco, melhora a base, e mantém o padrão.
+ROTA A+ — Continuar o padrão "deixar o repo melhor do que estava"
+  Sugestões de baixo risco para as próximas sessões:
+    a) Migrar fitparse → fitdecode (elimina o filtro do pytest.ini e a
+       dependência dormente). Requer: ler o código de parsing de .FIT
+       (provavelmente em backend/app/services/ ou no router de upload),
+       ler tests/test_calories.py, escolher API do fitdecode, reescrever,
+       rodar pytest completo. Sessão dedicada.
+    b) Adicionar coluna "Elevação" (ou "Elev. gain") no drill-down por tipo.
+       O dado já está no contrato (`total_elevation_gain_m`), só falta
+       exibir. Custo: 1 linha no header + 1 na linha + formatador
+       (`formatElevation`? reusar `formatDistance`? decidir).
+    c) Documentar no `docs/HANDOFF.md` (ou num futuro README) as rotas de
+       API em formato de "cheat sheet" (hoje a seção 4 já cobre, mas é
+       verbose — um sumário de 1 linha por endpoint ajudaria).
 
 ROTA B — Feature nova (requer escolha com o usuário)
   Escopo médio-grande. Exemplos:
@@ -614,13 +684,13 @@ ROTA B — Feature nova (requer escolha com o usuário)
   Requer: desenhar contrato + schema + teste (validável localmente, com
   pytest verde) + UI no front.
 
-  A minha recomendação para a Sessão 15 é a ROTA A (a ou b, nesta ordem de
-  preferência). Duas sessões seguidas de features grandes (S13 e S14)
-  pedem uma de consolidação; a dívida do fitparse e do pace no drill-down
-  são ganhos visíveis com custo baixo. Se o usuário preferir feature nova,
-  Rota B é viável — mas o assistente deve explicitar que está adiando
-  dívidas.
+  A minha recomendação para a Sessão 16 é a ROTA A+ (a ou b, nesta ordem
+  de preferência). A Sessão 15 foi de consolidação — terminou limpa, com
+  0 warnings no pytest e uma armadilha documentada. A dívida do fitdecode
+  é a próxima "pedra no sapato" real; a coluna de elevação é ganho visível
+  com custo de 10 minutos. Se o usuário preferir feature nova, Rota B é
+  viável — mas o assistente deve explicitar que está adiando dívidas.
 
   Em qualquer rota, handoff preventivo em ~70-80% do contexto — antes do
-  fim, parar e entregar o HANDOFF completo da Sessão 15 neste mesmo formato
+  fim, parar e entregar o HANDOFF completo da Sessão 16 neste mesmo formato
   (seções 0 a 8).
