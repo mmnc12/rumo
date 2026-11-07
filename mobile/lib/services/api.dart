@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import '../models/activity_track.dart';
 import '../models/comment.dart';
 
 class ApiException implements Exception {
@@ -105,6 +106,32 @@ class ApiClient {
   /// Deleta um comentário (somente o autor; o backend valida).
   Future<void> deleteComment(String commentId, {String? token}) async {
     await delete('/comments/$commentId', token: token);
+  }
+
+  // ---------- Rota (track) ----------
+
+  /// Busca a geometria da rota da atividade.
+  ///
+  /// Retorna `null` quando o backend responde 404 ("Atividade não possui
+  /// rota") — nesse caso o detalhe simplesmente esconde o card de mapa.
+  /// Qualquer outro erro (401, 403, 500, timeout) propaga como `ApiException`.
+  Future<ActivityTrack?> getActivityTrack(
+    String activityId, {
+    String? token,
+  }) async {
+    try {
+      final data = await get(
+        '/activities/$activityId/track',
+        token: token,
+      );
+      if (data is! Map<String, dynamic>) {
+        throw ApiException(500, 'Resposta inesperada ao buscar rota');
+      }
+      return ActivityTrack.fromJson(data);
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
   }
 
   // ---------- internos ----------

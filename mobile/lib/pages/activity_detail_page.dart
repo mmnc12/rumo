@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../models/activity.dart';
+import '../models/activity_track.dart';
 import '../models/comment.dart';
 import '../services/api.dart';
 import '../services/auth_service.dart';
+import '../widgets/activity_map.dart';
 import '../widgets/like_button.dart';
 
 class ActivityDetailPage extends StatefulWidget {
@@ -34,11 +36,17 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
   final TextEditingController _commentController = TextEditingController();
   bool _sendingComment = false;
 
+  // Rota (mapa)
+  ActivityTrack? _track;
+  bool _trackLoading = false;
+  String? _trackError;
+
   @override
   void initState() {
     super.initState();
     _load();
     _loadComments();
+    _loadTrack();
   }
 
   @override
@@ -88,6 +96,28 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
       setState(() => _commentsError = 'Erro: $e');
     } finally {
       setState(() => _commentsLoading = false);
+    }
+  }
+
+  Future<void> _loadTrack() async {
+    setState(() {
+      _trackLoading = true;
+      _trackError = null;
+    });
+
+    try {
+      final track = await widget.auth.api.getActivityTrack(
+        widget.activityId,
+        token: widget.auth.token,
+      );
+      // `null` = 404 do backend (atividade sem rota). Esconde o card.
+      setState(() => _track = track);
+    } on ApiException catch (e) {
+      setState(() => _trackError = e.message);
+    } catch (e) {
+      setState(() => _trackError = 'Erro: $e');
+    } finally {
+      setState(() => _trackLoading = false);
     }
   }
 
@@ -238,7 +268,6 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              // Botão de curtir integrado
               LikeButton(
                 activity: a,
                 auth: widget.auth,
@@ -279,6 +308,10 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
               ),
           ],
         ),
+
+        // ---------- Rota (mapa) ----------
+        ..._buildTrackSection(theme),
+
         if (a.description != null && a.description!.isNotEmpty) ...[
           const SizedBox(height: 24),
           Text('Descrição', style: theme.textTheme.titleMedium),
@@ -303,6 +336,74 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
         _buildCommentsSection(theme),
       ],
     );
+  }
+
+  /// Card "Rota". Regras:
+  /// - `_trackLoading` → spinner.
+  /// - `_trackError`   → mensagem + retry.
+  /// - `_track == null` (404, sem rota) → não renderiza nada.
+  /// - `_track != null` → mapa.
+  List<Widget> _buildTrackSection(ThemeData theme) {
+    if (_trackLoading) {
+      return [
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Icon(Icons.route, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 6),
+            Text('Rota', style: theme.textTheme.titleMedium),
+          ],
+        ),
+        const SizedBox(height: 12),
+        const SizedBox(
+          height: 120,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ];
+    }
+
+    if (_trackError != null) {
+      return [
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Icon(Icons.route, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 6),
+            Text('Rota', style: theme.textTheme.titleMedium),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(_trackError!, style: theme.textTheme.bodySmall),
+        TextButton(
+          onPressed: _loadTrack,
+          child: const Text('Tentar novamente'),
+        ),
+      ];
+    }
+
+    final track = _track;
+    if (track == null) {
+      // 404: atividade não tem rota — esconde a seção inteira.
+      return const [];
+    }
+
+    return [
+      const SizedBox(height: 24),
+      Row(
+        children: [
+          Icon(Icons.route, size: 18, color: theme.colorScheme.primary),
+          const SizedBox(width: 6),
+          Text('Rota', style: theme.textTheme.titleMedium),
+          const Spacer(),
+          Text(
+            '${track.nPoints} pts',
+            style: theme.textTheme.labelSmall,
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      ActivityMap(track: track),
+    ];
   }
 
   Widget _buildCommentsSection(ThemeData theme) {
