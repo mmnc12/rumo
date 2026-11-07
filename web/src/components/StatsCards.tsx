@@ -1,5 +1,12 @@
 import type { StatsSummary } from "../types/api";
-import { formatCalories, formatDistance, formatDuration } from "../lib/format";
+// [Sessão 15 — B1b] Reaproveita formatElevation (padrão pt-BR com milhar)
+// em vez de formatar inline. Antes: "1234 m"; agora: "1.234 m".
+import {
+  formatCalories,
+  formatDistance,
+  formatDuration,
+  formatElevation,
+} from "../lib/format";
 
 interface Props {
   data: StatsSummary | undefined;
@@ -43,11 +50,7 @@ export function StatsCards({ data, isLoading, isError }: Props) {
       />
       <StatCard
         label="Elevação"
-        value={
-          data.total_elevation_gain_m > 0
-            ? `${Math.round(data.total_elevation_gain_m)} m`
-            : "—"
-        }
+        value={formatElevation(data.total_elevation_gain_m)}
       />
       <StatCard
         label="Calorias"
