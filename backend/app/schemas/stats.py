@@ -39,3 +39,22 @@ class StatsMonthlyResponse(BaseModel):
 
     months: int
     items: list[StatsPeriod]
+
+
+# [Sessão 14 — B1] Drill-down por tipo de atividade.
+
+class StatsByTypeItem(BaseModel):
+    """Agregado de um único tipo de atividade (ex.: run, cycle)."""
+
+    activity_type: str
+    total_activities: int
+    total_distance_m: float
+    total_duration_s: int
+    total_elevation_gain_m: float
+    total_calories: int
+
+
+class StatsByTypeResponse(BaseModel):
+    """Lista de agregados por tipo, ordenada por total_activities DESC."""
+
+    items: list[StatsByTypeItem]

@@ -8,6 +8,7 @@ import type {
   StatsSummary,
   StatsWeeklyResponse,
   StatsMonthlyResponse,
+  StatsByTypeResponse,
 } from "../types/api";
 
 export interface StatsQuery {
@@ -40,8 +41,7 @@ export function getStatsWeekly(
   return apiFetch<StatsWeeklyResponse>(`/activities/stats/weekly?${qs}`);
 }
 
-// [Sessão 13] Resumo mensal — espelho do weekly. Endpoint confirmado em
-// produção: GET /activities/stats/monthly?months=N[&activity_type=...].
+// [Sessão 13] Resumo mensal — espelho do weekly.
 /**
  * GET /activities/stats/monthly — resumo dos últimos N meses.
  * Retorna uma lista ordenada (o backend decide a ordem; conferir na UI).
@@ -53,4 +53,13 @@ export function getStatsMonthly(
   const qs = new URLSearchParams({ months: String(months) });
   if (params.activity_type) qs.set("activity_type", params.activity_type);
   return apiFetch<StatsMonthlyResponse>(`/activities/stats/monthly?${qs}`);
+}
+
+// [Sessão 14 — B1] Drill-down por tipo de atividade.
+/**
+ * GET /activities/stats/by-type — agregado por tipo de atividade.
+ * O backend já ordena por total_activities DESC (desempate por tipo ASC).
+ */
+export function getStatsByType(): Promise<StatsByTypeResponse> {
+  return apiFetch<StatsByTypeResponse>("/activities/stats/by-type");
 }

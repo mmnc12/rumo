@@ -4,9 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { ActivityCard } from "../components/ActivityCard";
 import { StatsCards } from "../components/StatsCards";
-// [Sessão 14] Substitui os 4 gráficos por 1 componente parametrizado
-// (PeriodChart). Os tipos ChartPeriod/ChartMetric vêm do próprio componente
-// para evitar duplicação de union types no ProfilePage.
+// [Sessão 14] Substitui os 4 gráficos por 1 componente parametrizado.
 import {
   PeriodChart,
   type ChartPeriod,
@@ -19,7 +17,13 @@ import {
   useIsFollowing,
   useUser,
 } from "../hooks/useProfile";
-import { useStatsSummary, useStatsWeekly, useStatsMonthly } from "../hooks/useStats";
+import {
+  useStatsSummary,
+  useStatsWeekly,
+  useStatsMonthly,
+  // [Sessão 14 — B1] Drill-down por tipo de atividade.
+  useStatsByType,
+} from "../hooks/useStats";
 import { useFollowUser } from "../hooks/useSocial";
 import { ApiError } from "../api/client";
 import type { ActivityType, UserPublic } from "../types/api";
@@ -34,8 +38,15 @@ const TYPE_FILTERS: { label: string; value: ActivityType | undefined }[] = [
   { label: "Natação", value: "swim" },
 ];
 
-// [Sessão 14] ChartMode/ChartMetric agora vêm de PeriodChart (reexport).
-// Mantido o alias abaixo para deixar claro na leitura do componente.
+// [Sessão 14 — B1] Rótulos pt-BR para a tabela por tipo.
+const TYPE_LABELS: Record<ActivityType, string> = {
+  run: "Corrida",
+  walk: "Caminhada",
+  cycle: "Pedal",
+  hike: "Trilha",
+  swim: "Natação",
+  other: "Outro",
+};
 
 export default function ProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -86,6 +97,8 @@ export default function ProfilePage() {
     typeFilter,
     isSelf && chartMode === "monthly"
   );
+  // [Sessão 14 — B1] Drill-down por tipo — sem filtro, sempre todos os tipos.
+  const byTypeQuery = useStatsByType(isSelf);
 
   if (!id) {
     return (
@@ -110,7 +123,6 @@ export default function ProfilePage() {
   const activities = activitiesData?.pages.flat() ?? [];
 
   // [Sessão 14] Escolhe a query ativa com base no chartMode, uma única vez.
-  // As 4 combinações (period × metric) usam a mesma fonte de items.
   const activeChartQuery = chartMode === "weekly" ? weeklyQuery : monthlyQuery;
 
   return (
@@ -192,10 +204,7 @@ export default function ProfilePage() {
               isError={summaryQuery.isError}
             />
 
-            {/* [Sessão 13 + F] Dois toggles independentes:
-                  - Semanal | Mensal   → janela de tempo
-                  - Distância | Atividades → métrica do eixo Y
-                As 4 combinações usam os mesmos StatsPeriod, sem request nova. */}
+            {/* [Sessão 13 + F] Dois toggles independentes. */}
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <div className="inline-flex rounded-lg bg-white p-1 shadow-sm">
                 <button
@@ -249,8 +258,7 @@ export default function ProfilePage() {
             </div>
 
             <div className="mt-4">
-              {/* [Sessão 14] Um único componente cobre as 4 combinações.
-                  items/isLoading/isError vêm da query ativa (weekly ou monthly). */}
+              {/* [Sessão 14] Um único componente cobre as 4 combinações. */}
               <PeriodChart
                 period={chartMode}
                 metric={chartMetric}
@@ -258,6 +266,77 @@ export default function ProfilePage() {
                 isLoading={activeChartQuery.isLoading}
                 isError={activeChartQuery.isError}
               />
+            </div>
+
+            {/* [Sessão 14 — B1] Tabela de drill-down por tipo de atividade.
+                Sempre mostra TODOS os tipos praticados (sem filtro) —
+                o typeFilter acima continua afetando só cards/gráficos. */}
+            <div className="mt-6 rounded-lg bg-white p-4 shadow-sm">
+              <h3 className="mb-3 text-sm font-semibold text-gray-700">
+                Por tipo de atividade
+              </h3>
+
+              {byTypeQuery.isLoading && (
+                <p className="text-sm text-gray-500">Carregando…</p>
+              )}
+
+              {byTypeQuery.isError && (
+                <p className="text-sm text-red-600">
+                  Erro ao carregar tabela por tipo.
+                </p>
+              )}
+
+              {byTypeQuery.data && byTypeQuery.data.items.length === 0 && (
+                <p className="text-sm text-gray-500">
+                  Nenhuma atividade registrada ainda.
+                </p>
+              )}
+
+              {byTypeQuery.data && byTypeQuery.data.items.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500">
+                        <th className="py-2 pr-3 font-medium">Tipo</th>
+                        <th className="py-2 pr-3 text-right font-medium">
+                          Atividades
+                        </th>
+                        <th className="py-2 pr-3 text-right font-medium">
+                          Distância
+                        </th>
+                        <th className="py-2 pr-3 text-right font-medium">
+                          Tempo
+                        </th>
+                        <th className="py-2 text-right font-medium">
+                          Calorias
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {byTypeQuery.data.items.map((item) => (
+                        <tr key={item.activity_type}>
+                          <td className="py-2 pr-3 font-medium text-gray-900">
+                            {TYPE_LABELS[item.activity_type] ??
+                              item.activity_type}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-gray-700">
+                            {item.total_activities}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-gray-700">
+                            {formatDistance(item.total_distance_m)}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-gray-700">
+                            {formatDuration(item.total_duration_s)}
+                          </td>
+                          <td className="py-2 text-right text-gray-700">
+                            {item.total_calories} kcal
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -402,4 +481,20 @@ function UserRow({ user }: { user: UserPublic }) {
       </Link>
     </li>
   );
+}
+
+// [Sessão 14 — B1] Formatadores locais da tabela por tipo. Mantidos
+// inline porque só esta tabela usa; se surgir segundo uso, extrair para
+// src/lib/format.ts.
+
+function formatDistance(meters: number): string {
+  if (meters < 1000) return `${Math.round(meters)} m`;
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
+function formatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}min`;
+  return `${m}min`;
 }

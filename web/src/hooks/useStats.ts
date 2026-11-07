@@ -4,11 +4,13 @@ import {
   getStatsSummary,
   getStatsWeekly,
   getStatsMonthly,
+  getStatsByType,
 } from "../api/stats";
 import type {
   StatsSummary,
   StatsWeeklyResponse,
   StatsMonthlyResponse,
+  StatsByTypeResponse,
 } from "../types/api";
 
 // ===== Query keys =====
@@ -22,6 +24,8 @@ export const statsKeys = {
   // [Sessão 13] Chave para o mensal — mesmo padrão do weekly.
   monthly: (months: number, activityType?: string) =>
     [...statsKeys.all, "monthly", months, activityType ?? "all"] as const,
+  // [Sessão 14 — B1] Drill-down por tipo.
+  byType: () => [...statsKeys.all, "by-type"] as const,
 };
 
 // ===== Summary =====
@@ -69,9 +73,7 @@ export function useStatsWeekly(
 
 // ===== Monthly =====
 
-// [Sessão 13] Hook mensal — espelho do useStatsWeekly. Default 6 meses
-// (mesma decisão do getStatsMonthly). `enabled` mantém a mesma semântica:
-// só dispara quando o ProfilePage está no próprio perfil.
+// [Sessão 13] Hook mensal — espelho do useStatsWeekly.
 /**
  * Resumo mensal dos últimos N meses.
  *
@@ -86,6 +88,25 @@ export function useStatsMonthly(
   return useQuery<StatsMonthlyResponse>({
     queryKey: statsKeys.monthly(months, activityType),
     queryFn: () => getStatsMonthly(months, { activity_type: activityType }),
+    enabled,
+    staleTime: 60_000,
+    retry: 1,
+  });
+}
+
+// ===== By type [Sessão 14 — B1] =====
+
+/**
+ * Agregado por tipo de atividade do usuário logado.
+ *
+ * Sem filtro de tipo (o objetivo é justamente ver TODOS os tipos).
+ * `enabled` controla se dispara (só no próprio perfil).
+ * staleTime 60s: idem summary/weekly/monthly.
+ */
+export function useStatsByType(enabled = true) {
+  return useQuery<StatsByTypeResponse>({
+    queryKey: statsKeys.byType(),
+    queryFn: () => getStatsByType(),
     enabled,
     staleTime: 60_000,
     retry: 1,

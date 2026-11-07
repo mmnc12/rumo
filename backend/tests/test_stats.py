@@ -1,4 +1,4 @@
-"""Testes de stats_service: get_summary e get_period_stats.
+"""Testes de stats_service: get_summary, get_period_stats e get_by_type.
 
 Cobertura:
 - Service puro (db_session): somas, filtros, tratamento de None, isolamento
@@ -13,6 +13,9 @@ enum nativo, e os filtros usam string (o que o router de fato recebe).
 Paths de rota: o router `activities.py` é incluído no main.py com
 `prefix="/activities"`. Como as rotas de stats já declaram `/stats/...`
 no próprio router, o path final é `/activities/stats/summary`, etc.
+
+[Sessão 14 — B1] Adicionados testes de get_by_type (drill-down por tipo)
+e da rota /activities/stats/by-type.
 """
 
 from datetime import datetime, timezone
@@ -427,3 +430,123 @@ async def test_route_weekly_weeks_upper_bound(client, db_session, test_user):
 async def test_route_monthly_months_upper_bound(client, db_session, test_user):
     response = await client.get("/activities/stats/monthly", params={"months": 25})
     assert response.status_code == 422
+
+
+# ===== get_by_type — service [Sessão 14 — B1] =====
+
+
+@pytest.mark.asyncio
+async def test_get_by_type_empty_returns_empty_list(db_session, test_user):
+    result = await stats_service.get_by_type(db_session, test_user.id)
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_get_by_type_groups_and_orders(db_session, test_user):
+    # 2 runs + 1 cycle → run primeiro (mais atividades), depois cycle.
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         distance_m=5000.0, duration_s=1800,
+                         elevation_gain_m=100.0, calories=300)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         distance_m=3000.0, duration_s=1200,
+                         elevation_gain_m=50.0, calories=200)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.CYCLE,
+                         distance_m=20000.0, duration_s=3600,
+                         elevation_gain_m=400.0, calories=800)
+
+    result = await stats_service.get_by_type(db_session, test_user.id)
+
+    assert len(result) == 2
+    run = result[0]
+    assert run["activity_type"] == "run"
+    assert run["total_activities"] == 2
+    assert run["total_distance_m"] == pytest.approx(8000.0)
+    assert run["total_duration_s"] == 3000
+    assert run["total_elevation_gain_m"] == pytest.approx(150.0)
+    assert run["total_calories"] == 500
+
+    cycle = result[1]
+    assert cycle["activity_type"] == "cycle"
+    assert cycle["total_activities"] == 1
+    assert cycle["total_distance_m"] == pytest.approx(20000.0)
+    assert cycle["total_calories"] == 800
+
+
+@pytest.mark.asyncio
+async def test_get_by_type_tie_breaks_by_type_asc(db_session, test_user):
+    # 1 run + 1 cycle → empate em total_activities; desempate alfabético:
+    # "cycle" < "run", então cycle vem primeiro.
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN, calories=100)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.CYCLE, calories=500)
+
+    result = await stats_service.get_by_type(db_session, test_user.id)
+
+    assert len(result) == 2
+    assert result[0]["activity_type"] == "cycle"
+    assert result[1]["activity_type"] == "run"
+
+
+@pytest.mark.asyncio
+async def test_get_by_type_handles_none_calories(db_session, test_user):
+    await _make_activity(db_session, test_user, calories=100)
+    await _make_activity(db_session, test_user, calories=None)
+
+    result = await stats_service.get_by_type(db_session, test_user.id)
+
+    assert len(result) == 1
+    assert result[0]["activity_type"] == "run"
+    assert result[0]["total_activities"] == 2
+    assert result[0]["total_calories"] == 100
+
+
+@pytest.mark.asyncio
+async def test_get_by_type_ignores_other_users(db_session, test_user):
+    other = await _make_other_user(db_session)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN, calories=100)
+    await _make_activity(db_session, other,
+                         activity_type=ActivityType.CYCLE, calories=999)
+
+    result = await stats_service.get_by_type(db_session, test_user.id)
+
+    assert len(result) == 1
+    assert result[0]["activity_type"] == "run"
+    assert result[0]["total_activities"] == 1
+
+
+# ===== Rota /activities/stats/by-type [Sessão 14 — B1] =====
+
+
+@pytest.mark.asyncio
+async def test_route_by_type_empty(client, db_session, test_user):
+    response = await client.get("/activities/stats/by-type")
+    assert response.status_code == 200
+    data = response.json()
+    assert data == {"items": []}
+
+
+@pytest.mark.asyncio
+async def test_route_by_type_shape(client, db_session, test_user):
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         distance_m=5000.0, duration_s=1800,
+                         elevation_gain_m=100.0, calories=300)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.CYCLE,
+                         distance_m=20000.0, duration_s=3600,
+                         elevation_gain_m=400.0, calories=800)
+
+    response = await client.get("/activities/stats/by-type")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 2
+    # run e cycle têm 1 atividade cada; desempate "cycle" < "run"
+    assert data["items"][0]["activity_type"] == "cycle"
+    assert data["items"][0]["total_activities"] == 1
+    assert data["items"][0]["total_distance_m"] == pytest.approx(20000.0)
+    assert data["items"][1]["activity_type"] == "run"

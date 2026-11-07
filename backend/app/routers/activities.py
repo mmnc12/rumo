@@ -28,6 +28,7 @@ from app.schemas.activity import (
 )
 from app.schemas.like import LikeListResponse, LikeStateResponse
 from app.schemas.stats import (
+    StatsByTypeResponse,
     StatsMonthlyResponse,
     StatsSummary,
     StatsWeeklyResponse,
@@ -79,6 +80,21 @@ async def stats_monthly(
         db, current_user.id, "month", months, activity_type
     )
     return {"months": months, "items": items}
+
+
+# [Sessão 14 — B1] Drill-down por tipo de atividade.
+@router.get("/stats/by-type", response_model=StatsByTypeResponse)
+async def stats_by_type(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Agrega as atividades do usuário por tipo (run/cycle/walk/...).
+
+    Sem filtros: o objetivo é justamente ver TODOS os tipos praticados
+    lado a lado. Ordenação no backend: atividades DESC, tipo ASC.
+    """
+    items = await stats_service.get_by_type(db, current_user.id)
+    return {"items": items}
 
 
 # ===== Busca (estática — precisa vir ANTES de /{activity_id}) =====

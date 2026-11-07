@@ -144,6 +144,23 @@ export interface StatsMonthlyResponse {
   items: StatsPeriod[];
 }
 
+// [Sessão 14 — B1] Drill-down por tipo de atividade.
+
+/** Agregado de um único tipo de atividade. */
+export interface StatsByTypeItem {
+  activity_type: ActivityType;
+  total_activities: number;
+  total_distance_m: number;
+  total_duration_s: number;
+  total_elevation_gain_m: number;
+  total_calories: number;
+}
+
+/** Lista de agregados por tipo (já ordenada pelo backend). */
+export interface StatsByTypeResponse {
+  items: StatsByTypeItem[];
+}
+
 export interface ActivityPhoto {
   id: string;
   activity_id: string;
