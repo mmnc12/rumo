@@ -42,6 +42,22 @@ class StatsMonthlyResponse(BaseModel):
 
 
 # [Sessão 14 — B1] Drill-down por tipo de atividade.
+# [Sessão 18] Adicionado `previous` (comparação vs. janela imediatamente anterior).
+
+class StatsByTypePreviousItem(BaseModel):
+    """Agregado do tipo na janela *imediatamente anterior* à atual.
+
+    Só aparece quando `period != "all"` e o tipo teve >= 1 atividade
+    nessa janela. As 5 métricas são as mesmas do item atual; o
+    `activity_type` não se repete (é o mesmo do item pai).
+    """
+
+    total_activities: int
+    total_distance_m: float
+    total_duration_s: int
+    total_elevation_gain_m: float
+    total_calories: int
+
 
 class StatsByTypeItem(BaseModel):
     """Agregado de um único tipo de atividade (ex.: run, cycle)."""
@@ -52,6 +68,8 @@ class StatsByTypeItem(BaseModel):
     total_duration_s: int
     total_elevation_gain_m: float
     total_calories: int
+    # [Sessão 18] None quando period="all" ou sem atividade na janela anterior.
+    previous: StatsByTypePreviousItem | None = None
 
 
 class StatsByTypeResponse(BaseModel):

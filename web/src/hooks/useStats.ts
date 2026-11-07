@@ -28,6 +28,8 @@ export const statsKeys = {
   // [Sessão 14 — B1] Drill-down por tipo.
   // [Sessão 17] Chave inclui `period` para o React Query refazer a chamada
   // quando o usuário troca o filtro de janela temporal.
+  // [Sessão 18] O payload já traz `previous` por item (mesma chamada, sem
+  // novo hook nem nova key — a janela anterior é derivada no backend).
   byType: (period: StatsPeriod) =>
     [...statsKeys.all, "by-type", period] as const,
 };
@@ -102,11 +104,15 @@ export function useStatsMonthly(
 
 // [Sessão 17] Adicionado `period` como primeiro arg (default "all").
 // A query key inclui `period` — trocar de janela dispara refetch automaticamente.
+// [Sessão 18] Cada item do payload agora pode trazer `previous` (janela
+// imediatamente anterior). Nada muda no hook: o dado vem no mesmo response.
 /**
  * Agregado por tipo de atividade do usuário logado.
  *
  * Sem filtro de tipo (o objetivo é justamente ver TODOS os tipos).
  * `period` filtra por janela temporal: `all` (default), `90d`, `1y`.
+ * Para `90d`/`1y`, cada item traz `previous` (comparação com a janela
+ * anterior) ou `null` (sem atividade do tipo no período anterior).
  * `enabled` controla se dispara (só no próprio perfil).
  * staleTime 60s: idem summary/weekly/monthly.
  */

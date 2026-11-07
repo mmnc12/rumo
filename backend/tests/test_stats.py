@@ -16,6 +16,12 @@ depende de `now()` do banco. Para evitar flakiness, as margens entre
 "dentro" e "fora" da janela são ≥10 dias — folga absurdamente maior que
 qualquer desvio de relógio entre o processo de teste e o Postgres.
 
+Exceção [Sessão 18]: os testes de `previous` (janela anterior) seguem a
+mesma regra — usam `_dt_ago(days)` e a atividade "de referência" fica
+bem no meio da janela (ex.: 45d para 90d, 200d para 1y), longe das
+bordas `now-90d`/`now-180d`/`now-365d`/`now-730d`, para não flakar por
+relógio.
+
 Paths de rota: o router `activities.py` é incluído no main.py com
 `prefix="/activities"`. Como as rotas de stats já declaram `/stats/...`
 no próprio router, o path final é `/activities/stats/summary`, etc.
@@ -24,6 +30,10 @@ no próprio router, o path final é `/activities/stats/summary`, etc.
 e da rota /activities/stats/by-type.
 
 [Sessão 17] Adicionados testes de `period` (all|90d|1y) — service e rota.
+
+[Sessão 18] Adicionados testes de `previous` — janela imediatamente
+anterior (90d→[now-180d, now-90d); 1y→[now-730d, now-365d)). `all` →
+`previous is None`. Testa service e rota.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -51,6 +61,8 @@ def _dt_ago(days: int, hour: int = 10) -> datetime:
     em SQL via `now() - INTERVAL`. Fora dele, `_dt` (fixo) continua sendo
     o padrão. Margem mínima de 10 dias entre "dentro" e "fora" da janela
     elimina qualquer flakiness de relógio Python vs. Postgres.
+
+    [Sessão 18] Também usado pelos testes de `previous` (janela anterior).
     """
     return datetime.now(timezone.utc) - timedelta(days=days)
 
@@ -685,3 +697,167 @@ async def test_route_by_type_invalid_period_returns_422(
         "/activities/stats/by-type", params={"period": "30d"}
     )
     assert response.status_code == 422
+
+
+# ===== get_by_type com previous — service [Sessão 18] =====
+# Regra de janela: "anterior" = janela imediatamente anterior, sem
+# sobreposição. 90d → [now-180d, now-90d); 1y → [now-730d, now-365d).
+# Margens: toda atividade "de referência" fica bem no meio da janela
+# (45d para 90d; 200d para 1y), longe das bordas, para não flakar.
+
+
+@pytest.mark.asyncio
+async def test_get_by_type_previous_90d(db_session, test_user):
+    """Atividade dentro dos 90d atuais + atividade entre 90d e 180d
+    atrás → item atual reflete só a recente; `previous` reflete só a
+    antiga."""
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(45),
+                         distance_m=5000.0, duration_s=1800,
+                         elevation_gain_m=100.0, calories=300)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(120),
+                         distance_m=3000.0, duration_s=1200,
+                         elevation_gain_m=50.0, calories=200)
+
+    result = await stats_service.get_by_type(
+        db_session, test_user.id, period="90d"
+    )
+
+    assert len(result) == 1
+    run = result[0]
+    assert run["activity_type"] == "run"
+    # Janela atual (45d): só a primeira.
+    assert run["total_activities"] == 1
+    assert run["total_distance_m"] == pytest.approx(5000.0)
+    assert run["total_duration_s"] == 1800
+    assert run["total_elevation_gain_m"] == pytest.approx(100.0)
+    assert run["total_calories"] == 300
+    # Janela anterior (120d): só a segunda.
+    prev = run["previous"]
+    assert prev is not None
+    assert prev["total_activities"] == 1
+    assert prev["total_distance_m"] == pytest.approx(3000.0)
+    assert prev["total_duration_s"] == 1200
+    assert prev["total_elevation_gain_m"] == pytest.approx(50.0)
+    assert prev["total_calories"] == 200
+
+
+@pytest.mark.asyncio
+async def test_get_by_type_previous_1y(db_session, test_user):
+    """`period="1y"`: atual = 200d (dentro de 365d); anterior = 500d
+    (entre 365d e 730d)."""
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(200),
+                         distance_m=4000.0, calories=250)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(500),
+                         distance_m=6000.0, calories=350)
+
+    result = await stats_service.get_by_type(
+        db_session, test_user.id, period="1y"
+    )
+
+    assert len(result) == 1
+    run = result[0]
+    assert run["total_activities"] == 1
+    assert run["total_distance_m"] == pytest.approx(4000.0)
+    assert run["total_calories"] == 250
+
+    prev = run["previous"]
+    assert prev is not None
+    assert prev["total_activities"] == 1
+    assert prev["total_distance_m"] == pytest.approx(6000.0)
+    assert prev["total_calories"] == 350
+
+
+@pytest.mark.asyncio
+async def test_get_by_type_previous_all_is_none(db_session, test_user):
+    """`period="all"` → sem comparação: `previous is None` em todo item."""
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(30), calories=100)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.CYCLE,
+                         started_at=_dt_ago(200), calories=500)
+
+    result = await stats_service.get_by_type(db_session, test_user.id, period="all")
+
+    assert len(result) == 2
+    for item in result:
+        assert item["previous"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_by_type_previous_none_when_type_absent_in_window(
+    db_session, test_user
+):
+    """Tipo com atividade só na janela atual (nada na anterior) → item
+    existe com `previous is None`. Garante que o `null` não mascara o
+    item: o tipo aparece, mas sem comparação."""
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(30), calories=100)
+
+    result = await stats_service.get_by_type(
+        db_session, test_user.id, period="90d"
+    )
+
+    assert len(result) == 1
+    run = result[0]
+    assert run["activity_type"] == "run"
+    assert run["total_activities"] == 1
+    assert run["previous"] is None
+
+
+# ===== Rota /activities/stats/by-type com previous [Sessão 18] =====
+
+
+@pytest.mark.asyncio
+async def test_route_by_type_previous_shape(client, db_session, test_user):
+    """Shape do `previous` na rota, para period=90d e period=all."""
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(45),
+                         distance_m=5000.0, duration_s=1800,
+                         elevation_gain_m=100.0, calories=300)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(120),
+                         distance_m=3000.0, duration_s=1200,
+                         elevation_gain_m=50.0, calories=200)
+
+    # period=90d: previous preenchido com as 5 métricas.
+    response = await client.get(
+        "/activities/stats/by-type", params={"period": "90d"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 1
+    item = data["items"][0]
+    assert item["activity_type"] == "run"
+    assert item["total_activities"] == 1
+    prev = item["previous"]
+    assert prev is not None
+    assert set(prev.keys()) == {
+        "total_activities",
+        "total_distance_m",
+        "total_duration_s",
+        "total_elevation_gain_m",
+        "total_calories",
+    }
+    assert prev["total_activities"] == 1
+    assert prev["total_distance_m"] == pytest.approx(3000.0)
+    assert prev["total_calories"] == 200
+
+    # period=all: previous é null em todos os itens.
+    response_all = await client.get(
+        "/activities/stats/by-type", params={"period": "all"}
+    )
+    assert response_all.status_code == 200
+    for it in response_all.json()["items"]:
+        assert it["previous"] is None

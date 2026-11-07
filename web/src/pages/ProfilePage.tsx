@@ -37,7 +37,11 @@ import {
   formatElevation,
   formatPace,
 } from "../lib/format";
-import type { ActivityType, UserPublic } from "../types/api";
+import type {
+  ActivityType,
+  UserPublic,
+  StatsByTypeItem,
+} from "../types/api";
 
 // Filtros de tipo — "Tudo" = undefined (sem filtro no backend)
 const TYPE_FILTERS: { label: string; value: ActivityType | undefined }[] = [
@@ -124,6 +128,7 @@ export default function ProfilePage() {
   );
   // [Sessão 14 — B1] Drill-down por tipo — sem filtro, sempre todos os tipos.
   // [Sessão 17] Agora aceita janela temporal (`byTypePeriod`).
+  // [Sessão 18] Cada item pode trazer `previous` (janela anterior).
   const byTypeQuery = useStatsByType(byTypePeriod, isSelf);
 
   if (!id) {
@@ -150,6 +155,9 @@ export default function ProfilePage() {
 
   // [Sessão 14] Escolhe a query ativa com base no chartMode, uma única vez.
   const activeChartQuery = chartMode === "weekly" ? weeklyQuery : monthlyQuery;
+
+  // [Sessão 18] Comparação só faz sentido quando há janela anterior.
+  const showPrevious = byTypePeriod !== "all";
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -299,6 +307,8 @@ export default function ProfilePage() {
                 o typeFilter acima continua afetando só cards/gráficos. */}
             {/* [Sessão 17] Header ganhou segmented control de janela temporal
                 (Todos / 90 dias / 1 ano). O filtro afeta apenas esta tabela. */}
+            {/* [Sessão 18] Quando period != "all", ganha coluna "vs. anterior"
+                com delta (atividades / distância / elevação) em verde/vermelho. */}
             <div className="mt-6 rounded-lg bg-white p-4 shadow-sm">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold text-gray-700">
@@ -365,9 +375,15 @@ export default function ProfilePage() {
                         <th className="py-2 pr-3 text-right font-medium">
                           Pace médio
                         </th>
-                        <th className="py-2 text-right font-medium">
+                        <th className="py-2 pr-3 text-right font-medium">
                           Calorias
                         </th>
+                        {/* [Sessão 18] Delta vs. janela anterior. */}
+                        {showPrevious && (
+                          <th className="py-2 text-right font-medium">
+                            vs. anterior
+                          </th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -396,9 +412,15 @@ export default function ProfilePage() {
                             <td className="py-2 pr-3 text-right text-gray-700">
                               {showPace ? formatPace(pace) : "—"}
                             </td>
-                            <td className="py-2 text-right text-gray-700">
+                            <td className="py-2 pr-3 text-right text-gray-700">
                               {item.total_calories} kcal
                             </td>
+                            {/* [Sessão 18] Delta vs. janela anterior. */}
+                            {showPrevious && (
+                              <td className="py-2 text-right align-top">
+                                <PreviousDelta item={item} />
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
@@ -561,4 +583,70 @@ function computePace(item: {
 }): number | null {
   if (item.total_distance_m <= 0) return null;
   return item.total_duration_s / (item.total_distance_m / 1000);
+}
+
+// [Sessão 18] Bloco de delta vs. janela imediatamente anterior.
+// Mostra 3 métricas (atividades, distância, elevação) em linhas curtas.
+// `previous === null` → "—" (tipo não existia na janela anterior).
+function PreviousDelta({ item }: { item: StatsByTypeItem }) {
+  if (!item.previous) {
+    return <span className="text-xs text-gray-400">—</span>;
+  }
+  return (
+    <div className="space-y-0.5 text-xs leading-tight">
+      <DeltaLine
+        label="Ativ."
+        current={item.total_activities}
+        previous={item.previous.total_activities}
+      />
+      <DeltaLine
+        label="Dist."
+        current={item.total_distance_m}
+        previous={item.previous.total_distance_m}
+        formatter={formatDistance}
+      />
+      <DeltaLine
+        label="Elev."
+        current={item.total_elevation_gain_m}
+        previous={item.previous.total_elevation_gain_m}
+        formatter={formatElevation}
+      />
+    </div>
+  );
+}
+
+// [Sessão 18] Uma linha de delta: "label ±abs (±pct%)" colorido.
+// Verde = subiu, vermelho = desceu, cinza = igual. Percentual só quando
+// `previous > 0` (percentual em relação a 0 é indefinido).
+function DeltaLine({
+  label,
+  current,
+  previous,
+  formatter,
+}: {
+  label: string;
+  current: number;
+  previous: number;
+  formatter?: (n: number) => string;
+}) {
+  const delta = current - previous;
+  const fmt = formatter ?? ((n: number) => `${Math.round(n)}`);
+  const sign = delta > 0 ? "+" : delta < 0 ? "−" : "";
+  const abs = Math.abs(delta);
+  const pct = previous > 0 ? Math.round((delta / previous) * 100) : null;
+  const color =
+    delta > 0
+      ? "text-green-600"
+      : delta < 0
+        ? "text-red-600"
+        : "text-gray-400";
+  const pctText = pct !== null ? ` (${sign}${Math.abs(pct)}%)` : "";
+
+  return (
+    <div className={color}>
+      {label} {sign}
+      {fmt(abs)}
+      {pctText}
+    </div>
+  );
 }

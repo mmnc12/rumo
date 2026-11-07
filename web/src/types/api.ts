@@ -146,6 +146,17 @@ export interface StatsMonthlyResponse {
 
 // [Sessão 14 — B1] Drill-down por tipo de atividade.
 
+// [Sessão 18] Janela imediatamente anterior — mesmo shape do item atual,
+// sem `activity_type` (é o mesmo do item pai). `previous` no item é `null`
+// para `period="all"` ou quando o tipo não tem atividade na janela anterior.
+export interface StatsByTypePrevious {
+  total_activities: number;
+  total_distance_m: number;
+  total_duration_s: number;
+  total_elevation_gain_m: number;
+  total_calories: number;
+}
+
 /** Agregado de um único tipo de atividade. */
 export interface StatsByTypeItem {
   activity_type: ActivityType;
@@ -154,6 +165,9 @@ export interface StatsByTypeItem {
   total_duration_s: number;
   total_elevation_gain_m: number;
   total_calories: number;
+  // [Sessão 18] Comparação com a janela imediatamente anterior.
+  // `null` quando period="all" ou sem atividade do tipo na janela anterior.
+  previous: StatsByTypePrevious | null;
 }
 
 /** Lista de agregados por tipo (já ordenada pelo backend). */

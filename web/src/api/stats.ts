@@ -61,6 +61,7 @@ export function getStatsMonthly(
 
 // [Sessão 14 — B1] Drill-down por tipo de atividade.
 // [Sessão 17] Adicionado `period` (all|90d|1y) — janela temporal opcional.
+// [Sessão 18] Cada item agora pode trazer `previous` (janela anterior).
 /**
  * GET /activities/stats/by-type — agregado por tipo de atividade.
  * O backend já ordena por total_activities DESC (desempate por tipo ASC).
@@ -69,6 +70,12 @@ export function getStatsMonthly(
  *  - `all` (default): todos os tempos.
  *  - `90d`: últimos 90 dias.
  *  - `1y`: últimos 365 dias.
+ *
+ * [Sessão 18] Para `90d`/`1y`, cada item traz `previous` com as 5
+ * métricas da janela *imediatamente anterior* (90d→[now-180d, now-90d);
+ * 1y→[now-730d, now-365d)). `previous` é `null` para `period="all"` ou
+ * quando o tipo não teve atividade na janela anterior. O shape está
+ * em `StatsByTypeItem` (types/api.ts).
  *
  * Sempre manda o param na URL (inclusive `all`), para o log do backend
  * refletir a intenção e não depender do default do server no futuro.
