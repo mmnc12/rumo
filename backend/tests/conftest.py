@@ -16,6 +16,19 @@ Estratégia:
   garantir que cada teste rode no mesmo loop em que a conexão foi criada.
   `test_engine` e `_setup_schema` ficam em session porque o engine com
   NullPool não retém conexão entre loops (abre/fecha por uso).
+
+Warnings:
+- O fitparse (última release: 1.2.0, de 2020) usa
+  `datetime.datetime.utcfromtimestamp()`, que está depreciado no Python 3.12+
+  e será removido no futuro. Cada parsing de .FIT emite ~3.6k warnings
+  (3611 ao fim da Sessão 14), poluindo a saída do pytest.
+- O filtro vive em `pytest.ini` (filterwarnings), não aqui — o pytest
+  reinstala a lista de filtros antes de cada teste, então
+  `warnings.filterwarnings()` no topo do conftest seria sobrescrito.
+- DÍVIDA TÉCNICA (Sessão 15): migrar de fitparse para fitdecode (ativo,
+  mantido, sem utcfromtimestamp). Reescreve o parsing de .FIT no upload
+  e os testes de calorias. Merece sessão dedicada, não é tarefa de 10 min.
+  Quando migrar, remover o filtro do pytest.ini.
 """
 
 import os
