@@ -19,6 +19,21 @@ export function formatDistance(meters: number | null | undefined): string {
 }
 
 /**
+ * [Sessão 15 — B1] Elevação: metros → "850 m" | "1.234 m"
+ *
+ * Diferente de formatDistance: elevação NUNCA vira km, mesmo em
+ * montanhas de 2000 m — o padrão de mercado (Strava, Garmin) é sempre
+ * metros. Usa separador de milhar pt-BR pra deixar "1.234 m" legível
+ * sem perder precisão inteira (metros decimais não agregam).
+ *
+ * Se null (upload sem dados de altitude), retorna "—".
+ */
+export function formatElevation(meters: number | null | undefined): string {
+  if (meters == null) return "—";
+  return `${Math.round(meters).toLocaleString("pt-BR")} m`;
+}
+
+/**
  * Duração: segundos → "1h 05min" | "32min" | "45s"
  * Não usa Date porque não é uma data, é uma quantidade de tempo.
  */

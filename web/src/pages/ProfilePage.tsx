@@ -28,7 +28,13 @@ import { useFollowUser } from "../hooks/useSocial";
 import { ApiError } from "../api/client";
 // [Sessão 15 — B1] Reaproveita formatadores de lib/format.ts em vez de
 // duplicar inline. Mesma decisão de "deixar o repo melhor do que estava".
-import { formatDistance, formatDuration, formatPace } from "../lib/format";
+// [Sessão 15 — B1b] +formatElevation pra coluna de elevação.
+import {
+  formatDistance,
+  formatDuration,
+  formatElevation,
+  formatPace,
+} from "../lib/format";
 import type { ActivityType, UserPublic } from "../types/api";
 
 // Filtros de tipo — "Tudo" = undefined (sem filtro no backend)
@@ -312,6 +318,10 @@ export default function ProfilePage() {
                         <th className="py-2 pr-3 text-right font-medium">
                           Distância
                         </th>
+                        {/* [Sessão 15 — B1b] Nova coluna: elevação acumulada. */}
+                        <th className="py-2 pr-3 text-right font-medium">
+                          Elevação
+                        </th>
                         <th className="py-2 pr-3 text-right font-medium">
                           Tempo
                         </th>
@@ -339,6 +349,10 @@ export default function ProfilePage() {
                             </td>
                             <td className="py-2 pr-3 text-right text-gray-700">
                               {formatDistance(item.total_distance_m)}
+                            </td>
+                            {/* [Sessão 15 — B1b] Elevação acumulada do tipo. */}
+                            <td className="py-2 pr-3 text-right text-gray-700">
+                              {formatElevation(item.total_elevation_gain_m)}
                             </td>
                             <td className="py-2 pr-3 text-right text-gray-700">
                               {formatDuration(item.total_duration_s)}
