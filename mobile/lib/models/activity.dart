@@ -1,3 +1,4 @@
+// [Sessão 11] campo `bbox` (miniatura de mapa no feed).
 class UserPublic {
   final String id;
   final String username;
@@ -42,6 +43,10 @@ class Activity {
   final bool likedByMe;
   final int commentsCount;
 
+  // [Sessão 11] Bounding box da rota em ordem GeoJSON
+  // [minLon, minLat, maxLon, maxLat]. `null` quando a atividade não tem rota.
+  final List<double>? bbox;
+
   Activity({
     required this.id,
     required this.activityType,
@@ -60,9 +65,16 @@ class Activity {
     this.likesCount = 0,
     this.likedByMe = false,
     this.commentsCount = 0,
+    this.bbox,
   });
 
   factory Activity.fromJson(Map<String, dynamic> json) {
+    // [Sessão 11] `bbox` chega como List<num>; converte para List<double>.
+    final rawBbox = json['bbox'];
+    final bbox = rawBbox is List
+        ? rawBbox.map((e) => (e as num).toDouble()).toList(growable: false)
+        : null;
+
     return Activity(
       id: json['id'] as String,
       activityType: json['activity_type'] as String,
@@ -85,6 +97,7 @@ class Activity {
       likesCount: (json['likes_count'] as int?) ?? 0,
       likedByMe: (json['liked_by_me'] as bool?) ?? false,
       commentsCount: (json['comments_count'] as int?) ?? 0,
+      bbox: bbox,
     );
   }
 
@@ -113,6 +126,7 @@ class Activity {
       likesCount: likesCount ?? this.likesCount,
       likedByMe: likedByMe ?? this.likedByMe,
       commentsCount: commentsCount ?? this.commentsCount,
+      bbox: bbox,
     );
   }
 

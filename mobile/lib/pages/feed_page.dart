@@ -1,9 +1,11 @@
+// [Sessão 11] miniatura de mapa (bbox estático) no card do feed.
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../models/activity.dart';
 import '../services/api.dart';
 import '../services/auth_service.dart';
+import '../widgets/activity_map.dart';
 import '../widgets/like_button.dart';
 
 class FeedPage extends StatefulWidget {
@@ -199,6 +201,20 @@ class _ActivityCard extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
+
+              // [Sessão 11] Miniatura de mapa (só se houver rota).
+              if (activity.bbox != null) ...[
+                const SizedBox(height: 8),
+                // GestureDetector absorve o toque para abrir o detalhe,
+                // já que o mapa em si está estático (InteractiveFlag.none).
+                GestureDetector(
+                  onTap: onTap,
+                  child: ActivityMap.fromBbox(
+                    bbox: activity.bbox!,
+                    height: 120,
+                  ),
+                ),
+              ],
               const SizedBox(height: 8),
 
               // Métricas
