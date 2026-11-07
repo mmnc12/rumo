@@ -1,14 +1,15 @@
 // [Sessão 11 — fix] toggle Mapa/Satélite no mapa do detalhe (igual mobile).
-import { useEffect, useState } from "react";
+// [Sessão 13] Mapa extraído para components/RouteMap.tsx (reutilizável).
+
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { MapContainer, Polyline, TileLayer, useMap } from "react-leaflet";
-import type { LatLngBoundsExpression } from "leaflet";
 
 import { AppHeader } from "../components/AppHeader";
 import { CommentsSection } from "../components/CommentsSection";
 import { LikeButton } from "../components/LikeButton";
 import { PhotoGallery } from "../components/PhotoGallery";
 import { PhotoUpload } from "../components/PhotoUpload";
+// [Sessão 13] Mapa da rota extraído (encapsula Leaflet + toggle Mapa/Satélite).
+import { RouteMap } from "../components/RouteMap";
 import { useAuth } from "../hooks/useAuth";
 import {
   useActivity,
@@ -26,33 +27,6 @@ import {
   formatPace,
 } from "../lib/format";
 
-// [Sessão 11 — fix] Providers alinhados com o mobile (ActivityMap).
-// Ordem dos placeholders difere:
-//   OSM:   {z}/{x}/{y}
-//   Esri:  {z}/{y}/{x}
-const OSM_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-const OSM_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
-const ESRI_URL =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const ESRI_ATTRIBUTION =
-  "Esri, Maxar, Earthstar Geographics, and the GIS User Community";
-
-/** Ajusta o zoom do mapa pra enquadrar a rota inteira. */
-function FitBounds({ bbox }: { bbox: [number, number, number, number] }) {
-  const map = useMap();
-  useEffect(() => {
-    // bbox vem [minLon, minLat, maxLon, maxLat] do backend.
-    // Leaflet espera [[lat, lng], [lat, lng]] → [[minLat, minLon], [maxLat, maxLon]]
-    const bounds: LatLngBoundsExpression = [
-      [bbox[1], bbox[0]],
-      [bbox[3], bbox[2]],
-    ];
-    map.fitBounds(bounds, { padding: [24, 24] });
-  }, [bbox, map]);
-  return null;
-}
-
 export default function ActivityDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -63,9 +37,6 @@ export default function ActivityDetailPage() {
   const { data: photos } = useActivityPhotos(id);
   const deleteMutation = useDeleteActivity();
   const deletePhoto = useDeletePhoto(id ?? "");
-
-  // [Sessão 11 — fix] Camada ativa: false = mapa (OSM), true = satélite (Esri).
-  const [satelite, setSatelite] = useState(false);
 
   async function handleDelete() {
     if (!id) return;
@@ -100,10 +71,6 @@ export default function ActivityDetailPage() {
   }
 
   const isOwner = !!user && user.id === activity.user_id;
-
-  // Inverte [lon, lat] (GeoJSON) → [lat, lng] (Leaflet)
-  const positions =
-    track?.coordinates.map(([lon, lat]) => [lat, lon] as [number, number]) ?? [];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -142,86 +109,10 @@ export default function ActivityDetailPage() {
           </p>
         </div>
 
-        {/* Mapa */}
-        {positions.length > 0 && track ? (
-          <div
-            className="relative rounded-lg overflow-hidden shadow-sm mb-6"
-            style={{ height: "24rem" }}
-          >
-            <MapContainer
-              style={{ height: "100%", width: "100%" }}
-              center={[positions[0][0], positions[0][1]]}
-              zoom={13}
-              scrollWheelZoom
-            >
-              {/* [Sessão 11 — fix] `key` força remount do TileLayer ao trocar
-                  de camada; sem isso o Leaflet mantém os tiles antigos em cache. */}
-              <TileLayer
-                key={satelite ? "esri" : "osm"}
-                attribution={satelite ? ESRI_ATTRIBUTION : OSM_ATTRIBUTION}
-                url={satelite ? ESRI_URL : OSM_URL}
-              />
-              <Polyline
-                positions={positions}
-                pathOptions={{ color: "#f97316", weight: 4 }}
-              />
-              <FitBounds bbox={track.bbox} />
-            </MapContainer>
-
-            {/* [Sessão 11 — fix] Toggle Mapa/Satélite (mesmo padrão do mobile).
-                z-[1000] alinha com os controles nativos do Leaflet (zoom etc.). */}
-            <button
-              type="button"
-              onClick={() => setSatelite((v) => !v)}
-              aria-label={satelite ? "Ver mapa" : "Ver satélite"}
-              title={satelite ? "Ver mapa" : "Ver satélite"}
-              className="absolute top-2 right-2 z-[1000] flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-md hover:bg-gray-50 transition"
-            >
-              {satelite ? (
-                // Ícone "mapa" (quadrado com linhas internas).
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-5 w-5 text-gray-800"
-                >
-                  <path d="M9 4 3 6v16l6-2 6 2 6-2V4l-6 2-6-2z" />
-                  <path d="M9 4v16" />
-                  <path d="M15 6v16" />
-                </svg>
-              ) : (
-                // Ícone "satélite" (antena + prato).
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-5 w-5 text-gray-800"
-                >
-                  <path d="M13 7 9 3 5 7l4 4" />
-                  <path d="m17 11 4 4-4 4-4-4" />
-                  <path d="m8 12 4 4 6-6-4-4Z" />
-                  <path d="m16 8 3-3" />
-                  <path d="M9 21a6 6 0 0 0-6-6" />
-                </svg>
-              )}
-            </button>
-          </div>
-        ) : (
-          <div
-            className="rounded-lg bg-gray-100 mb-6 flex items-center justify-center"
-            style={{ height: "24rem" }}
-          >
-            <p className="text-gray-500">Sem rota disponível pra esta atividade.</p>
-          </div>
-        )}
+        {/* Mapa — [Sessão 13] extraído para RouteMap. O componente cuida do
+            estado vazio ("Sem rota disponível…"), do toggle Mapa/Satélite
+            e do fit bounds. */}
+        <RouteMap track={track} className="mb-6" />
 
         {/* Fotos */}
         {(isOwner || (photos && photos.length > 0)) && (
