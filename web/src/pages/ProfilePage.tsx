@@ -26,6 +26,9 @@ import {
 } from "../hooks/useStats";
 import { useFollowUser } from "../hooks/useSocial";
 import { ApiError } from "../api/client";
+// [Sessão 15 — B1] Reaproveita formatadores de lib/format.ts em vez de
+// duplicar inline. Mesma decisão de "deixar o repo melhor do que estava".
+import { formatDistance, formatDuration, formatPace } from "../lib/format";
 import type { ActivityType, UserPublic } from "../types/api";
 
 // Filtros de tipo — "Tudo" = undefined (sem filtro no backend)
@@ -47,6 +50,11 @@ const TYPE_LABELS: Record<ActivityType, string> = {
   swim: "Natação",
   other: "Outro",
 };
+
+// [Sessão 15 — B1] Pace só faz sentido para atividades humanas de
+// deslocamento a pé. Ciclismo/natação usam velocidade, não pace; "outro"
+// é caixa-preta. Fora desses, a tabela mostra "—".
+const PACE_TYPES: ReadonlySet<ActivityType> = new Set(["run", "walk", "hike"]);
 
 export default function ProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -307,32 +315,43 @@ export default function ProfilePage() {
                         <th className="py-2 pr-3 text-right font-medium">
                           Tempo
                         </th>
+                        {/* [Sessão 15 — B1] Nova coluna: pace médio do tipo. */}
+                        <th className="py-2 pr-3 text-right font-medium">
+                          Pace médio
+                        </th>
                         <th className="py-2 text-right font-medium">
                           Calorias
                         </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {byTypeQuery.data.items.map((item) => (
-                        <tr key={item.activity_type}>
-                          <td className="py-2 pr-3 font-medium text-gray-900">
-                            {TYPE_LABELS[item.activity_type] ??
-                              item.activity_type}
-                          </td>
-                          <td className="py-2 pr-3 text-right text-gray-700">
-                            {item.total_activities}
-                          </td>
-                          <td className="py-2 pr-3 text-right text-gray-700">
-                            {formatDistance(item.total_distance_m)}
-                          </td>
-                          <td className="py-2 pr-3 text-right text-gray-700">
-                            {formatDuration(item.total_duration_s)}
-                          </td>
-                          <td className="py-2 text-right text-gray-700">
-                            {item.total_calories} kcal
-                          </td>
-                        </tr>
-                      ))}
+                      {byTypeQuery.data.items.map((item) => {
+                        const pace = computePace(item);
+                        const showPace = PACE_TYPES.has(item.activity_type);
+                        return (
+                          <tr key={item.activity_type}>
+                            <td className="py-2 pr-3 font-medium text-gray-900">
+                              {TYPE_LABELS[item.activity_type] ??
+                                item.activity_type}
+                            </td>
+                            <td className="py-2 pr-3 text-right text-gray-700">
+                              {item.total_activities}
+                            </td>
+                            <td className="py-2 pr-3 text-right text-gray-700">
+                              {formatDistance(item.total_distance_m)}
+                            </td>
+                            <td className="py-2 pr-3 text-right text-gray-700">
+                              {formatDuration(item.total_duration_s)}
+                            </td>
+                            <td className="py-2 pr-3 text-right text-gray-700">
+                              {showPace ? formatPace(pace) : "—"}
+                            </td>
+                            <td className="py-2 text-right text-gray-700">
+                              {item.total_calories} kcal
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -483,18 +502,13 @@ function UserRow({ user }: { user: UserPublic }) {
   );
 }
 
-// [Sessão 14 — B1] Formatadores locais da tabela por tipo. Mantidos
-// inline porque só esta tabela usa; se surgir segundo uso, extrair para
-// src/lib/format.ts.
-
-function formatDistance(meters: number): string {
-  if (meters < 1000) return `${Math.round(meters)} m`;
-  return `${(meters / 1000).toFixed(1)} km`;
-}
-
-function formatDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (h > 0) return `${h}h ${m}min`;
-  return `${m}min`;
+// [Sessão 15 — B1] Pace médio do tipo, em segundos por km.
+// Retorna null quando não há distância registrada (evita divisão por zero);
+// formatPace(null) já devolve "—".
+function computePace(item: {
+  total_duration_s: number;
+  total_distance_m: number;
+}): number | null {
+  if (item.total_distance_m <= 0) return null;
+  return item.total_duration_s / (item.total_distance_m / 1000);
 }
