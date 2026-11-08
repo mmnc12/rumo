@@ -5,11 +5,15 @@ from __future__ import annotations
 import math
 from datetime import datetime, timezone
 from io import BytesIO
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import gpxpy
+import gpxpy.gpx
 
 from app.services.errors import BadRequestError
+
+if TYPE_CHECKING:
+    from app.models.activity import Activity
 
 _EARTH_RADIUS_M = 6_371_000.0
 _ELEVATION_THRESHOLD_M = 1.0
@@ -166,3 +170,50 @@ def map_gpx_type(gpx_type: str | None) -> str:
     if not gpx_type:
         return "other"
     return GPX_TYPE_MAP.get(gpx_type.lower(), "other")
+
+
+# ===== Geração de GPX (export) — [Sessão 21] =====
+
+def to_gpx(
+    activity: "Activity",
+    coordinates: list[list[float]],
+) -> str:
+    """Serializa uma atividade como GPX 1.1 (string XML).
+
+    `coordinates` vem do `get_activity_track` em ordem GeoJSON `[lon, lat]`.
+    Aqui invertemos para `lat`/`lon` no atributo do `<trkpt>` — é o
+    contrário do `parse_gpx`, que lê `[lat, lon]` do GPX e devolve
+    `[lat, lon]`. Manter essa inversão documentada evita bugs de eixo.
+
+    Timestamps por ponto não vão no GPX exportado (a geometria guardada
+    em `route` é só LineString, sem stream temporal — decisão da S10 pra
+    não pesar o SELECT do mapa). O `<time>` do `<trk>` usa `started_at`
+    da atividade como aproximação; o consumidor (Strava, Garmin) aceita
+    GPX sem `<time>` por ponto.
+    """
+    gpx = gpxpy.gpx.GPX()
+    gpx.creator = "Rumo"
+
+    track = gpxpy.gpx.GPXTrack()
+    if activity.title:
+        track.name = activity.title
+    track.type = (
+        activity.activity_type.value
+        if hasattr(activity.activity_type, "value")
+        else str(activity.activity_type)
+    )
+    gpx.tracks.append(track)
+
+    segment = gpxpy.gpx.GPXTrackSegment()
+    track.segments.append(segment)
+
+    started_at = _as_utc(activity.started_at)
+    for point in coordinates:
+        # point é [lon, lat] (GeoJSON) — inverter aqui.
+        lon, lat = point[0], point[1]
+        trkpt = gpxpy.gpx.GPXTrackPoint(latitude=lat, longitude=lon)
+        if started_at is not None:
+            trkpt.time = started_at
+        segment.points.append(trkpt)
+
+    return gpx.to_xml()

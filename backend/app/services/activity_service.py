@@ -1,7 +1,10 @@
 """Service de atividades: CRUD + upload de GPX/FIT + track + busca."""
 
 import asyncio
+import csv
+import io
 import json
+from typing import Literal
 
 from geoalchemy2.elements import WKTElement
 from sqlalchemy import func, or_, select
@@ -18,7 +21,7 @@ from app.services import follow_service
 from app.services.errors import NotFoundError
 from app.services.fit_service import map_fit_sport, parse_fit
 from app.services.follow_service import following_ids_subquery
-from app.services.gpx_service import map_gpx_type, parse_gpx
+from app.services.gpx_service import map_gpx_type, parse_gpx, to_gpx
 
 
 _VALID_ACTIVITY_TYPES = {t.value for t in ActivityType}
@@ -669,3 +672,127 @@ async def delete_activity(
     activity = await get_activity(db, user_id, activity_id)
     await db.delete(activity)
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Export (CSV / GPX) — [Sessão 21]
+# ---------------------------------------------------------------------------
+#
+# Reusa get_activity (CSV) e get_activity_track (GPX) para herdar a regra
+# dono-ou-seguidor e o 404 sem vazar existência. Não reimplementa auth.
+#
+# Contrato do retorno: (body_bytes, content_type, filename). O router só
+# decora com Response + Content-Disposition. Separar a serialização da
+# rota mantém o service testável sem HTTP.
+
+_CSV_COLUMNS = [
+    "id",
+    "activity_type",
+    "title",
+    "started_at",
+    "finished_at",
+    "duration_s",
+    "distance_m",
+    "elevation_gain_m",
+    "calories",
+    "avg_pace_s_per_km",
+    "avg_speed_mps",
+    "bbox_min_lon",
+    "bbox_min_lat",
+    "bbox_max_lon",
+    "bbox_max_lat",
+]
+
+
+def _activity_type_str(activity: Activity) -> str:
+    """Extrai o valor string do activity_type do ORM (enum nativo do Postgres)."""
+    return (
+        activity.activity_type.value
+        if hasattr(activity.activity_type, "value")
+        else str(activity.activity_type)
+    )
+
+
+def _activity_to_csv(activity: Activity) -> bytes:
+    """Serializa uma Activity como CSV de 1 linha de dados + cabeçalho."""
+    bbox = activity.bbox or [None, None, None, None]
+
+    def _iso(dt):
+        return dt.isoformat() if dt else ""
+
+    def _num(v):
+        return "" if v is None else v
+
+    row = [
+        str(activity.id),
+        _activity_type_str(activity),
+        activity.title or "",
+        _iso(activity.started_at),
+        _iso(activity.finished_at),
+        _num(activity.duration_s),
+        _num(activity.distance_m),
+        _num(activity.elevation_gain_m),
+        _num(activity.calories),
+        _num(activity.avg_pace_s_per_km),
+        _num(activity.avg_speed_mps),
+        _num(bbox[0]),
+        _num(bbox[1]),
+        _num(bbox[2]),
+        _num(bbox[3]),
+    ]
+
+    buf = io.StringIO()
+    # QUOTE_MINIMAL escapa vírgula/aspas/quebra dentro de `title`.
+    # lineterminator="\n" (em vez do padrão \r\n do csv.writer) para
+    # output determinístico e diffável. Excel/LibreOffice leem sem drama.
+    writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
+    writer.writerow(_CSV_COLUMNS)
+    writer.writerow(row)
+    return buf.getvalue().encode("utf-8")
+
+
+def _export_filename(activity: Activity, ext: str) -> str:
+    """Nome de arquivo seguro: rumo_<id>_<type>.<ext>."""
+    return f"rumo_{activity.id}_{_activity_type_str(activity)}.{ext}"
+
+
+async def export_activity(
+    db: AsyncSession,
+    viewer_id,
+    activity_id,
+    fmt: Literal["csv", "gpx"],
+) -> tuple[bytes, str, str]:
+    """Serializa a atividade como CSV ou GPX.
+
+    Retorna (body_bytes, content_type, filename).
+
+    - CSV: 1 header + 1 linha de metadados (sem pontos). Funciona com ou
+      sem rota (bbox sai vazio se não houver).
+    - GPX: exige rota — `get_activity_track` levanta NotFoundError
+      ("Atividade não possui rota") se route for NULL; o router traduz
+      para 404.
+
+    Auth: mesma de get_activity / get_activity_track (dono ou seguidor;
+    caso contrário, 404).
+    """
+    if fmt == "gpx":
+        track = await get_activity_track(db, viewer_id, activity_id)
+        activity = await get_activity(
+            db, viewer_id, activity_id, allow_following=True
+        )
+        gpx_str = to_gpx(activity, track.coordinates)
+        return (
+            gpx_str.encode("utf-8"),
+            "application/gpx+xml; charset=utf-8",
+            _export_filename(activity, "gpx"),
+        )
+
+    # fmt == "csv"
+    activity = await get_activity(
+        db, viewer_id, activity_id, allow_following=True
+    )
+    return (
+        _activity_to_csv(activity),
+        "text/csv; charset=utf-8",
+        _export_filename(activity, "csv"),
+    )

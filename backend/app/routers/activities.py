@@ -11,6 +11,7 @@ from fastapi import (
     HTTPException,
     Query,
     Request,
+    Response,
     UploadFile,
     status,
 )
@@ -306,6 +307,42 @@ async def get_activity_track(
         )
     except ServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
+
+
+# [Sessão 21] Export CSV/GPX — metadados (CSV) e geometria (GPX).
+# Auth: mesma de /track (dono ou seguidor; 404 caso contrário).
+# 404 se format=gpx e route IS NULL ("Atividade não possui rota").
+# Response cru (bytes) — não é JSON, então não usa response_model.
+@router.get("/{activity_id}/export")
+async def export_activity(
+    activity_id: UUID,
+    format: Literal["csv", "gpx"] = Query(
+        default="csv",
+        description="Formato do arquivo: 'csv' (metadados) ou 'gpx' (geometria da rota).",
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Baixa a atividade como CSV (metadados) ou GPX (geometria completa).
+
+    - CSV: 1 linha de cabeçalho + 1 linha de dados. Funciona com ou sem rota.
+    - GPX: exige rota (404 "Atividade não possui rota" se não houver).
+
+    Retorna `Response` com `Content-Disposition: attachment` — o browser
+    baixa em vez de exibir.
+    """
+    try:
+        body, content_type, filename = await activity_service.export_activity(
+            db, current_user.id, activity_id, format
+        )
+    except ServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
+
+    return Response(
+        content=body,
+        media_type=content_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.delete("/{activity_id}", status_code=status.HTTP_204_NO_CONTENT)
