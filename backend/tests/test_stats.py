@@ -34,15 +34,25 @@ e da rota /activities/stats/by-type.
 [Sessão 18] Adicionados testes de `previous` — janela imediatamente
 anterior (90d→[now-180d, now-90d); 1y→[now-730d, now-365d)). `all` →
 `previous is None`. Testa service e rota.
+
+[Sessão 19] Adicionados testes das stats públicas em perfis de terceiros
+(/users/{user_id}/stats/*). Regra: dono OU seguidor do dono. Viewer não
+seguidor → 403; user_id inexistente → 404. Helper `client_as(user)`
+sobrescreve get_current_user localmente, sem tocar no conftest.
 """
 
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid6 import uuid7
 
+from app.core.dependencies import get_current_user
+from app.database import get_db
+from app.main import app
 from app.models.activity import Activity, ActivityType
+from app.models.follow import Follow
 from app.models.user import User
 from app.services import stats_service
 
@@ -111,6 +121,45 @@ async def _make_other_user(db: AsyncSession, username: str = "otheruser") -> Use
     await db.commit()
     await db.refresh(user)
     return user
+
+
+# [Sessão 19] Cria relação de follow direto no banco (sem notification).
+async def _make_follow(
+    db: AsyncSession, follower: User, following: User
+) -> Follow:
+    follow = Follow(follower_id=follower.id, following_id=following.id)
+    db.add(follow)
+    await db.commit()
+    await db.refresh(follow)
+    return follow
+
+
+# [Sessão 19] AsyncClient "logado como outro usuário".
+# O `client` do conftest sobrescreve get_current_user para `test_user`
+# fixo. Para testar permissão (viewer != dono), precisamos de um client
+# cujo current_user seja outro usuário. Não tocamos no conftest:
+# montamos o override aqui, reaproveitando o `test_engine` (session-scoped)
+# para o mesmo banco de teste.
+def _client_as(user: User, test_engine):
+    async def _override_get_db():
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+        session_factory = async_sessionmaker(
+            bind=test_engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autoflush=False,
+        )
+        async with session_factory() as session:
+            yield session
+
+    async def _override_get_current_user() -> User:
+        return user
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_get_current_user
+
+    return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
 
 # ===== get_summary — service =====
@@ -861,3 +910,164 @@ async def test_route_by_type_previous_shape(client, db_session, test_user):
     assert response_all.status_code == 200
     for it in response_all.json()["items"]:
         assert it["previous"] is None
+
+
+# ===== Stats públicas em perfis de terceiros [Sessão 19] =====
+# Regra: dono OU seguidor do dono (mesma do /activities/{id}/track).
+# Viewer não seguidor → 403. user_id inexistente → 404 (não vaza existência).
+#
+# O `client` padrão do conftest é "logado" como test_user. Para simular
+# um viewer diferente, usamos _client_as(viewer, test_engine) — que monta
+# override local de get_current_user sem tocar no conftest.
+#
+# Convenção dos testes abaixo:
+# - `owner` = dono das atividades (test_user, o "viewer padrão" é ele mesmo
+#   no teste de regressão self).
+# - `viewer` = outro usuário (sem follow, ou com follow, conforme o teste).
+
+
+@pytest.mark.asyncio
+async def test_user_stats_summary_self_ok(client, db_session, test_user):
+    """Regressão: /users/{meu_id}/stats/summary funciona igual ao antigo
+    /activities/stats/summary (self sempre permitido, sem exigir follow)."""
+    await _make_activity(
+        db_session, test_user,
+        distance_m=5000.0, duration_s=1800, calories=300,
+    )
+
+    response = await client.get(f"/users/{test_user.id}/stats/summary")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_activities"] == 1
+    assert data["total_distance_m"] == pytest.approx(5000.0)
+    assert data["total_calories"] == 300
+
+
+@pytest.mark.asyncio
+async def test_user_stats_summary_forbidden_when_not_following(
+    db_session, test_user, test_engine
+):
+    """Viewer que NÃO segue o dono → 403 (mesma regra do /track)."""
+    owner = test_user
+    viewer = await _make_other_user(db_session, username="viewer1")
+    await _make_activity(db_session, owner, distance_m=5000.0, calories=300)
+
+    async with _client_as(viewer, test_engine) as ac:
+        response = await ac.get(f"/users/{owner.id}/stats/summary")
+
+    assert response.status_code == 403
+    # Mensagem consistente com list_activities.
+    assert "seguir" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_user_stats_summary_allowed_when_following(
+    db_session, test_user, test_engine
+):
+    """Viewer que segue o dono → 200, e os dados são do DONO (não do viewer).
+    Prova que o target_id é respeitado (não cai no current_user.id por engano)."""
+    owner = test_user
+    viewer = await _make_other_user(db_session, username="viewer2")
+    await _make_follow(db_session, follower=viewer, following=owner)
+
+    # Atividades distintas: owner tem 2, viewer tem 1 (não deve aparecer).
+    await _make_activity(db_session, owner, distance_m=5000.0, calories=300)
+    await _make_activity(db_session, owner, distance_m=3000.0, calories=200)
+    await _make_activity(db_session, viewer, distance_m=9999.0, calories=999)
+
+    async with _client_as(viewer, test_engine) as ac:
+        response = await ac.get(f"/users/{owner.id}/stats/summary")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_activities"] == 2
+    assert data["total_distance_m"] == pytest.approx(8000.0)
+    assert data["total_calories"] == 500
+
+
+@pytest.mark.asyncio
+async def test_user_stats_weekly_allowed_when_following(
+    db_session, test_user, test_engine
+):
+    """Rota weekly responde no mesmo shape do /activities/stats/weekly."""
+    owner = test_user
+    viewer = await _make_other_user(db_session, username="viewer3")
+    await _make_follow(db_session, follower=viewer, following=owner)
+    await _make_activity(db_session, owner,
+                         started_at=_dt(2026, 1, 5), calories=100)
+
+    async with _client_as(viewer, test_engine) as ac:
+        response = await ac.get(
+            f"/users/{owner.id}/stats/weekly", params={"weeks": 2}
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["weeks"] == 2
+    assert len(data["items"]) == 1
+    assert data["items"][0]["period_start"] == "2026-01-05"
+    assert data["items"][0]["total_calories"] == 100
+
+
+@pytest.mark.asyncio
+async def test_user_stats_monthly_forbidden_when_not_following(
+    db_session, test_user, test_engine
+):
+    """Monthly também respeita a regra de follow (403)."""
+    owner = test_user
+    viewer = await _make_other_user(db_session, username="viewer4")
+
+    async with _client_as(viewer, test_engine) as ac:
+        response = await ac.get(f"/users/{owner.id}/stats/monthly")
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_user_stats_by_type_previous_when_following(
+    db_session, test_user, test_engine
+):
+    """by-type de terceiros mantém `previous` (mesma semântica da S18)."""
+    owner = test_user
+    viewer = await _make_other_user(db_session, username="viewer5")
+    await _make_follow(db_session, follower=viewer, following=owner)
+
+    # 45d atrás (janela atual 90d) e 120d atrás (janela anterior).
+    await _make_activity(
+        db_session, owner, activity_type=ActivityType.RUN,
+        started_at=_dt_ago(45), distance_m=5000.0, calories=300,
+    )
+    await _make_activity(
+        db_session, owner, activity_type=ActivityType.RUN,
+        started_at=_dt_ago(120), distance_m=3000.0, calories=200,
+    )
+
+    async with _client_as(viewer, test_engine) as ac:
+        response = await ac.get(
+            f"/users/{owner.id}/stats/by-type", params={"period": "90d"}
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 1
+    run = data["items"][0]
+    assert run["activity_type"] == "run"
+    assert run["total_activities"] == 1
+    assert run["total_distance_m"] == pytest.approx(5000.0)
+    prev = run["previous"]
+    assert prev is not None
+    assert prev["total_activities"] == 1
+    assert prev["total_distance_m"] == pytest.approx(3000.0)
+    assert prev["total_calories"] == 200
+
+
+@pytest.mark.asyncio
+async def test_user_stats_unknown_user_404(
+    client, db_session, test_user
+):
+    """user_id que não existe → 404 (não 403; não vaza existência)."""
+    # UUID válido (formato), mas não existe no banco.
+    missing = uuid7()
+    response = await client.get(f"/users/{missing}/stats/summary")
+    assert response.status_code == 404
+    assert "não encontrado" in response.json()["detail"].lower()
