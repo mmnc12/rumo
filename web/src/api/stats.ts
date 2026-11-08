@@ -7,6 +7,15 @@
  * arbitrário. Backend exige que o viewer seja o próprio dono OU
  * que siga o dono (mesma regra do /activities/{id}/track); caso
  * contrário devolve 403. 404 quando user_id não existe.
+ *
+ * [Sessão 20] Adicionado param opcional `compare` (prev|yoy) nas
+ * funções de by-type (`getStatsByType` / `getUserStatsByType`).
+ * Escolhe a janela de comparação usada em `previous`:
+ *  - `prev` (default do backend): janela imediatamente anterior.
+ *  - `yoy`: mesmo período do ano anterior.
+ * Só tem efeito quando `period != "all"`. Quando `compare` é omitido,
+ * o param NÃO vai na URL — backend usa o default e a URL fica
+ * idêntica à S18 (zero surpresa em Network).
  */
 
 import { apiFetch } from "./client";
@@ -24,6 +33,10 @@ export interface StatsQuery {
 // [Sessão 17] Janela temporal do drill-down por tipo.
 // Espelha o enum aceito pelo backend em GET /activities/stats/by-type.
 export type StatsPeriod = "all" | "90d" | "1y";
+
+// [Sessão 20] Janela de comparação do `previous` no by-type.
+// Espelha o enum aceito pelo backend em ?compare=prev|yoy.
+export type StatsCompare = "prev" | "yoy";
 
 /**
  * GET /activities/stats/summary — totais gerais do usuário logado.
@@ -68,6 +81,7 @@ export function getStatsMonthly(
 // [Sessão 14 — B1] Drill-down por tipo de atividade.
 // [Sessão 17] Adicionado `period` (all|90d|1y) — janela temporal opcional.
 // [Sessão 18] Cada item agora pode trazer `previous` (janela anterior).
+// [Sessão 20] Adicionado `compare` (prev|yoy) — janela de comparação.
 /**
  * GET /activities/stats/by-type — agregado por tipo de atividade.
  * O backend já ordena por total_activities DESC (desempate por tipo ASC).
@@ -78,18 +92,27 @@ export function getStatsMonthly(
  *  - `1y`: últimos 365 dias.
  *
  * [Sessão 18] Para `90d`/`1y`, cada item traz `previous` com as 5
- * métricas da janela *imediatamente anterior* (90d→[now-180d, now-90d);
- * 1y→[now-730d, now-365d)). `previous` é `null` para `period="all"` ou
- * quando o tipo não teve atividade na janela anterior. O shape está
- * em `StatsByTypeItem` (types/api.ts).
+ * métricas da janela de comparação. O shape está em `StatsByTypeItem`
+ * (types/api.ts).
  *
- * Sempre manda o param na URL (inclusive `all`), para o log do backend
+ * [Sessão 20] `compare` escolhe a janela de comparação:
+ *  - `prev` (default): janela imediatamente anterior
+ *    (90d→[now-180d, now-90d); 1y→[now-730d, now-365d)).
+ *  - `yoy`: mesmo período do ano anterior
+ *    (90d→[now-455d, now-365d); 1y→[now-730d, now-365d) — coincide
+ *    com prev por definição matemática).
+ * Quando omitido, o param NÃO vai na URL — backend usa `prev` e a URL
+ * fica idêntica à S18. `period="all"` ignora `compare` (previous null).
+ *
+ * Sempre manda `period` na URL (inclusive `all`), para o log do backend
  * refletir a intenção e não depender do default do server no futuro.
  */
 export function getStatsByType(
-  period: StatsPeriod = "all"
+  period: StatsPeriod = "all",
+  compare?: StatsCompare
 ): Promise<StatsByTypeResponse> {
   const qs = new URLSearchParams({ period });
+  if (compare) qs.set("compare", compare);
   return apiFetch<StatsByTypeResponse>(`/activities/stats/by-type?${qs}`);
 }
 
@@ -150,18 +173,25 @@ export function getUserStatsMonthly(
   );
 }
 
+// [Sessão 20] Mesmo `compare` opcional do getStatsByType.
 /**
  * GET /users/{userId}/stats/by-type — agregado por tipo de um usuário.
  * Mesma semântica de `getStatsByType`: ordenação no backend
  * (total_activities DESC, tipo ASC) e `previous` para 90d/1y.
  *
+ * [Sessão 20] `compare` escolhe a janela de comparação (prev|yoy).
+ * Omitido → backend usa `prev` e a URL fica idêntica à S19.
+ * `period="all"` ignora `compare` (previous null).
+ *
  * Requer viewer = dono OU viewer segue o dono. 403 caso contrário.
  */
 export function getUserStatsByType(
   userId: string,
-  period: StatsPeriod = "all"
+  period: StatsPeriod = "all",
+  compare?: StatsCompare
 ): Promise<StatsByTypeResponse> {
   const qs = new URLSearchParams({ period });
+  if (compare) qs.set("compare", compare);
   return apiFetch<StatsByTypeResponse>(
     `/users/${userId}/stats/by-type?${qs}`
   );

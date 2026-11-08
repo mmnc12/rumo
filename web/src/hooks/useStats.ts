@@ -10,6 +10,7 @@ import {
   getUserStatsMonthly,
   getUserStatsByType,
   type StatsPeriod,
+  type StatsCompare,
 } from "../api/stats";
 import type {
   StatsSummary,
@@ -34,8 +35,13 @@ export const statsKeys = {
   // quando o usuário troca o filtro de janela temporal.
   // [Sessão 18] O payload já traz `previous` por item (mesma chamada, sem
   // novo hook nem nova key — a janela anterior é derivada no backend).
-  byType: (period: StatsPeriod) =>
-    [...statsKeys.all, "by-type", period] as const,
+  // [Sessão 20] Chave inclui `compare` (prev|yoy). Sem ele, `prev` e
+  // `yoy` colidiriam no cache do React Query — bug sutil (mostraria
+  // delta da janela errada até o staleTime expirar). Default `"prev"`
+  // explícito: cache entre "omitido" e "prev" é o mesmo (backend os
+  // trata igual); key sempre tem 4 elementos (determinístico).
+  byType: (period: StatsPeriod, compare?: StatsCompare) =>
+    [...statsKeys.all, "by-type", period, compare ?? "prev"] as const,
 
   // ===== [Sessão 19] Stats de terceiros — namespaced por userId =====
   // Prefixo `["stats", "user", userId, ...]` garante que:
@@ -66,8 +72,18 @@ export const statsKeys = {
       months,
       activityType ?? "all",
     ] as const,
-  userByType: (userId: string, period: StatsPeriod) =>
-    [...statsKeys.userAll(userId), "by-type", period] as const,
+  // [Sessão 20] Mesmo padrão do byType: `compare` na key, default "prev".
+  userByType: (
+    userId: string,
+    period: StatsPeriod,
+    compare?: StatsCompare
+  ) =>
+    [
+      ...statsKeys.userAll(userId),
+      "by-type",
+      period,
+      compare ?? "prev",
+    ] as const,
 };
 
 // ===== Summary =====
@@ -142,20 +158,35 @@ export function useStatsMonthly(
 // A query key inclui `period` — trocar de janela dispara refetch automaticamente.
 // [Sessão 18] Cada item do payload agora pode trazer `previous` (janela
 // imediatamente anterior). Nada muda no hook: o dado vem no mesmo response.
+// [Sessão 20] Adicionado `compare` (prev|yoy) como 3º arg opcional. A key
+// inclui `compare` (default "prev") — trocar de janela de comparação
+// refaz a query e não colide cache. `enabled` continua na 2ª posição
+// para preservar call sites existentes.
 /**
  * Agregado por tipo de atividade do usuário logado.
  *
  * Sem filtro de tipo (o objetivo é justamente ver TODOS os tipos).
  * `period` filtra por janela temporal: `all` (default), `90d`, `1y`.
  * Para `90d`/`1y`, cada item traz `previous` (comparação com a janela
- * anterior) ou `null` (sem atividade do tipo no período anterior).
+ * de comparação escolhida) ou `null`.
+ *
+ * [Sessão 20] `compare` escolhe a janela de comparação:
+ *  - `prev` (default do backend): janela imediatamente anterior.
+ *  - `yoy`: mesmo período do ano anterior.
+ * Omitido → backend usa `prev` e a URL fica idêntica à S18.
+ * `period="all"` ignora `compare` (previous null).
+ *
  * `enabled` controla se dispara (só no próprio perfil).
  * staleTime 60s: idem summary/weekly/monthly.
  */
-export function useStatsByType(period: StatsPeriod = "all", enabled = true) {
+export function useStatsByType(
+  period: StatsPeriod = "all",
+  enabled = true,
+  compare?: StatsCompare
+) {
   return useQuery<StatsByTypeResponse>({
-    queryKey: statsKeys.byType(period),
-    queryFn: () => getStatsByType(period),
+    queryKey: statsKeys.byType(period, compare),
+    queryFn: () => getStatsByType(period, compare),
     enabled,
     staleTime: 60_000,
     retry: 1,
@@ -245,12 +276,21 @@ export function useUserStatsMonthly(
   });
 }
 
+// [Sessão 20] `compare` como 4º arg opcional. A key inclui `compare`
+// (default "prev"), mesmo padrão do useStatsByType.
 /**
  * Drill-down por tipo de um usuário (dono ou seguido).
  *
  * `period` filtra por janela temporal: `all` (default), `90d`, `1y`.
  * Para `90d`/`1y`, cada item traz `previous` (comparação com a janela
- * anterior) ou `null` — mesma semântica do `useStatsByType`.
+ * de comparação escolhida) ou `null` — mesma semântica do `useStatsByType`.
+ *
+ * [Sessão 20] `compare` escolhe a janela de comparação:
+ *  - `prev` (default do backend): janela imediatamente anterior.
+ *  - `yoy`: mesmo período do ano anterior.
+ * Omitido → backend usa `prev` e a URL fica idêntica à S19.
+ * `period="all"` ignora `compare` (previous null).
+ *
  * `canView` deve ser `isSelf || isFollowing` (calculado no caller).
  * Quando false, o hook fica desabilitado — sem request ao backend.
  * staleTime 60s: idem hooks do próprio perfil.
@@ -258,11 +298,12 @@ export function useUserStatsMonthly(
 export function useUserStatsByType(
   userId: string | undefined,
   canView: boolean,
-  period: StatsPeriod = "all"
+  period: StatsPeriod = "all",
+  compare?: StatsCompare
 ) {
   return useQuery<StatsByTypeResponse>({
-    queryKey: statsKeys.userByType(userId ?? "", period),
-    queryFn: () => getUserStatsByType(userId as string, period),
+    queryKey: statsKeys.userByType(userId ?? "", period, compare),
+    queryFn: () => getUserStatsByType(userId as string, period, compare),
     enabled: canView && !!userId,
     staleTime: 60_000,
     retry: 1,

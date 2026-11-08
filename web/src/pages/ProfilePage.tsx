@@ -31,7 +31,8 @@ import {
   useUserStatsByType,
 } from "../hooks/useStats";
 // [Sessão 17] Tipo do filtro de janela temporal do drill-down por tipo.
-import type { StatsPeriod } from "../api/stats";
+// [Sessão 20] + tipo do filtro de janela de comparação (prev|yoy).
+import type { StatsPeriod, StatsCompare } from "../api/stats";
 import { useFollowUser } from "../hooks/useSocial";
 import { ApiError } from "../api/client";
 // [Sessão 15 — B1] Reaproveita formatadores de lib/format.ts em vez de
@@ -81,6 +82,13 @@ const PERIOD_FILTERS: { label: string; value: StatsPeriod }[] = [
   { label: "1 ano", value: "1y" },
 ];
 
+// [Sessão 20] Rótulos pt-BR para o filtro de janela de comparação.
+// Só renderiza quando byTypePeriod !== "all" (period="all" ignora compare).
+const COMPARE_FILTERS: { label: string; value: StatsCompare }[] = [
+  { label: "Período anterior", value: "prev" },
+  { label: "Mesmo período do ano anterior", value: "yoy" },
+];
+
 export default function ProfilePage() {
   const { id } = useParams<{ id: string }>();
   const [tab, setTab] = useState<"followers" | "following">("followers");
@@ -93,6 +101,9 @@ export default function ProfilePage() {
   const [chartMetric, setChartMetric] = useState<ChartMetric>("distance");
   // [Sessão 17] Filtro de janela temporal do drill-down por tipo.
   const [byTypePeriod, setByTypePeriod] = useState<StatsPeriod>("all");
+  // [Sessão 20] Filtro de janela de comparação do `previous`. Preservado
+  // ao voltar de "all" (não reseta): "prev" é o default inicial.
+  const [byTypeCompare, setByTypeCompare] = useState<StatsCompare>("prev");
 
   const {
     data: profile,
@@ -133,6 +144,7 @@ export default function ProfilePage() {
   // [Sessão 13/14/17/18] Hooks do próprio perfil. Ficam desabilitados
   // quando o perfil é de terceiro (enabled = isSelf), evitando request
   // desnecessária — o backend já responderia 200, mas economiza rede.
+  // [Sessão 20] by-type ganha `byTypeCompare` (3º arg).
   const selfSummaryQuery = useStatsSummary(typeFilter, isSelf);
   const selfWeeklyQuery = useStatsWeekly(8, typeFilter, isSelf);
   const selfMonthlyQuery = useStatsMonthly(
@@ -140,12 +152,13 @@ export default function ProfilePage() {
     typeFilter,
     isSelf && chartMode === "monthly"
   );
-  const selfByTypeQuery = useStatsByType(byTypePeriod, isSelf);
+  const selfByTypeQuery = useStatsByType(byTypePeriod, isSelf, byTypeCompare);
 
   // ===== Stats — terceiros [Sessão 19] =====
   // Sempre chamados (regras de hooks), mas `enabled` só liga quando
   // `showOtherStats`. Chaves de cache namespaced por userId, então não
   // colidem com os hooks self.
+  // [Sessão 20] by-type ganha `byTypeCompare` (4º arg).
   const otherSummaryQuery = useUserStatsSummary(
     id,
     showOtherStats,
@@ -166,7 +179,8 @@ export default function ProfilePage() {
   const otherByTypeQuery = useUserStatsByType(
     id,
     showOtherStats,
-    byTypePeriod
+    byTypePeriod,
+    byTypeCompare
   );
 
   // Fonte única: self OU alvo, conforme o perfil aberto.
@@ -201,6 +215,8 @@ export default function ProfilePage() {
   const activeChartQuery = chartMode === "weekly" ? weeklyQuery : monthlyQuery;
 
   // [Sessão 18] Comparação só faz sentido quando há janela anterior.
+  // [Sessão 20] `byTypePeriod !== "all"` também controla a visibilidade
+  // do 2º segmented control (compare) — period="all" ignora compare.
   const showPrevious = byTypePeriod !== "all";
 
   return (
@@ -354,31 +370,66 @@ export default function ProfilePage() {
                 (Todos / 90 dias / 1 ano). O filtro afeta apenas esta tabela. */}
             {/* [Sessão 18] Quando period != "all", ganha coluna "vs. anterior"
                 com delta (atividades / distância / elevação) em verde/vermelho. */}
+            {/* [Sessão 20] Header ganhou 2º segmented control (compare:
+                Período anterior / Mesmo período do ano anterior). Só
+                renderiza quando period != "all". O header da coluna do
+                delta vira "vs. ano anterior" quando compare="yoy". */}
             <div className="mt-6 rounded-lg bg-white p-4 shadow-sm">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold text-gray-700">
-                  Por tipo de atividade
-                </h3>
+              <div className="mb-3 flex flex-col gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-gray-700">
+                    Por tipo de atividade
+                  </h3>
 
-                <div className="inline-flex rounded-lg bg-gray-50 p-1">
-                  {PERIOD_FILTERS.map((p) => {
-                    const active = byTypePeriod === p.value;
-                    return (
-                      <button
-                        key={p.value}
-                        type="button"
-                        onClick={() => setByTypePeriod(p.value)}
-                        className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-                          active
-                            ? "bg-rumo-500 text-white"
-                            : "text-gray-600 hover:bg-gray-100"
-                        }`}
-                      >
-                        {p.label}
-                      </button>
-                    );
-                  })}
+                  <div className="inline-flex rounded-lg bg-gray-50 p-1">
+                    {PERIOD_FILTERS.map((p) => {
+                      const active = byTypePeriod === p.value;
+                      return (
+                        <button
+                          key={p.value}
+                          type="button"
+                          onClick={() => setByTypePeriod(p.value)}
+                          className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                            active
+                              ? "bg-rumo-500 text-white"
+                              : "text-gray-600 hover:bg-gray-100"
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
+
+                {/* [Sessão 20] 2º segmented control — só quando há janela
+                    de comparação (period != "all"). */}
+                {showPrevious && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-gray-500">
+                      Comparar com:
+                    </span>
+                    <div className="inline-flex rounded-lg bg-gray-50 p-1">
+                      {COMPARE_FILTERS.map((c) => {
+                        const active = byTypeCompare === c.value;
+                        return (
+                          <button
+                            key={c.value}
+                            type="button"
+                            onClick={() => setByTypeCompare(c.value)}
+                            className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                              active
+                                ? "bg-rumo-500 text-white"
+                                : "text-gray-600 hover:bg-gray-100"
+                            }`}
+                          >
+                            {c.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {byTypeQuery.isLoading && (
@@ -424,9 +475,13 @@ export default function ProfilePage() {
                           Calorias
                         </th>
                         {/* [Sessão 18] Delta vs. janela anterior. */}
+                        {/* [Sessão 20] Rótulo alterna: "vs. anterior" (prev)
+                            ou "vs. ano anterior" (yoy). */}
                         {showPrevious && (
                           <th className="py-2 text-right font-medium">
-                            vs. anterior
+                            {byTypeCompare === "yoy"
+                              ? "vs. ano anterior"
+                              : "vs. anterior"}
                           </th>
                         )}
                       </tr>
@@ -633,6 +688,8 @@ function computePace(item: {
 // [Sessão 18] Bloco de delta vs. janela imediatamente anterior.
 // Mostra 3 métricas (atividades, distância, elevação) em linhas curtas.
 // `previous === null` → "—" (tipo não existia na janela anterior).
+// [Sessão 20] Sem mudança: `previous` é o mesmo shape (backend calcula
+// conforme `compare`), então o componente é agnóstico ao modo.
 function PreviousDelta({ item }: { item: StatsByTypeItem }) {
   if (!item.previous) {
     return <span className="text-xs text-gray-400">—</span>;
