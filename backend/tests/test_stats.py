@@ -39,6 +39,12 @@ anterior (90d→[now-180d, now-90d); 1y→[now-730d, now-365d)). `all` →
 (/users/{user_id}/stats/*). Regra: dono OU seguidor do dono. Viewer não
 seguidor → 403; user_id inexistente → 404. Helper `client_as(user)`
 sobrescreve get_current_user localmente, sem tocar no conftest.
+
+[Sessão 20] Adicionados testes de `compare=prev|yoy` no get_by_type —
+janela de comparação configurável. `prev` (default) = janela imediatamente
+anterior (S18); `yoy` = mesmo período do ano anterior (90d→[now-455d,
+now-365d); 1y→[now-730d, now-365d) — idêntico a prev, coincidência
+matemática documentada). Testa service e rota.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -73,6 +79,7 @@ def _dt_ago(days: int, hour: int = 10) -> datetime:
     elimina qualquer flakiness de relógio Python vs. Postgres.
 
     [Sessão 18] Também usado pelos testes de `previous` (janela anterior).
+    [Sessão 20] Também usado pelos testes de `compare=yoy`.
     """
     return datetime.now(timezone.utc) - timedelta(days=days)
 
@@ -1071,3 +1078,201 @@ async def test_user_stats_unknown_user_404(
     response = await client.get(f"/users/{missing}/stats/summary")
     assert response.status_code == 404
     assert "não encontrado" in response.json()["detail"].lower()
+
+
+# ===== compare=prev|yoy — janela de comparação configurável [Sessão 20] =====
+# Semântica (service):
+# - compare="prev" (default): comportamento S18 — janela imediatamente
+#   anterior. 90d → [now-180d, now-90d); 1y → [now-730d, now-365d).
+# - compare="yoy": mesmo período do ano anterior. 90d → [now-455d,
+#   now-365d); 1y → [now-730d, now-365d) (coincide com prev — matemática).
+# - period="all": previous sempre None, independente de compare.
+#
+# Estratégia de datas (90d):
+# - _dt_ago(45)  → dentro da janela ATUAL [now-90, now).
+# - _dt_ago(120) → dentro da janela PREV [now-180, now-90).
+# - _dt_ago(400) → dentro da janela YOY [now-455, now-365).
+# Cada modo pega uma atividade distinta:
+# - compare=prev → previous = 120d (3000m).
+# - compare=yoy  → previous = 400d (7000m).
+# Margem mínima de 30 dias das bordas → zero flakiness.
+
+
+@pytest.mark.asyncio
+async def test_get_by_type_compare_yoy_90d_uses_year_ago_window(
+    db_session, test_user
+):
+    """`compare="yoy"` + `90d`: previous reflete _dt_ago(400) (janela yoy),
+    não _dt_ago(120) (janela prev)."""
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(45),
+                         distance_m=5000.0, calories=300)
+    # Referência prev: dentro de [now-180, now-90).
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(120),
+                         distance_m=3000.0, calories=200)
+    # Referência yoy: dentro de [now-455, now-365).
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(400),
+                         distance_m=7000.0, calories=400)
+
+    prev_result = await stats_service.get_by_type(
+        db_session, test_user.id, period="90d", compare="prev"
+    )
+    yoy_result = await stats_service.get_by_type(
+        db_session, test_user.id, period="90d", compare="yoy"
+    )
+
+    # Item atual idêntico nos dois modos: só a atividade de 45d.
+    assert len(prev_result) == 1 and len(yoy_result) == 1
+    prev_item = prev_result[0]
+    yoy_item = yoy_result[0]
+    assert prev_item["total_activities"] == 1
+    assert yoy_item["total_activities"] == 1
+    assert prev_item["total_distance_m"] == pytest.approx(5000.0)
+    assert yoy_item["total_distance_m"] == pytest.approx(5000.0)
+
+    # prev → pega a referência de 120d.
+    assert prev_item["previous"] is not None
+    assert prev_item["previous"]["total_distance_m"] == pytest.approx(3000.0)
+    assert prev_item["previous"]["total_calories"] == 200
+
+    # yoy → pega a referência de 400d, ignora a de 120d.
+    assert yoy_item["previous"] is not None
+    assert yoy_item["previous"]["total_distance_m"] == pytest.approx(7000.0)
+    assert yoy_item["previous"]["total_calories"] == 400
+
+
+@pytest.mark.asyncio
+async def test_get_by_type_compare_yoy_90d_null_when_no_data_in_yoy_window(
+    db_session, test_user
+):
+    """Se só há atividade na janela PREV (não na yoy), `compare=yoy` →
+    previous None (mesmo com `compare=prev` trazendo dados)."""
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(45),
+                         distance_m=5000.0, calories=300)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(120),
+                         distance_m=3000.0, calories=200)
+
+    yoy_result = await stats_service.get_by_type(
+        db_session, test_user.id, period="90d", compare="yoy"
+    )
+
+    assert len(yoy_result) == 1
+    assert yoy_result[0]["total_activities"] == 1
+    assert yoy_result[0]["previous"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_by_type_compare_yoy_1y_equals_prev(db_session, test_user):
+    """Para period="1y", compare="yoy" e compare="prev" coincidem: a janela
+    imediatamente anterior a 1 ano é o mesmo período do ano anterior."""
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(200),
+                         distance_m=4000.0, calories=250)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(500),
+                         distance_m=6000.0, calories=350)
+
+    prev_result = await stats_service.get_by_type(
+        db_session, test_user.id, period="1y", compare="prev"
+    )
+    yoy_result = await stats_service.get_by_type(
+        db_session, test_user.id, period="1y", compare="yoy"
+    )
+
+    assert prev_result == yoy_result
+    assert prev_result[0]["previous"] is not None
+    assert prev_result[0]["previous"]["total_distance_m"] == pytest.approx(6000.0)
+
+
+@pytest.mark.asyncio
+async def test_get_by_type_compare_yoy_all_is_none(db_session, test_user):
+    """period="all" ignora compare: previous sempre None."""
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(30), calories=100)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(400), calories=400)
+
+    result = await stats_service.get_by_type(
+        db_session, test_user.id, period="all", compare="yoy"
+    )
+
+    assert len(result) == 1
+    assert result[0]["previous"] is None
+
+
+@pytest.mark.asyncio
+async def test_route_by_type_compare_yoy_param(client, db_session, test_user):
+    """Rota aceita ?compare=yoy e propaga ao service (mesmo cenário do
+    teste de service, agora via HTTP)."""
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(45),
+                         distance_m=5000.0, calories=300)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(120),
+                         distance_m=3000.0, calories=200)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(400),
+                         distance_m=7000.0, calories=400)
+
+    response = await client.get(
+        "/activities/stats/by-type",
+        params={"period": "90d", "compare": "yoy"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 1
+    run = data["items"][0]
+    assert run["total_activities"] == 1
+    prev = run["previous"]
+    assert prev is not None
+    assert prev["total_distance_m"] == pytest.approx(7000.0)
+    assert prev["total_calories"] == 400
+
+
+@pytest.mark.asyncio
+async def test_route_by_type_compare_invalid_returns_422(
+    client, db_session, test_user
+):
+    """compare fora de {prev, yoy} → 422 (Literal do FastAPI)."""
+    response = await client.get(
+        "/activities/stats/by-type", params={"compare": "xpto"}
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_route_by_type_compare_default_is_prev(client, db_session, test_user):
+    """Sem passar ?compare=, comportamento S18 preservado (default prev)."""
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(45),
+                         distance_m=5000.0, calories=300)
+    await _make_activity(db_session, test_user,
+                         activity_type=ActivityType.RUN,
+                         started_at=_dt_ago(120),
+                         distance_m=3000.0, calories=200)
+
+    response = await client.get(
+        "/activities/stats/by-type", params={"period": "90d"}
+    )
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["previous"] is not None
+    # 120d está na prev de 90d → 3000m.
+    assert item["previous"]["total_distance_m"] == pytest.approx(3000.0)

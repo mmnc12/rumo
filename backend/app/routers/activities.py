@@ -85,11 +85,20 @@ async def stats_monthly(
 
 # [Sessão 14 — B1] Drill-down por tipo de atividade.
 # [Sessão 17] Adicionado param `period` (all|90d|1y) para janela temporal.
+# [Sessão 20] Adicionado param `compare` (prev|yoy) — janela de comparação.
 @router.get("/stats/by-type", response_model=StatsByTypeResponse)
 async def stats_by_type(
     period: Literal["all", "90d", "1y"] = Query(
         default="all",
         description="Janela temporal: 'all' (todos os tempos), '90d' (últimos 90 dias) ou '1y' (últimos 365 dias)",
+    ),
+    compare: Literal["prev", "yoy"] = Query(
+        default="prev",
+        description=(
+            "Janela de comparação para `previous`: 'prev' (imediatamente "
+            "anterior, default) ou 'yoy' (mesmo período do ano anterior). "
+            "Só tem efeito quando period != 'all'."
+        ),
     ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -103,8 +112,12 @@ async def stats_by_type(
     - `all` (default): todos os tempos — comportamento original.
     - `90d`: últimas 90 dias corridos.
     - `1y`: últimos 365 dias corridos.
+
+    `compare` escolhe a janela de comparação usada em `previous`:
+    - `prev` (default): janela imediatamente anterior (comportamento S18).
+    - `yoy`: mesmo período do ano anterior (Sessão 20).
     """
-    items = await stats_service.get_by_type(db, current_user.id, period)
+    items = await stats_service.get_by_type(db, current_user.id, period, compare)
     return {"items": items}
 
 

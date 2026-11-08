@@ -53,7 +53,7 @@ def _current_window_expr(period: Literal["all", "90d", "1y"]):
 
     Usada dentro de `CASE WHEN` quando `period != "all"` — porque nesse
     caso o `WHERE` do get_by_type foi ampliado para cobrir também a
-    janela anterior, e o recorte da janela atual precisa ser feito
+    janela de comparação, e o recorte da janela atual precisa ser feito
     dentro de cada métrica.
     """
     days = _period_window_days(period)
@@ -78,6 +78,52 @@ def _previous_window_expr(period: Literal["all", "90d", "1y"]):
     end_prev = func.now() - timedelta(days=days)
     start_prev = func.now() - timedelta(days=2 * days)
     return and_(Activity.started_at >= start_prev, Activity.started_at < end_prev)
+
+
+# [Sessão 20] Janela "mesmo período do ano anterior" (year-over-year).
+# Simétrica à _previous_window_expr, mas deslocada 365 dias para trás.
+#
+# Semântica por period:
+# - `all`: None (year-over-year não faz sentido sem janela).
+# - `90d`: [now-455d, now-365d) — os 90 dias terminando "um ano atrás".
+# - `1y`:  [now-730d, now-365d) — coincide exatamente com _previous_window_expr
+#          de period="1y". Isso NÃO é bug: a janela imediatamente anterior
+#          a 1 ano é o mesmo período do ano anterior. Documentado em teste.
+def _yoy_window_expr(period: Literal["all", "90d", "1y"]):
+    """Condição SQL da janela do mesmo período do ano anterior (Sessão 20)."""
+    days = _period_window_days(period)
+    if days is None:
+        return None
+    end_yoy = func.now() - timedelta(days=365)
+    start_yoy = func.now() - timedelta(days=days + 365)
+    return and_(Activity.started_at >= start_yoy, Activity.started_at < end_yoy)
+
+
+# [Sessão 20] Retorna a condição de comparação conforme o modo.
+def _comparison_window_expr(
+    period: Literal["all", "90d", "1y"],
+    compare: Literal["prev", "yoy"],
+):
+    """Despacha para _previous_window_expr ou _yoy_window_expr."""
+    if compare == "yoy":
+        return _yoy_window_expr(period)
+    return _previous_window_expr(period)
+
+
+# [Sessão 20] Limite inferior do WHERE quando há janela de comparação.
+#
+# - `prev`: now - 2N (janela atual + anterior adjacentes).
+# - `yoy`:  now - (N + 365) (janela atual + yoy, deslocada 1 ano atrás).
+def _where_floor_days(
+    period: Literal["all", "90d", "1y"],
+    compare: Literal["prev", "yoy"],
+) -> int | None:
+    days = _period_window_days(period)
+    if days is None:
+        return None
+    if compare == "yoy":
+        return days + 365
+    return 2 * days
 
 
 async def get_summary(
@@ -156,10 +202,12 @@ async def get_period_stats(
 # [Sessão 14 — B1] Drill-down por tipo de atividade.
 # [Sessão 17] Adicionado param `period` (all|90d|1y) para janela temporal.
 # [Sessão 18] Adicionado `previous` por item (comparação vs. janela anterior).
+# [Sessão 20] Adicionado param `compare` (prev|yoy) — janela de comparação.
 async def get_by_type(
     db: AsyncSession,
     user_id: UUID,
     period: Literal["all", "90d", "1y"] = "all",
+    compare: Literal["prev", "yoy"] = "prev",
 ) -> list[dict]:
     """Agrega as atividades do usuário por tipo.
 
@@ -173,21 +221,27 @@ async def get_by_type(
     - `1y`:  últimos 365 dias corridos.
 
     [Sessão 18] Para `90d`/`1y`, cada item ganha `previous` com as
-    mesmas 5 métricas, calculadas sobre a janela *imediatamente
-    anterior* (sem sobreposição):
-    - `90d`: [now-180d, now-90d)
-    - `1y`:  [now-730d, now-365d)
+    mesmas 5 métricas, calculadas sobre uma janela de comparação:
+    - `compare="prev"` (default): janela *imediatamente anterior*.
+        - `90d`: [now-180d, now-90d)
+        - `1y`:  [now-730d, now-365d)
+    - `compare="yoy"` [Sessão 20]: mesmo período do ano anterior.
+        - `90d`: [now-455d, now-365d)
+        - `1y`:  [now-730d, now-365d) — idêntico a prev (coincidência
+                 matemática: a janela imediatamente anterior a 1 ano é
+                 o mesmo período do ano anterior).
     `previous` é `null` quando `period="all"` ou quando o tipo não tem
-    nenhuma atividade na janela anterior (todas as métricas zero).
+    nenhuma atividade na janela de comparação (todas as métricas zero).
 
     [Sessão 18 — fix] Quando `period != "all"`, o `WHERE` do SELECT
-    cobre `started_at >= now - 2N dias` (janela anterior + atual) e
-    cada métrica faz seu próprio recorte via `CASE WHEN`. Antes, o
-    `WHERE` recortava só a janela atual e as linhas da janela anterior
-    eram descartadas antes do `CASE WHEN` — `previous` vinha sempre
-    `null`. As 5 métricas "atuais" também passaram a ser
-    `SUM(CASE WHEN <janela_atual> ...)` para ignorar as linhas da
-    janela anterior que agora entram no SELECT.
+    cobre a união (janela de comparação + atual) e cada métrica faz seu
+    próprio recorte via `CASE WHEN`. Sem isso, as linhas da janela de
+    comparação eram descartadas antes do `CASE WHEN` e `previous` vinha
+    sempre `null`.
+    [Sessão 20 — fix] O limite inferior do WHERE depende de `compare`:
+    para `prev` é `now - 2N` (janelas adjacentes); para `yoy` é
+    `now - (N + 365)` (janela deslocada 1 ano atrás). `_where_floor_days`
+    encapsula essa diferença.
 
     [Sessão 14 — fix] O desempate por tipo é feito em Python, não no
     ORDER BY do SQL. Motivo: `Activity.activity_type` é um Enum nativo
@@ -199,14 +253,15 @@ async def get_by_type(
     """
     type_col = Activity.activity_type.label("activity_type")
     curr_cond = _current_window_expr(period)
-    prev_cond = _previous_window_expr(period)
+    # [Sessão 20] Janela de comparação depende de `compare`.
+    cmp_cond = _comparison_window_expr(period, compare)
 
-    # [Sessão 18 — fix] Quando há janela anterior, cada métrica do item
-    # atual precisa ignorar as linhas da janela anterior que entram no
+    # [Sessão 18 — fix] Quando há janela de comparação, cada métrica do
+    # item atual precisa ignorar as linhas dessa janela que entram no
     # SELECT (o WHERE foi ampliado). Para `period="all"`, mantém o
     # comportamento original (somas diretas, sem CASE).
     def _curr_metric(col, agg):
-        """SUM/CASE da janela atual sobre `col` (ou contagem, se col=1)."""
+        """SUM/CASE da janela atual sobre `col` (ou contagem, se col=None)."""
         if curr_cond is None:
             return agg(col) if col is not None else func.count(Activity.id)
         if col is None:
@@ -235,23 +290,23 @@ async def get_by_type(
             _curr_metric(Activity.calories, func.sum).label("total_calories"),
         ]
 
-    # [Sessão 18] Métricas da janela anterior (só para 90d/1y).
-    if prev_cond is not None:
+    # [Sessão 18/20] Métricas da janela de comparação.
+    if cmp_cond is not None:
         columns += [
             func.coalesce(
-                func.sum(case((prev_cond, 1), else_=0)), 0
+                func.sum(case((cmp_cond, 1), else_=0)), 0
             ).label("prev_total_activities"),
             func.coalesce(
-                func.sum(case((prev_cond, Activity.distance_m), else_=0)), 0
+                func.sum(case((cmp_cond, Activity.distance_m), else_=0)), 0
             ).label("prev_total_distance_m"),
             func.coalesce(
-                func.sum(case((prev_cond, Activity.duration_s), else_=0)), 0
+                func.sum(case((cmp_cond, Activity.duration_s), else_=0)), 0
             ).label("prev_total_duration_s"),
             func.coalesce(
-                func.sum(case((prev_cond, Activity.elevation_gain_m), else_=0)), 0
+                func.sum(case((cmp_cond, Activity.elevation_gain_m), else_=0)), 0
             ).label("prev_total_elevation_gain_m"),
             func.coalesce(
-                func.sum(case((prev_cond, Activity.calories), else_=0)), 0
+                func.sum(case((cmp_cond, Activity.calories), else_=0)), 0
             ).label("prev_total_calories"),
         ]
 
@@ -268,11 +323,11 @@ async def get_by_type(
         # [Sessão 17] Filtro de janela temporal (no-op para "all").
         stmt = _apply_period_filter(stmt, period)
     else:
-        # [Sessão 18 — fix] WHERE ampliado para [now-2N, now): cobre
-        # janela anterior + atual. O recorte de cada janela é feito
-        # pelos CASE WHEN das métricas acima.
-        days = _period_window_days(period)
-        stmt = stmt.where(Activity.started_at >= func.now() - timedelta(days=2 * days))
+        # [Sessão 18/20] WHERE ampliado para cobrir janela atual + janela
+        # de comparação. `_where_floor_days` decide o limite inferior:
+        # prev → 2N (adjacentes); yoy → N + 365 (deslocada 1 ano atrás).
+        floor_days = _where_floor_days(period, compare)
+        stmt = stmt.where(Activity.started_at >= func.now() - timedelta(days=floor_days))
 
     rows = (await db.execute(stmt)).all()
 
@@ -280,7 +335,7 @@ async def get_by_type(
     for row in rows:
         # [Sessão 18 — fix] Só tipos com >= 1 atividade na janela atual
         # aparecem (o WHERE ampliado traz também tipos que só existem
-        # na janela anterior; esses são filtrados aqui).
+        # na janela de comparação; esses são filtrados aqui).
         curr_activities = int(row.total_activities or 0)
         if curr_activities == 0:
             continue
@@ -298,8 +353,9 @@ async def get_by_type(
             "previous": None,
         }
 
-        # [Sessão 18] Preenche `previous` só quando há dado na janela anterior.
-        if prev_cond is not None:
+        # [Sessão 18/20] Preenche `previous` só quando há dado na janela
+        # de comparação.
+        if cmp_cond is not None:
             prev_activities = int(row.prev_total_activities or 0)
             if prev_activities > 0:
                 item["previous"] = {
