@@ -137,3 +137,44 @@ export async function downloadActivityExport(
   );
   _triggerDownload(blob, filename ?? `rumo_${id}.${format}`);
 }
+
+// ===== Export em lote — [Sessão 23] =====
+//
+// Paridade de UI com o endpoint GET /activities/export (backend S22).
+// Auth: self-only (diferente do unitário — o backend só exporta as
+// atividades do viewer autenticado). Retorna um ZIP com N arquivos.
+
+export interface DownloadActivityExportBulkParams {
+  format: ActivityExportFormat;
+  /** Data inicial inclusiva (YYYY-MM-DD, UTC). Omitir = sem limite. */
+  from?: string;
+  /** Data final inclusiva (YYYY-MM-DD, UTC). Omitir = sem limite. */
+  to?: string;
+}
+
+/**
+ * GET /activities/export?format=&from=&to= — baixa TODAS as suas
+ * atividades (do filtro) como um ZIP, com 1 arquivo por atividade.
+ *
+ * - `format=csv`: todas as atividades do filtro (com ou sem rota).
+ * - `format=gpx`: só as com rota (backend omite as sem — não gera GPX vazio).
+ * - Filtro opcional `from`/`to` (YYYY-MM-DD, inclusivo nas duas pontas).
+ * - 0 atividades no filtro → ZIP vazio (200, não é erro).
+ * - `from > to` → 422. `format` inválido → 422.
+ *
+ * O nome do arquivo (`rumo_export_<YYYYMMDD-HHMMSS>.zip`) vem do header
+ * `Content-Disposition`; se faltar, cai em `rumo_export.zip`.
+ */
+export async function downloadActivityExportBulk(
+  params: DownloadActivityExportBulkParams
+): Promise<void> {
+  const qs = new URLSearchParams();
+  qs.set("format", params.format);
+  if (params.from) qs.set("from", params.from);
+  if (params.to) qs.set("to", params.to);
+
+  const { blob, filename } = await apiFetchBlob(
+    `/activities/export?${qs.toString()}`
+  );
+  _triggerDownload(blob, filename ?? "rumo_export.zip");
+}

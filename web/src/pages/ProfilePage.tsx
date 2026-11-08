@@ -35,6 +35,11 @@ import {
 import type { StatsPeriod, StatsCompare } from "../api/stats";
 import { useFollowUser } from "../hooks/useSocial";
 import { ApiError } from "../api/client";
+// [Sessão 23] Export em lote (paridade de UI com o endpoint /activities/export).
+import {
+  downloadActivityExportBulk,
+  type ActivityExportFormat,
+} from "../api/activities";
 // [Sessão 15 — B1] Reaproveita formatadores de lib/format.ts em vez de
 // duplicar inline. Mesma decisão de "deixar o repo melhor do que estava".
 // [Sessão 15 — B1b] +formatElevation pra coluna de elevação.
@@ -89,6 +94,12 @@ const COMPARE_FILTERS: { label: string; value: StatsCompare }[] = [
   { label: "Mesmo período do ano anterior", value: "yoy" },
 ];
 
+// [Sessão 23] Opções de formato para o "Exportar tudo".
+const EXPORT_FORMATS: { label: string; value: ActivityExportFormat }[] = [
+  { label: "CSV", value: "csv" },
+  { label: "GPX", value: "gpx" },
+];
+
 export default function ProfilePage() {
   const { id } = useParams<{ id: string }>();
   const [tab, setTab] = useState<"followers" | "following">("followers");
@@ -104,6 +115,13 @@ export default function ProfilePage() {
   // [Sessão 20] Filtro de janela de comparação do `previous`. Preservado
   // ao voltar de "all" (não reseta): "prev" é o default inicial.
   const [byTypeCompare, setByTypeCompare] = useState<StatsCompare>("prev");
+
+  // [Sessão 23] Estado do "Exportar tudo" (self-only).
+  const [exportFormat, setExportFormat] = useState<ActivityExportFormat>("csv");
+  const [exportFrom, setExportFrom] = useState<string>("");
+  const [exportTo, setExportTo] = useState<string>("");
+  const [exportLoading, setExportLoading] = useState<boolean>(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const {
     data: profile,
@@ -189,6 +207,35 @@ export default function ProfilePage() {
   const monthlyQuery = isSelf ? selfMonthlyQuery : otherMonthlyQuery;
   const byTypeQuery = isSelf ? selfByTypeQuery : otherByTypeQuery;
 
+  // [Sessão 23] Handler do "Exportar tudo".
+  // - Bloqueia client-side se from > to (o backend devolve 422; evitar ida perdida).
+  // - Erros de rede/HTTP viram mensagem inline; 401 já limpa token no client.
+  async function handleExportAll(): Promise<void> {
+    if (exportFrom && exportTo && exportFrom > exportTo) {
+      setExportError("A data inicial não pode ser maior que a final.");
+      return;
+    }
+    setExportError(null);
+    setExportLoading(true);
+    try {
+      await downloadActivityExportBulk({
+        format: exportFormat,
+        from: exportFrom || undefined,
+        to: exportTo || undefined,
+      });
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? typeof err.detail === "string"
+            ? err.detail
+            : `Falha ao exportar (HTTP ${err.status}).`
+          : "Falha ao exportar. Verifique sua conexão.";
+      setExportError(message);
+    } finally {
+      setExportLoading(false);
+    }
+  }
+
   if (!id) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -264,6 +311,75 @@ export default function ProfilePage() {
                       ? "Deixar de seguir"
                       : "Seguir"}
                 </button>
+              )}
+
+              {/* [Sessão 23] "Exportar tudo" — paridade com /activities/export
+                  (ZIP). Só no próprio perfil: o backend é self-only. */}
+              {isSelf && (
+                <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <h2 className="text-sm font-semibold text-gray-700">
+                    Exportar tudo
+                  </h2>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Baixa todas as suas atividades do período como um ZIP,
+                    com um arquivo por atividade.
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap items-end gap-2">
+                    <label className="flex flex-col gap-1 text-xs text-gray-600">
+                      <span>Formato</span>
+                      <select
+                        value={exportFormat}
+                        onChange={(e) =>
+                          setExportFormat(e.target.value as ActivityExportFormat)
+                        }
+                        className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900"
+                        disabled={exportLoading}
+                      >
+                        {EXPORT_FORMATS.map((f) => (
+                          <option key={f.value} value={f.value}>
+                            {f.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="flex flex-col gap-1 text-xs text-gray-600">
+                      <span>De (opcional)</span>
+                      <input
+                        type="date"
+                        value={exportFrom}
+                        onChange={(e) => setExportFrom(e.target.value)}
+                        className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900"
+                        disabled={exportLoading}
+                      />
+                    </label>
+
+                    <label className="flex flex-col gap-1 text-xs text-gray-600">
+                      <span>Até (opcional)</span>
+                      <input
+                        type="date"
+                        value={exportTo}
+                        onChange={(e) => setExportTo(e.target.value)}
+                        className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900"
+                        disabled={exportLoading}
+                      />
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={handleExportAll}
+                      disabled={exportLoading}
+                      className="rounded-lg bg-rumo-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-rumo-600 disabled:opacity-50"
+                    >
+                      {exportLoading ? "Preparando…" : "Exportar tudo"}
+                    </button>
+                  </div>
+
+                  {exportError && (
+                    <p className="mt-2 text-xs text-red-600">{exportError}</p>
+                  )}
+                </div>
               )}
             </>
           )}
