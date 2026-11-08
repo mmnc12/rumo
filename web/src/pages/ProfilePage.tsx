@@ -23,6 +23,12 @@ import {
   useStatsMonthly,
   // [Sessão 14 — B1] Drill-down por tipo de atividade.
   useStatsByType,
+  // [Sessão 19] Stats públicas — mesmo shape, mas para o alvo (userId).
+  // `enabled` é controlado por `!isSelf && isFollowing` no caller.
+  useUserStatsSummary,
+  useUserStatsWeekly,
+  useUserStatsMonthly,
+  useUserStatsByType,
 } from "../hooks/useStats";
 // [Sessão 17] Tipo do filtro de janela temporal do drill-down por tipo.
 import type { StatsPeriod } from "../api/stats";
@@ -117,19 +123,57 @@ export default function ProfilePage() {
   const { isFollowing, isSelf } = useIsFollowing(id ?? "");
   const toggleFollow = useFollowUser(id ?? "");
 
-  // Stats só no próprio perfil (endpoints /stats/* são do current_user)
-  const summaryQuery = useStatsSummary(typeFilter, isSelf);
-  const weeklyQuery = useStatsWeekly(8, typeFilter, isSelf);
-  // [Sessão 13] Monthly só dispara quando o modo mensal está ativo.
-  const monthlyQuery = useStatsMonthly(
+  // [Sessão 19] Stats de terceiros só se o viewer segue o alvo
+  // (mesma regra do /activities/{id}/track). `canView` controla tanto o
+  // `enabled` dos hooks quanto a renderização da seção.
+  const canView = isSelf || isFollowing;
+  const showOtherStats = !isSelf && isFollowing;
+
+  // ===== Stats — self =====
+  // [Sessão 13/14/17/18] Hooks do próprio perfil. Ficam desabilitados
+  // quando o perfil é de terceiro (enabled = isSelf), evitando request
+  // desnecessária — o backend já responderia 200, mas economiza rede.
+  const selfSummaryQuery = useStatsSummary(typeFilter, isSelf);
+  const selfWeeklyQuery = useStatsWeekly(8, typeFilter, isSelf);
+  const selfMonthlyQuery = useStatsMonthly(
     6,
     typeFilter,
     isSelf && chartMode === "monthly"
   );
-  // [Sessão 14 — B1] Drill-down por tipo — sem filtro, sempre todos os tipos.
-  // [Sessão 17] Agora aceita janela temporal (`byTypePeriod`).
-  // [Sessão 18] Cada item pode trazer `previous` (janela anterior).
-  const byTypeQuery = useStatsByType(byTypePeriod, isSelf);
+  const selfByTypeQuery = useStatsByType(byTypePeriod, isSelf);
+
+  // ===== Stats — terceiros [Sessão 19] =====
+  // Sempre chamados (regras de hooks), mas `enabled` só liga quando
+  // `showOtherStats`. Chaves de cache namespaced por userId, então não
+  // colidem com os hooks self.
+  const otherSummaryQuery = useUserStatsSummary(
+    id,
+    showOtherStats,
+    typeFilter
+  );
+  const otherWeeklyQuery = useUserStatsWeekly(
+    id,
+    showOtherStats,
+    8,
+    typeFilter
+  );
+  const otherMonthlyQuery = useUserStatsMonthly(
+    id,
+    showOtherStats && chartMode === "monthly",
+    6,
+    typeFilter
+  );
+  const otherByTypeQuery = useUserStatsByType(
+    id,
+    showOtherStats,
+    byTypePeriod
+  );
+
+  // Fonte única: self OU alvo, conforme o perfil aberto.
+  const summaryQuery = isSelf ? selfSummaryQuery : otherSummaryQuery;
+  const weeklyQuery = isSelf ? selfWeeklyQuery : otherWeeklyQuery;
+  const monthlyQuery = isSelf ? selfMonthlyQuery : otherMonthlyQuery;
+  const byTypeQuery = isSelf ? selfByTypeQuery : otherByTypeQuery;
 
   if (!id) {
     return (
@@ -209,8 +253,9 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* Stats — só no próprio perfil */}
-        {isSelf && (
+        {/* [Sessão 19] Stats: dono OU seguidor do dono (mesma regra do
+            /activities/{id}/track). Se não pode ver, a seção não renderiza. */}
+        {canView && (
           <section className="mt-6">
             <div className="mb-3 flex flex-wrap gap-2">
               {TYPE_FILTERS.map((f) => {
