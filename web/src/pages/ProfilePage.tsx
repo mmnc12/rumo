@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { AppHeader } from "../components/AppHeader";
@@ -122,6 +122,16 @@ export default function ProfilePage() {
   const [exportTo, setExportTo] = useState<string>("");
   const [exportLoading, setExportLoading] = useState<boolean>(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  // [Sessão 24] Feedback de sucesso transitório (some em ~4s) para dar
+  // confirmação visual — antes o usuário só via o download do SO.
+  const [exportInfo, setExportInfo] = useState<string | null>(null);
+
+  // [Sessão 24] Limpa o feedback de sucesso depois de alguns segundos.
+  useEffect(() => {
+    if (!exportInfo) return;
+    const t = window.setTimeout(() => setExportInfo(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [exportInfo]);
 
   const {
     data: profile,
@@ -210,12 +220,14 @@ export default function ProfilePage() {
   // [Sessão 23] Handler do "Exportar tudo".
   // - Bloqueia client-side se from > to (o backend devolve 422; evitar ida perdida).
   // - Erros de rede/HTTP viram mensagem inline; 401 já limpa token no client.
+  // [Sessão 24] Em sucesso, exibe confirmação transitória ("Download iniciado.").
   async function handleExportAll(): Promise<void> {
     if (exportFrom && exportTo && exportFrom > exportTo) {
       setExportError("A data inicial não pode ser maior que a final.");
       return;
     }
     setExportError(null);
+    setExportInfo(null);
     setExportLoading(true);
     try {
       await downloadActivityExportBulk({
@@ -223,6 +235,7 @@ export default function ProfilePage() {
         from: exportFrom || undefined,
         to: exportTo || undefined,
       });
+      setExportInfo("Download iniciado.");
     } catch (err) {
       const message =
         err instanceof ApiError
@@ -322,7 +335,8 @@ export default function ProfilePage() {
                   </h2>
                   <p className="mt-1 text-xs text-gray-500">
                     Baixa todas as suas atividades do período como um ZIP,
-                    com um arquivo por atividade.
+                    com um arquivo por atividade. Se nenhuma atividade casar
+                    com o período, o ZIP virá vazio.
                   </p>
 
                   <div className="mt-3 flex flex-wrap items-end gap-2">
@@ -376,8 +390,14 @@ export default function ProfilePage() {
                     </button>
                   </div>
 
+                  {/* [Sessão 24] Erro (vermelho) e sucesso (verde) são
+                      mutuamente exclusivos porque handleExportAll limpa
+                      o outro antes de setar. */}
                   {exportError && (
                     <p className="mt-2 text-xs text-red-600">{exportError}</p>
+                  )}
+                  {exportInfo && !exportError && (
+                    <p className="mt-2 text-xs text-green-600">{exportInfo}</p>
                   )}
                 </div>
               )}
