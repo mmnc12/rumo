@@ -1,5 +1,6 @@
 """Endpoints de atividades (CRUD, estatísticas, curtidas, upload, track, busca)."""
 
+from datetime import date
 from typing import Literal
 from uuid import UUID
 
@@ -264,6 +265,65 @@ async def list_activities(
             )
 
     return await activity_service.list_activities(db, target_id, limit, offset)
+
+
+# [Sessão 22] Export em lote (ZIP) — self-only, filtrável por período.
+# Precisa vir ANTES de /{activity_id} (rota estática vs. dinâmica).
+# Saída: ZIP com N arquivos, cada um no formato unitário (S21):
+#   - format=csv → rumo_<id>_<type>.csv (todas as atividades do filtro)
+#   - format=gpx → rumo_<id>_<type>.gpx (só as com rota; as sem rota são omitidas)
+# 0 atividades no filtro → 200 com ZIP vazio. from > to → 422.
+@router.get("/export")
+async def export_activities_bulk(
+    format: Literal["csv", "gpx"] = Query(
+        default="csv",
+        description="Formato dos arquivos dentro do ZIP: 'csv' (metadados) ou 'gpx' (geometria).",
+    ),
+    from_: date | None = Query(
+        default=None,
+        alias="from",
+        description="Data inicial inclusiva (YYYY-MM-DD, UTC). Se omitida, sem limite inferior.",
+    ),
+    to_: date | None = Query(
+        default=None,
+        alias="to",
+        description="Data final inclusiva (YYYY-MM-DD, UTC). Se omitida, sem limite superior.",
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Baixa TODAS as suas atividades (do filtro) como um ZIP.
+
+    Diferente do export unitário (`/{activity_id}/export`):
+    - Escopo é só o seu: exporta apenas as atividades do usuário autenticado.
+    - Saída é um ZIP com um arquivo por atividade, no formato unitário.
+    - `format=gpx` omite as atividades sem rota (não gera GPX vazio).
+    - Filtro opcional `from`/`to` (YYYY-MM-DD, UTC, inclusivo nas pontas).
+
+    Casos de borda:
+    - 0 atividades no filtro → 200 com ZIP vazio (0 entries).
+    - `from` > `to` → 422 ("from deve ser <= to").
+    - `from`/`to` em formato inválido → 422 (validação do Pydantic).
+    """
+    try:
+        body, content_type, filename = await activity_service.export_activities_bulk(
+            db, current_user.id, format, from_, to_
+        )
+    except ValueError as exc:
+        # _get_user_activity_ids_in_range levanta ValueError se from > to.
+        # Traduz para 422 (semântica de input inválido, não erro do servidor).
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        )
+    except ServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
+
+    return Response(
+        content=body,
+        media_type=content_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{activity_id}", response_model=ActivityDetailResponse)

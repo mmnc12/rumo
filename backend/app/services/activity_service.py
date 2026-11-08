@@ -4,6 +4,8 @@ import asyncio
 import csv
 import io
 import json
+import zipfile
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal
 
 from geoalchemy2.elements import WKTElement
@@ -795,4 +797,145 @@ async def export_activity(
         _activity_to_csv(activity),
         "text/csv; charset=utf-8",
         _export_filename(activity, "csv"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Export em lote (ZIP) — [Sessão 22]
+# ---------------------------------------------------------------------------
+#
+# Diferente do export unitário (S21), aqui:
+# - Auth é self-only: exporta apenas as atividades do próprio viewer. Não
+#   exporta atividades de terceiros, mesmo seguidos. Escopo "meus dados".
+# - Saída é SEMPRE um ZIP (application/zip), com N arquivos dentro:
+#   - format=csv → N arquivos rumo_<id>_<type>.csv (1 header + 1 linha cada).
+#     Inclui atividades sem rota (bbox_* vazios) — CSV sempre funciona.
+#   - format=gpx → N arquivos rumo_<id>_<type>.gpx. Atividades sem rota são
+#     OMITIDAS (não dá pra gerar GPX sem geometria; arquivo vazio seria pior).
+# - Filtro opcional from/to (YYYY-MM-DD, UTC, inclusivo nas duas pontas):
+#   - from: started_at >= from 00:00 UTC
+#   - to:   started_at <  (to + 1 dia) 00:00 UTC  (inclui o dia inteiro)
+#   - from > to → ValueError (router traduz para 422)
+# - 0 atividades no filtro → ZIP vazio (0 entries), 200. Não é erro.
+#
+# Reuso: get_activity (preenche bbox), get_activity_track (geometria),
+# _activity_to_csv, _export_filename, to_gpx. Nada da S21 muda.
+#
+# Nome do arquivo externo: rumo_export_<YYYYMMDD-HHMMSS>.zip (UTC). Evita
+# sobrescrever ao baixar duas vezes seguidas.
+#
+# Custo: O(N) em queries (1 get_activity por atividade + 1 get_activity_track
+# por atividade com rota no GPX). Export é raro; aceitável. Se virar gargalo,
+# otimizar com um SELECT único + bbox por linha (mas aí duplica a lógica
+# de _attach_counts — preferi reusar).
+
+
+def _bulk_export_filename(now: datetime) -> str:
+    """Nome do ZIP externo: rumo_export_<YYYYMMDD-HHMMSS>.zip (UTC)."""
+    return f"rumo_export_{now.strftime('%Y%m%d-%H%M%S')}.zip"
+
+
+def _to_utc_start(d: date) -> datetime:
+    """Converte uma date em datetime UTC 00:00:00 do dia."""
+    return datetime.combine(d, time.min, tzinfo=timezone.utc)
+
+
+async def _get_user_activity_ids_in_range(
+    db: AsyncSession,
+    user_id,
+    date_from: date | None,
+    date_to: date | None,
+) -> list:
+    """IDs das atividades do usuário no intervalo (started_at DESC).
+
+    - Sem filtro: todas as atividades do usuário.
+    - from: started_at >= from 00:00 UTC.
+    - to:   started_at <  (to + 1 dia) 00:00 UTC (dia inteiro incluso).
+    - from > to: ValueError("from deve ser <= to") — router traduz p/ 422.
+
+    Ordenação: started_at DESC (mesma da lista). Determinística; o ZIP
+    preserva a ordem de inserção (zipfile.write em ordem).
+    """
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise ValueError("from deve ser <= to")
+
+    stmt = select(Activity.id).where(Activity.user_id == user_id)
+
+    if date_from is not None:
+        stmt = stmt.where(Activity.started_at >= _to_utc_start(date_from))
+
+    if date_to is not None:
+        # to inclusivo: < (to + 1 dia) 00:00 UTC
+        upper = _to_utc_start(date_to) + timedelta(days=1)
+        stmt = stmt.where(Activity.started_at < upper)
+
+    stmt = stmt.order_by(Activity.started_at.desc())
+    result = await db.execute(stmt)
+    return [row[0] for row in result.all()]
+
+
+async def export_activities_bulk(
+    db: AsyncSession,
+    viewer_id,
+    fmt: Literal["csv", "gpx"],
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> tuple[bytes, str, str]:
+    """Exporta as atividades do viewer como ZIP (CSV ou GPX por atividade).
+
+    Retorna (zip_bytes, content_type, filename).
+
+    - CSV: inclui TODAS as atividades no filtro (com ou sem rota). Cada
+      arquivo interno tem 1 header + 1 linha, mesmo formato do export
+      unitário (S21).
+    - GPX: inclui só atividades COM rota. Sem rota → omitida. Cada arquivo
+      interno é um GPX completo (<gpx><trk>…).
+    - 0 atividades no filtro → ZIP vazio (0 entries), 200.
+
+    Auth: self-only (viewer_id == dono). Diferente do unitário.
+    Levanta ValueError se from > to (router traduz para 422).
+    """
+    activity_ids = await _get_user_activity_ids_in_range(
+        db, viewer_id, date_from, date_to
+    )
+
+    now = datetime.now(timezone.utc)
+    zip_filename = _bulk_export_filename(now)
+
+    buf = io.BytesIO()
+    # ZIP_DEFLATED: CSV/GPX são texto e comprimem bem. ZIP_DEFLATED exige
+    # zlib, que é stdlib — sempre disponível no CPython oficial.
+    with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for activity_id in activity_ids:
+            # get_activity preenche bbox via _attach_counts; get_activity_track
+            # exige rota. Ambos chamam allow_following=True mas viewer é o
+            # dono, então o branch de follow nunca é exercitado aqui.
+            activity = await get_activity(
+                db, viewer_id, activity_id, allow_following=True
+            )
+
+            if fmt == "csv":
+                zf.writestr(
+                    _export_filename(activity, "csv"),
+                    _activity_to_csv(activity),
+                )
+            else:  # fmt == "gpx"
+                try:
+                    track = await get_activity_track(
+                        db, viewer_id, activity_id
+                    )
+                except NotFoundError:
+                    # Atividade sem rota: GPX não é gerável. Omitir é o
+                    # comportamento documentado (espelha o unitário).
+                    continue
+                gpx_str = to_gpx(activity, track.coordinates)
+                zf.writestr(
+                    _export_filename(activity, "gpx"),
+                    gpx_str.encode("utf-8"),
+                )
+
+    return (
+        buf.getvalue(),
+        "application/zip",
+        zip_filename,
     )
