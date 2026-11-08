@@ -1,4 +1,4 @@
-HANDOFF — Rumo (backend + frontend + mobile) — gerado ao fim da Sessão 18
+HANDOFF — Rumo (backend + frontend + mobile) — gerado ao fim da Sessão 19
 
 ===============================================================================
 
@@ -38,105 +38,105 @@ O QUE É LOCAL vs O QUE É PRODUÇÃO
     localmente" para testar UI.
 
     DOCKER: INSTALADO E FUNCIONAL no Windows local. pytest -q local verde
-    (129 passed ao fim da Sessão 18). Container de teste rumo_postgres_test
-    na porta 5433. Para reativar numa sessão nova: (1) abrir Docker Desktop e
-    esperar a baleia verde; (2) garantir que o terminal foi aberto via Win+R
-    (fora do VS Code / Windows Terminal, que herdam PATH antigo);
-    (3) cd D:\Rumo\backend; (4) docker compose -f docker-compose.test.yml up -d;
-    (5) ..venv\Scripts\Activate.ps1 (pular se o prompt já mostra (.venv));
-    (6) pytest -q.
+    (136 passed ao fim da Sessão 19). Container de teste rumo_postgres_test
+    na porta 5433. Para reativar numa sessão nova:
+    (1) abrir Docker Desktop e esperar a baleia verde;
+    (2) garantir que o terminal foi aberto via Win+R (fora do VS Code /
+        Windows Terminal, que herdam PATH antigo);
+    (3) cd D:\Rumo\backend;
+    (4) docker compose -f docker-compose.test.yml up -d;
+    (5) .\venv\Scripts\Activate.ps1  (UM ponto, não dois — ver lição S19);
+    (6) python -m pytest -q  (ou pytest -q, se o PATH do venv estiver certo).
+
+    VENV: ao fim da S19, o venv ativo é D:\Rumo\backend\venv (sem ponto),
+    criado com Python 3.13.7. Havia também um .venv antigo (não removido —
+    ver dívida técnica) que NÃO deve ser usado.
 
 ESTRUTURA DO REPO (referência — NÃO É PARA ASSUMIR, É PARA CONFERIR)
 
-Árvore de alto nível REAL, confirmada na Sessão 17 e mantida na S18:
+Árvore de alto nível REAL, confirmada na Sessão 19:
 
 D:\Rumo
 ├── .vscode
 ├── backend
 │ ├── .pytest_cache
 │ ├── .ruff_cache
-│ ├── .venv\ # virtualenv Python ativo (..venv\Scripts\Activate.ps1)
+│ ├── .venv\                # ANTIGA, não usar; remoção pendente (dívida)
+│ ├── venv\                 # ATIVA (Python 3.13.7) — usar esta
 │ ├── alembic
 │ ├── app
 │ │ ├── core
 │ │ ├── models
-│ │ ├── routers\ # activities.py, auth.py, comments.py, feed.py,
-│ │ │ # notifications.py, photos.py, users.py, init.py
-│ │ ├── schemas\ # activity.py, like.py, stats.py, ...
-│ │ ├── services\ # activity_service.py, comment_service.py, errors.py,
-│ │ │ # feed_service.py, fit_service.py, follow_service.py,
-│ │ │ # gpx_service.py, like_service.py, notification_service.py,
-│ │ │ # photo_service.py, stats_service.py, user_service.py
-│ │ └── pycache
+│ │ ├── routers\            # activities.py, auth.py, comments.py, feed.py,
+│ │ │                       # notifications.py, photos.py, users.py, __init__.py
+│ │ ├── schemas\            # activity.py, like.py, stats.py, user.py, ...
+│ │ ├── services\           # activity_service.py, comment_service.py, errors.py,
+│ │ │                       # feed_service.py, fit_service.py, follow_service.py,
+│ │ │                       # gpx_service.py, like_service.py, notification_service.py,
+│ │ │                       # photo_service.py, stats_service.py, user_service.py
+│ │ └── __pycache__
 │ ├── samples
 │ ├── scripts
-│ ├── tests\ # conftest.py + test_calories.py + test_comment.py +
-│ │ # test_follow.py + test_like.py + test_stats.py
+│ ├── tests\                # conftest.py + test_calories.py + test_comment.py +
+│ │                         # test_follow.py + test_like.py + test_stats.py + __init__.py
 │ ├── _scratch
 │ ├── docker-compose.test.yml
 │ ├── pytest.ini
 │ └── requirements.txt
 ├── docs
-│ └── HANDOFF.md # este arquivo
+│ └── HANDOFF.md            # este arquivo
 ├── mobile
 │ └── lib
-│ ├── models\ # activity.dart, activity_track.dart, comment.dart
-│ ├── pages\ # activity_detail_page.dart, feed_page.dart,
-│ │ # login_page.dart
+│ ├── models\               # activity.dart, activity_track.dart, comment.dart
+│ ├── pages\                # activity_detail_page.dart, feed_page.dart, login_page.dart
 │ ├── services
-│ └── widgets\ # activity_map.dart, like_button.dart (flat)
+│ └── widgets\              # activity_map.dart, like_button.dart
 └── web
     └── src
-        ├── api\ # activities.ts, auth.ts, client.ts, notifications.ts,
-        │ # photos.ts, social.ts, stats.ts
+        ├── api\            # activities.ts, auth.ts, client.ts, notifications.ts,
+        │                   # photos.ts, social.ts, stats.ts
         ├── assets
-        ├── components\ # ActivityCard, ActivityResults, AppHeader,
-        │ # CommentsSection, LikeButton, NotificationBell,
-        │ # PeriodChart (unifica 4 gráficos), PhotoGallery,
-        │ # PhotoUpload, ProtectedRoute, RouteMap, StatsCards,
-        │ # UserResults
+        ├── components\     # ActivityCard, ActivityResults, AppHeader, CommentsSection,
+        │                   # LikeButton, NotificationBell, PeriodChart, PhotoGallery,
+        │                   # PhotoUpload, ProtectedRoute, RouteMap, StatsCards, UserResults
         ├── contexts
-        ├── hooks\ # useActivities, useActivitySearch, useAuth, useDebounce,
-        │ # useNotifications, usePhotos, useProfile, useSocial,
-        │ # useStats, useUserSearch
-        ├── lib\ # format.ts (format* + formatElevation),
-        │ # geo.ts (bboxToOsmTileGrid — único helper geo desde S17)
-        ├── pages\ # ActivitiesPage, ActivityDetailPage, FeedPage,
-        │ # LoginPage, NotificationsPage, ProfilePage,
-        │ # RegisterPage, SearchPage, UploadPage
-        └── types\ # api.ts (todos os tipos, StatsByTypePrevious — S18)
+        ├── hooks\          # useActivities, useActivitySearch, useAuth, useDebounce,
+        │                   # useNotifications, usePhotos, useProfile, useSocial,
+        │                   # useStats, useUserSearch
+        ├── lib\            # format.ts, geo.ts
+        ├── pages\          # ActivitiesPage, ActivityDetailPage, FeedPage, LoginPage,
+        │                   # NotificationsPage, ProfilePage, RegisterPage, SearchPage, UploadPage
+        └── types\          # api.ts
 
-DIVERGÊNCIAS vs handoff da Sessão 17:
+DIVERGÊNCIAS vs handoff da Sessão 18:
 
-    backend/app/services/stats_service.py: get_by_type ganhou comparação
-    com a janela anterior. Novo helper _current_window_expr; WHERE ampliado
-    para 2N dias quando period != "all"; métricas atuais via CASE WHEN;
-    previous montado em Python. get_summary e get_period_stats intocados.
+    backend/app/routers/users.py: +4 endpoints GET /users/{user_id}/stats/{summary,
+        weekly, monthly, by-type}. +helper _ensure_can_view_stats (404 target
+        inexistente; 403 viewer não segue; self sempre OK). Endpoints declarados
+        ANTES de @router.get("/{user_id}") para não colidir com parsing de UUID.
+        Reaproveitam 100% do stats_service (mesmas assinaturas, só passam
+        target_id). Sem mudança em /activities/stats/*.
 
-    backend/app/schemas/stats.py: +StatsByTypePreviousItem; +campo
-    previous: StatsByTypePreviousItem | None = None em StatsByTypeItem.
+    backend/tests/test_stats.py: +7 testes de stats públicas (self OK, 403 sem
+        follow, 200 com follow, weekly shape, monthly 403, by-type com previous,
+        user inexistente 404). +helpers _make_follow e _client_as (client com
+        override local de get_current_user, sem tocar no conftest). Total:
+        136 passed (era 129 na S18).
 
-    backend/tests/test_stats.py: +5 testes de previous (service + rota).
-    Total: 129 passed (era 124 na S17).
+    web/src/api/stats.ts: +4 funções getUserStats{Summary,Weekly,Monthly,ByType}
+        (mesmo shape, path /users/{userId}/stats/*). As 4 originais intocadas.
 
-    web/src/api/stats.ts: SÓ DOCSTRING de getStatsByType ganhou parágrafo
-    S18. Sem mudança de código.
+    web/src/hooks/useStats.ts: +statsKeys.user{All,Summary,Weekly,Monthly,ByType}
+        (namespaced por userId) +4 hooks useUserStats{...} com param canView
+        (enabled = canView && !!userId). Os 4 hooks originais intocados.
 
-    web/src/hooks/useStats.ts: SÓ 3 comentários S18. Sem mudança de código.
+    web/src/pages/ProfilePage.tsx: +import dos 4 hooks novos; +canView =
+        isSelf || isFollowing; +showOtherStats = !isSelf && isFollowing;
+        +8 chamadas de hook (4 self + 4 user) com enabled complementar;
+        +seleção de fonte (isSelf ? self : user); +seção de stats passa de
+        {isSelf && ...} para {canView && ...}. Conteúdo interno intocado.
 
-    web/src/types/api.ts: +StatsByTypePrevious; +campo
-    previous: StatsByTypePrevious | null em StatsByTypeItem (obrigatório
-    no tipo, não opcional — o backend sempre envia null quando não aplica).
-
-    web/src/pages/ProfilePage.tsx: +showPrevious; +<th> e <td> "vs. anterior"
-    condicionais; +componentes PreviousDelta e DeltaLine (no fim do arquivo).
-    Todo o resto intocado (filtros, toggles, StatsCards, PeriodChart, lista).
-
-    backend/app/routers/activities.py: INTOCADO na S18 (period já existia
-    desde a S17; previous é derivado no service, declarado no schema,
-    serializado pelo FastAPI).
-
-    mobile/: INTOCADO desde a S11 (sem drill-down de stats no app).
+    mobile/: INTOCADO desde a S11.
 
 Se um arquivo específico for necessário, o pedido correto é:
 Get-Content -Encoding UTF8 <caminho completo>
@@ -145,7 +145,6 @@ E o script de descoberta (primeira ação de sessão) está na seção 6.
 COMO RODAR COMANDOS FLUTTER NO WINDOWS DESTE USUÁRIO
 
     Flutter instalado em: C:\Users\nasci\flutter (bin em ...\flutter\bin).
-
     Versões: Flutter 3.47.9 (stable) / Dart 3.13.7 / DevTools 2.60.0.
 
     PROBLEMA CONHECIDO: mesmo com C:\Users\nasci\flutter\bin no PATH do usuário
@@ -155,16 +154,12 @@ COMO RODAR COMANDOS FLUTTER NO WINDOWS DESTE USUÁRIO
     SOLUÇÃO QUE FUNCIONA (usar por padrão):
     & "C:\Users\nasci\flutter\bin\flutter.bat" <comando>
 
-    Repo/repo mobile: D:\Rumo e D:\Rumo\mobile. PowerShell, Windows 5.1.
-
 COMO RODAR DOCKER E PYTEST LOCAL (Windows deste usuário)
 
     Docker Desktop instalado em:
     C:\Users\nasci\AppData\Local\Programs\DockerDesktop
-
-    O executável docker.exe está em:
+    docker.exe em:
     C:\Users\nasci\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe
-
     Este caminho ESTÁ no PATH do usuário. Se docker não for reconhecido,
     é porque o PowerShell foi aberto de dentro do VS Code / Windows Terminal
     (herda PATH antigo). SOLUÇÃO: abrir PowerShell via Win+R → "powershell".
@@ -175,24 +170,38 @@ COMO RODAR DOCKER E PYTEST LOCAL (Windows deste usuário)
     Passos para pytest local:
 
         PowerShell via Win+R → "powershell"
-
         docker version (Client + Server) e docker compose version
-
         cd D:\Rumo\backend
-
         docker compose -f docker-compose.test.yml up -d
-
         docker ps (rumo_postgres_test Up healthy na 5433)
-
-        ..venv\Scripts\Activate.ps1
-        ATENÇÃO: se o prompt já mostra (.venv), PULE o Activate —
-        rodar ..venv\Scripts\Activate.ps1 com o venv já ativo dá
-        "módulo '..venv' não encontrado" (inofensivo, mas confunde).
-
-        pytest -q — esperado: 129 passed, 0 warnings (verde na Sessão 18)
+        .\venv\Scripts\Activate.ps1     # UM ponto, NÃO dois
+        # ATENÇÃO: se o prompt já mostra (venv), PULE o Activate —
+        # rodar .\venv\Scripts\Activate.ps1 com o venv já ativo é inofensivo,
+        # mas confunde. Se der "módulo '..venv' não encontrado", você digitou
+        # dois pontos por engano (ver lição S19).
+        python -m pytest -q — esperado: 136 passed, 0 warnings
 
     Se Activate.ps1 der erro de política:
     Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+
+    ⚠️ LIÇÃO S19 — PYTHON 3.14 NÃO SERVE PARA ESTE PROJETO.
+    O `py -3` deste Windows aponta para Python 3.14
+    (C:\Users\nasci\AppData\Local\Programs\Python\Python314). As versões
+    fixadas no requirements.txt (pydantic 2.10.4 → pydantic-core 2.27.2,
+    asyncpg 0.30.0, greenlet 3.1.1) NÃO têm wheels cp314 — o pip tenta
+    compilar do zero e falha (PyO3 0.22.6 não suporta 3.14; asyncpg/greenlet
+    quebram no compilador C com a API nova).
+    Pythons instalados (confirmado com `py -0p` na S19):
+        3.14 (default do `py -3`) — NÃO USAR
+        3.13 (C:\Python313)       — USAR ESTE
+        3.11 (C:\Python311)       — alternativa, mas não testado na S19
+        (não há 3.12)
+    Criar venv correto:
+        py -3.13 -m venv D:\Rumo\backend\venv
+    Se `py -3.13 -m venv` falhar, usar caminho direto:
+        C:\Python313\python.exe -m venv D:\Rumo\backend\venv
+    Se o prompt mostrar (venv) apontando para pasta apagada (venv fantasma),
+    rodar `deactivate` ANTES de recriar — senão o prompt continua enganando.
 
 COMO TESTAR O BACKEND DE PRODUÇÃO SEM O APP (PowerShell)
 
@@ -201,27 +210,43 @@ COMO TESTAR O BACKEND DE PRODUÇÃO SEM O APP (PowerShell)
     $login = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/login" -Method Post -ContentType "application/x-www-form-urlencoded" -Body $body
     $token = $login.access_token
 
-    Stats by-type COM previous (S18 — validado em produção):
-    Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=all"  -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 4
-    Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=90d"  -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 4
-    Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=1y"   -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 4
+    ⚠️ LIÇÃO S19 — "QUEM SOU EU" É GET /auth/me, NÃO /users/me.
+    /users/me devolve 422 (FastAPI tenta parsear "me" como UUID).
+    Endpoint correto:
+    $me = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/me" -Headers @{ Authorization = "Bearer $token" }
+    $meId = $me.id
+    (fallback: decodificar o `sub` do JWT — payload base64url.)
+
+    Stats de terceiros (S19 — validado em produção):
+    Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$meId/stats/summary" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
+    Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$meId/stats/weekly?weeks=8" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
+    Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$meId/stats/monthly?months=6" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
+    Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$meId/stats/by-type?period=90d" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 4
 
     Conta de teste: prod@rumo.com / senha12345.
-    NOTA — essa conta tem 3 walk (todas <90d). Por isso period=all, period=90d
-    e period=1y retornam IGUAIS, e "previous" vem null em TODOS os itens
-    (não há atividade na janela anterior). NÃO é bug — é ausência de dado
-    antigo. Os 129 testes locais (com _dt_ago(120), _dt_ago(500)) provam
-    o filtro e o previous de verdade. NÃO PERDER TEMPO achando que está
-    quebrado.
+    id de prod: 01a12c83-be2a-71fa-b966-1c93ca64f341 (6 atividades).
+    prod segue Prod2 (id 01a141e7-5ea4-7600-8959-19145475ad0a, 2 atividades).
+    Use Prod2 para validar o cenário "terceiro seguido" (os números de
+    Prod2 são bem distintos dos de prod — 2 vs 6 atividades, 14.643 m vs
+    26.443 m — qualquer vazamento é óbvio).
+    Para o cenário "terceiro NÃO seguido", usar a busca
+    (/users/search?q=a) e escolher um id que não seja prod nem Prod2.
+
+    ⚠️ LIÇÃO S18/S19 — "422 de versão" NÃO distingue S17 de S18.
+    O endpoint /activities/stats/by-type?period=30d devolve 422 desde a S17.
+    Para saber se o Render redeployou a S18, o check correto é GET ?period=90d
+    e verificar se o item tem a CHAVE "previous" (valor null é OK). Para a S19,
+    o check é: GET /users/{meId}/stats/summary responde 200 (não 404) e
+    GET /users/me responde 422 (esse endpoint nunca existiu — 404 aqui seria
+    sinal de que o router de users está quebrado). NÃO confundir "backend de
+    pé" com "versão certa no ar".
 
 O QUE O ASSISTENTE PRECISA PEDIR AO USUÁRIO (não tem acesso a arquivos)
 
     Conteúdo de arquivos via: Get-Content -Encoding UTF8 <caminho>
     (SEMPRE passar -Encoding UTF8; sem isso, acentos viram "inÃ­cio".)
-
     Saídas de comandos (flutter analyze, npm run build, git log, git status,
     pytest -q, ruff check).
-
     Nunca assumir estrutura "de cabeça": pedir o arquivo antes de reescrevê-lo.
 
     ATENÇÃO — arquivos truncados/duplicados: se um Get-Content vier com a
@@ -229,8 +254,7 @@ O QUE O ASSISTENTE PRECISA PEDIR AO USUÁRIO (não tem acesso a arquivos)
     Pedir ruff check <arquivo> (lista duplicatas de uma vez) e entregar o
     arquivo completo para Ctrl+A → colar → salvar.
 
-    ATENÇÃO (S17) — arquivo "salvo" que não salvou. A S17 perdeu dois rounds
-    porque o Ctrl+S não foi feito (ou foi feito em outro buffer/arquivo).
+    ATENÇÃO (S17, reforçada na S19) — arquivo "salvo" que não salvou.
     SINTOMA: build ou pytest falha dizendo que um símbolo novo não existe,
     mesmo o assistente tendo entregado o arquivo. DIAGNÓSTICO RÁPIDO:
     Get-Content -Encoding UTF8 <caminho> | Select-String -Pattern "<simbolo>"
@@ -238,6 +262,8 @@ O QUE O ASSISTENTE PRECISA PEDIR AO USUÁRIO (não tem acesso a arquivos)
     usuário salvar de novo. Isso NÃO é bug de código — é save perdido.
     REGRA: depois de entregar um arquivo que muda contrato, pedir a
     confirmação com Get-Content | Select-String ANTES de rodar build/test.
+    Na S19 isso funcionou nas duas entregas (backend users.py, front
+    ProfilePage.tsx) — manter.
 
     ATENÇÃO — git diff pipeado no PowerShell pode exibir acentos como
     mojibake. É artefato de codepage do pipe, NÃO corrupção do arquivo.
@@ -248,28 +274,21 @@ O QUE O ASSISTENTE PRECISA PEDIR AO USUÁRIO (não tem acesso a arquivos)
     ATENÇÃO — git log sem --no-pager abre o less e trava o terminal.
     SEMPRE usar git --no-pager log ... ou prefixar com $env:PAGER="".
 
-    ATENÇÃO (S18 — NOVO) — "422 de versão" NÃO distingue S17 de S18.
-    O endpoint /activities/stats/by-type?period=30d devolve 422 desde a S17
-    (period já existia). Para saber se o Render redeployou a S18, o check
-    correto é: GET ?period=90d e verificar se o item tem a CHAVE "previous"
-    (valor null é OK). Se a chave não existir, o Render ainda está na S17.
-    NÃO confundir "backend de pé" com "S18 no ar".
-
-    ATENÇÃO (S18 — NOVO) — WHERE mata a janela anterior antes do CASE WHEN.
-    Regra aprendida: quando um único SELECT precisa somar duas janelas de
-    tempo, o WHERE NÃO pode filtrar só a janela atual — ele descarta as
-    linhas da janela anterior ANTES do CASE WHEN chegar nelas. Solução:
-    ampliar o WHERE para cobrir as duas janelas (started_at >= now - 2N) e
-    fazer o recorte da janela atual DENTRO de cada métrica, via
-    SUM(CASE WHEN <janela_atual> THEN col ELSE 0 END), inclusive a contagem
-    (SUM(CASE WHEN ... THEN 1 ELSE 0 END)). Detalhe na seção 7.
+    ATENÇÃO (S19 — NOVO) — Pylance reclamando de "Não foi possível resolver
+    a importação fastapi/sqlalchemy/pytest..." NÃO é erro de código.
+    É o VS Code apontando para o interpretador errado (provavelmente o .venv
+    antigo ou o Python global). Terminal está certo (venv). Correção:
+    Ctrl+Shift+P → "Python: Select Interpreter" → escolher
+    D:\Rumo\backend\venv\Scripts\python.exe → Developer: Reload Window.
+    Se não aparecer, criar .vscode/settings.json com
+    "python.defaultInterpreterPath": "D:\\Rumo\\backend\\venv\\Scripts\\python.exe"
+    e "python.analysis.extraPaths": ["D:\\Rumo\\backend"].
 
 ACORDOS DE TRABALHO (válidos em todas as sessões)
 
     SEMPRE seguir a recomendação do assistente. Quando houver decisão
     pendente, executar a recomendada salvo instrução explícita em contrário.
-    (Usuário reforçou isso no início das Sessões 15, 16, 17 e de novo na 18:
-    "sempre vamos fazer o que você recomenda".)
+    (Usuário reforçou isso no início das Sessões 15, 16, 17, 18 e 19.)
 
     SEMPRE entregar o CÓDIGO COMPLETO ao atualizar um arquivo — nunca diff
     parcial, nunca "// resto igual". Preservar imports, comentários e trechos
@@ -278,11 +297,7 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
 
     UMA versão por arquivo por resposta. Se errar no meio do raciocínio,
     cortar a versão errada e entregar só a corrigida com nota de 1 linha.
-    NUNCA duas versões do mesmo arquivo na mesma resposta. (A S18 violou
-    essa regra uma vez com o ProfilePage.tsx — entregou uma versão com bug
-    no PreviousDelta e, na mesma resposta, a corrigida. O usuário não
-    reclamou, mas foi erro do assistente. NÃO repetir: se errar, cortar a
-    versão errada e entregar só a corrigida.)
+    NUNCA duas versões do mesmo arquivo na mesma resposta.
 
     HANDOFF PREVENTIVO em ~70-80% do limite de contexto: parar o trabalho em
     curso e entregar o HANDOFF completo neste mesmo formato (seções 0 a 8),
@@ -298,14 +313,14 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
     VERIFICAR SAVE ANTES DE BUILD: quando o assistente entrega um arquivo
     com símbolo novo (tipo, função, param), pedir ao usuário:
     Get-Content -Encoding UTF8 <caminho> | Select-String -Pattern "<simbolo>"
-    antes de rodar build/test. A S17 mostrou que o Ctrl+S pode não pegar.
+    antes de rodar build/test.
 
 ===============================================================================
 
     TL;DR PARA QUEM CHEGA AGORA
     ===============================================================================
 
-    Backend: 129 testes passando LOCALMENTE (pytest -q verde na Sessão 18),
+    Backend: 136 testes passando LOCALMENTE (pytest -q verde na Sessão 19),
     0 warnings. Activity.route é PostGIS LINESTRING. GET /activities/{id}/track
     devolve TrackResponse com coordinates em ordem GeoJSON [lon, lat],
     bbox [minLon,minLat,maxLon,maxLat], n_points, simplified. 404 quando
@@ -321,81 +336,112 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
         GET /activities/stats/weekly?weeks=N — StatsWeeklyResponse.
         GET /activities/stats/monthly?months=N — StatsMonthlyResponse.
         GET /activities/stats/by-type?period=<all|90d|1y> — StatsByTypeResponse.
-            (S17) period é opcional, default "all". Valores inválidos → 422.
-            Janela é retroativa a partir de now() (started_at >= now() - N dias).
-            (S18) Cada item ganhou "previous" (janela imediatamente anterior)
-            ou null (quando period="all" ou tipo ausente na janela anterior).
+            (S17) period opcional, default "all". Inválidos → 422.
+            (S18) cada item tem "previous" (janela imediatamente anterior)
+            ou null (period="all" ou tipo ausente na janela anterior).
 
-    Os 3 primeiros endpoints de stats (summary/weekly/monthly) aceitam
-    activity_type opcional. O by-type NÃO aceita activity_type (é o
-    drill-down por tipo — filtrar por tipo derrotaria o propósito).
+    [Sessão 19] Stats públicas em perfis de terceiros — 4 endpoints novos,
+    espelhando os 4 acima, mas com user_id no path:
+
+        GET /users/{user_id}/stats/summary   → StatsSummary
+        GET /users/{user_id}/stats/weekly    → StatsWeeklyResponse
+        GET /users/{user_id}/stats/monthly   → StatsMonthlyResponse
+        GET /users/{user_id}/stats/by-type   → StatsByTypeResponse
+
+    Regra de acesso (helper _ensure_can_view_stats em routers/users.py):
+    - self (viewer == target) → 200, sem consulta extra.
+    - viewer segue target       → 200.
+    - viewer não segue target   → 403 ("Você precisa seguir este usuário pra
+                                   ver as estatísticas dele").
+    - target não existe         → 404 ("Usuário não encontrado") — 404, não
+                                   403, para não vazar existência.
+    Mesmo padrão do /activities/{id}/track e do feed. Reaproveitam 100% do
+    stats_service (mesmas assinaturas, target_id no lugar de current_user.id).
+    by-type mantém `previous` (mesma semântica da S18, custo zero).
+
+    Os 3 primeiros endpoints de /activities/stats/* aceitam activity_type
+    opcional. O by-type NÃO aceita (é o drill-down por tipo).
 
     Frontend Web: React 19 + Vite 8 + TypeScript + Tailwind; react-leaflet
     (RouteMap no detalhe) + recharts (gráficos no perfil). Drill-down por
     tipo tem segmented control de janela temporal (S17) e, quando period
     != "all", coluna "vs. anterior" com delta (Ativ./Dist./Elev.) colorido
-    (S18).
+    (S18). [S19] A seção de stats do ProfilePage agora renderiza também
+    para perfis de terceiros quando o viewer segue o alvo; quando não segue,
+    não renderiza.
 
     Mobile: mapa de rota no detalhe (flutter_map, OSM/Esri satélite),
     alternância Mapa/Satélite, miniatura no feed via CameraFit.bounds.
     Sem drill-down de stats no app.
 
-    [Sessão 18 — entregas]
+    [Sessão 19 — entregas]
 
-        Backend — comparação com janela imediatamente anterior.
+        Backend — stats públicas em perfis de terceiros.
 
-            schemas/stats.py: +StatsByTypePreviousItem (5 métricas, sem
-            activity_type). StatsByTypeItem ganhou
-            previous: StatsByTypePreviousItem | None = None.
+            routers/users.py: +4 endpoints GET /users/{user_id}/stats/{...},
+            declarados ANTES de @router.get("/{user_id}") (senão FastAPI
+            tenta parsear "stats" como UUID → 422). +helper
+            _ensure_can_view_stats (self OK / segue OK / senão 403; target
+            inexistente → 404). Reaproveitam stats_service.get_summary,
+            get_period_stats e get_by_type sem mudança de assinatura.
+            Imports novos: Literal (typing), StatsSummary/StatsWeeklyResponse/
+            StatsMonthlyResponse/StatsByTypeResponse (schemas.stats),
+            stats_service (services).
 
-            services/stats_service.py: get_by_type estendido. Novo
-            _current_window_expr (condição started_at >= now - N).
-            _previous_window_expr (já existia da entrega interna, mas é
-            o helper que define [now-2N, now-N)). WHERE ampliado para
-            started_at >= now - 2N quando period != "all". Métricas da
-            janela atual via SUM(CASE WHEN <janela_atual> THEN col ELSE 0
-            END), inclusive contagem. Métricas da janela anterior via
-            SUM(CASE WHEN <janela_anterior> THEN col ELSE 0 END). previous
-            montado em Python; null quando prev_total_activities == 0.
-            Loop pula linhas com curr_activities == 0 (tipo só na janela
-            anterior não aparece). get_summary e get_period_stats INTOCADOS.
+            tests/test_stats.py: +7 testes no fim do arquivo, seção
+            "# ===== Stats públicas em perfis de terceiros [Sessão 19] =====".
+            +helper _make_follow (insert direto de Follow, sem notificação).
+            +helper _client_as(user, test_engine) — AsyncClient com override
+            LOCAL de get_current_user (não toca no conftest; usa o test_engine
+            session-scoped para o mesmo banco). Testes:
+              - test_user_stats_summary_self_ok (regressão self, via client
+                padrão)
+              - test_user_stats_summary_forbidden_when_not_following (403,
+                mensagem contém "seguir")
+              - test_user_stats_summary_allowed_when_following (200, dados
+                do ALVO — prova que target_id é respeitado)
+              - test_user_stats_weekly_allowed_when_following (shape
+                {weeks, items})
+              - test_user_stats_monthly_forbidden_when_not_following (403)
+              - test_user_stats_by_type_previous_when_following (200,
+                previous preenchido para 90d)
+              - test_user_stats_unknown_user_404 (404, não 403)
+            Total: 136 passed.
 
-            tests/test_stats.py: +5 testes:
-              - test_get_by_type_previous_90d (45d atual, 120d anterior)
-              - test_get_by_type_previous_1y (200d atual, 500d anterior)
-              - test_get_by_type_previous_all_is_none (period=all → null)
-              - test_get_by_type_previous_none_when_type_absent_in_window
-                (item existe, previous null)
-              - test_route_by_type_previous_shape (shape HTTP com as 5
-                chaves exatas em 90d; null em all)
-            Total: 129 passed.
+        Web — stats no perfil de terceiros seguidos.
 
-        Web — coluna "vs. anterior" no drill-down por tipo.
+            api/stats.ts: +4 funções getUserStats{Summary,Weekly,Monthly,
+            ByType} com userId no path. As 4 originais (getStatsSummary,
+            getStatsWeekly, getStatsMonthly, getStatsByType) INTOCADAS,
+            incluindo o docstring S18 do by-type.
 
-            types/api.ts: +StatsByTypePrevious (5 campos). StatsByTypeItem
-            ganhou previous: StatsByTypePrevious | null (obrigatório no tipo;
-            null é valor válido, não undefined).
+            hooks/useStats.ts: +statsKeys.user{All,Summary,Weekly,Monthly,
+            ByType} namespaced por userId (não colidem com as keys self).
+            +4 hooks useUserStats{Summary,Weekly,Monthly,ByType}(userId |
+            undefined, canView, ...). `enabled = canView && !!userId`;
+            staleTime 60s; retry 1. Os 4 hooks originais INTOCADOS, incluindo
+            os comentários S13/S14/S17/S18.
 
-            pages/ProfilePage.tsx: +import type { StatsByTypeItem };
-            +const showPrevious = byTypePeriod !== "all"; +<th> "vs. anterior"
-            condicional; +<td> com <PreviousDelta item={item} /> condicional;
-            +componentes PreviousDelta e DeltaLine no fim do arquivo.
-            PreviousDelta mostra 3 linhas: Ativ./Dist./Elev., com delta
-            absoluto e percentual (percentual só quando previous > 0), cor
-            verde (subiu) / vermelho (desceu) / cinza (igual). null → "—".
-            DeltaLine recebe current, previous, formatter opcional.
+            pages/ProfilePage.tsx: +import dos 4 hooks novos; +canView =
+            isSelf || isFollowing; +showOtherStats = !isSelf && isFollowing;
+            +8 chamadas de hook (4 self + 4 user) com enabled complementar
+            (self.enabled = isSelf...; user.enabled = showOtherStats...);
+            +seleção de fonte (isSelf ? selfQuery : userQuery); +seção de
+            stats passa de {isSelf && (...)} para {canView && (...)}.
+            Conteúdo interno (TYPE_FILTERS, TYPE_LABELS, PACE_TYPES,
+            PERIOD_FILTERS, toggles, StatsCards, PeriodChart, tabela,
+            PreviousDelta, DeltaLine, lista de atividades, abas, UserRow,
+            computePace) INTOCADO.
 
-            api/stats.ts: SÓ DOCSTRING de getStatsByType ganhou parágrafo S18.
-            hooks/useStats.ts: SÓ 3 comentários S18.
-
-        Estado final: working tree limpo, HEAD == origin/main == b0e3a29,
-        pytest 129 passed / 0 warnings (local), ruff All checks passed,
-        npm run build verde (824 modules, ProfilePage 15.98 kB), flutter
-        analyze sem issues, Render deployado (previous presente na
-        resposta do period=90d em produção), Vercel redeployado (timing
-        pós-push, não validado visualmente — próxima sessão pode conferir
-        abrindo https://rumo-wheat.vercel.app e indo em /users/me ou
-        equivalente).
+        Estado final: working tree limpo, HEAD == origin/main == 0df0b9f.
+        pytest 136 passed / 0 warnings (local). ruff All checks passed.
+        npm run build verde (824 modules, ProfilePage 17.52 kB).
+        flutter analyze sem issues. Render deployado (endpoints S19
+        respondendo em produção). Vercel redeployado e validado
+        visualmente: cenário 1 (self, 6 atividades / 26.443 m) OK;
+        cenário 2 (Prod2 seguido, 2 atividades / 14.643 m / 0 kcal / pace
+        496,89 s/km) OK — dados do alvo, não vazaram os do viewer;
+        cenário 3 (terceiro não seguido) OK — sem seção de stats.
 
 ===============================================================================
 
@@ -403,172 +449,188 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
     ===============================================================================
 
     Backend: https://rumo-api-5s0b.onrender.com
-
     Docs Backend: https://rumo-api-5s0b.onrender.com/docs
-
     Frontend Web: https://rumo-wheat.vercel.app
-
     Repo local: D:\Rumo
-
     Mobile: D:\Rumo\mobile
-
     Web: D:\Rumo\web (scripts: "build": "tsc -b && vite build", "lint": "eslint .")
-
     Flutter: 3.47.9 / Dart 3.13.7
-
     Docker Desktop: 4.93.0 (engine 29.8.1, compose v5.5.1)
-
     SO: Windows, PowerShell 5.1
+    Python: 3.13.7 (venv em D:\Rumo\backend\venv) — NÃO usar 3.14
+    Venv backend: D:\Rumo\backend\venv (ativa com .\venv\Scripts\Activate.ps1)
 
-    Venv backend: D:\Rumo\backend.venv (ativa com ..venv\Scripts\Activate.ps1)
-
-    Git (estado ao fim da Sessão 18):
-    b0e3a29 (HEAD -> main, origin/main) feat(stats): comparacao com janela anterior no drill-down por tipo (Sessao 18)
+    Git (estado ao fim da Sessão 19):
+    0df0b9f (HEAD -> main, origin/main) feat(web): stats no perfil de terceiros seguidos (Sessao 19)
+    229e36b feat(users): stats publicas em perfis de terceiros (Sessao 19)
+    4ba08da docs: handoff da Sessao 18
+    b0e3a29 feat(stats): comparacao com janela anterior no drill-down por tipo (Sessao 18)
     494d8cc docs: handoff da Sessao 17
     5925a03 feat(stats): filtro de periodo no drill-down por tipo (90d|1y|all)
     0f1c6ef chore(web): remove bboxToOsmTileUrl deprecated da Sessao 16
     1ab793d docs: handoff da Sessão 16
     a8a515f feat(web): miniatura do feed em mosaico 2x2 de tiles OSM
     05185f0 docs: handoff da Sessão 15
-    4cfd099 refactor(web): StatsCards usa formatElevation em vez de inline
-    fdac345 feat(web): coluna de elevacao no drill-down por tipo
-    3cf7668 refactor(backend): migra parsing de .FIT de fitparse para fitdecode
 
     Todos os commits estão em origin/main (pushados).
-
-    Render e Vercel deployam automático a cada push em main. A Sessão 18
-    está deployada em produção (validado via "previous": null no
-    period=90d).
+    Render e Vercel deployam automático a cada push em main.
 
 ===============================================================================
 
-    O QUE FOI FEITO NA SESSÃO 18
+    O QUE FOI FEITO NA SESSÃO 19
     ===============================================================================
 
-3.1 Validação de estado inicial (Sessão 18)
+3.1 Validação de estado inicial (Sessão 19)
 
-    PowerShell via Win+R, repo em D:\Rumo, venv backend ativo.
-
+    PowerShell via Win+R, repo em D:\Rumo.
     git push: Everything up-to-date.
-
-    HEAD == origin/main == 5925a03 (commit da S17, antes do handoff).
-
-    git status --short: docs/HANDOFF.md modificado (handoff da S17 ainda
-    não commitado).
-
-    npm run build: 824 modules, verde.
-
+    HEAD == origin/main == 4ba08da (handoff da S18 commitado).
+    git status --short: limpo.
+    npm run build: 824 modules, verde (ProfilePage 15.98 kB).
     flutter analyze: No issues found.
+    docker version / compose version: OK.
+    docker ps: rumo_postgres_test subiu na 5433.
 
-    docker ps: rumo_postgres_test healthy.
+    pytest -q: NÃO rodou de primeira — venv quebrado (ver 3.2).
 
-    pytest -q: 124 passed (estado da S17).
+3.2 Recuperação do venv (lição grande da S19)
 
-    Detecção de versão em produção: 422 em period=30d. S17 deployada.
+    Sintoma 1: `..venv\Scripts\Activate.ps1` falhou com "Não foi possível
+    carregar o módulo '..venv'". Causa: o handoff da S18 tinha o typo
+    "..venv" (dois pontos) — o correto é ".\venv" (um ponto).
 
-    Commit do handoff da S17: 494d8cc (docs: handoff da Sessao 17).
+    Sintoma 2: o prompt mostrava (venv), mas D:\Rumo\backend\venv não
+    existia — era um venv "fantasma" apontando para pasta apagada.
+    Correção: `deactivate` antes de qualquer coisa.
 
-3.2 Definição de contrato (antes de codar)
+    Sintoma 3: `py -3 -m venv venv` criou venv com Python 3.14 (default
+    do `py -3`). `pip install -r requirements.txt` falhou compilando
+    asyncpg, greenlet e pydantic-core — nenhuma tem wheel cp314.
+    Diagnóstico: `py -0p` mostrou 3.14 (default), 3.13 (C:\Python313),
+    3.11 (C:\Python311); sem 3.12.
 
-    Usuário reforçou "sempre vamos seguir suas recomendações".
+    Correção final (funcionou):
+        cd D:\Rumo\backend
+        deactivate                      # se prompt mostrar (venv)
+        Remove-Item -Recurse -Force .\venv   # remove o 3.14 quebrado
+        py -3.13 -m venv D:\Rumo\backend\venv
+        .\venv\Scripts\Activate.ps1     # UM ponto
+        python -m pip install --upgrade pip
+        python -m pip install -r requirements.txt   # baixa wheels, sem compilar
+        python -m pytest -q             # 129 passed (estado da S18)
 
-    Contrato fixado:
+    Pytest: 129 passed in 34s. fitdecode 0.11.0 OK; fitparse ausente (correto).
 
-        - "Anterior" = janela imediatamente anterior, sem sobreposição:
-          90d → [now-180d, now-90d); 1y → [now-730d, now-365d).
-        - period="all" → sem comparação (previous is None).
-        - previous aninhado no item; null quando period="all" ou quando
-          o tipo não tem atividade na janela anterior.
-        - Implementação (A): um único SELECT, SUM(CASE WHEN ...) por
-          métrica; sem N+1.
-        - Front: coluna "vs. anterior" no ProfilePage, visível só em
-          period != "all"; delta absoluto + percentual; verde/vermelho/cinza.
-        - Fora de escopo: StatsCards (summary "todos os tempos"), mobile,
-          get_summary, get_period_stats.
+    Detecção de versão em produção (S18): campo `previous` presente no
+    period=90d → S18 no ar. Estrutura conferida via Get-ChildItem: igual
+    ao handoff da S18, exceto que existem DUAS pastas de venv (.venv antiga
+    e venv nova). ruff All checks passed.
 
-3.3 [Backend] Implementação + testes
+3.3 Decisão de rota (Opção 2 — stats públicas)
+
+    Usuário reforçou "sempre vamos fazer o que você recomendar".
+    Opções do handoff da S18: (1) year-over-year, (2) stats públicas em
+    perfis de terceiros, (3) export CSV/GPX, (4) resíduos de baixo risco.
+    Recomendação: Opção 2. Motivos: evolução natural do produto (o app já
+    mostra perfil de terceiros, mas esconde stats); adição de endpoints
+    novos (não muda contrato existente); 100% testável local; front pequeno
+    (1 condicional no ProfilePage); privacidade alinhada com /track e feed.
+
+    Decisões travadas:
+    - Regra de acesso: viewer segue o alvo (mesma do /track).
+    - Endpoints novos /users/{user_id}/stats/* (não param em /activities).
+    - by-type de terceiros mantém `previous`.
+    - Front: se !isSelf && isFollowing → mostra stats do alvo; se não
+      segue → não renderiza (sem mensagem "siga pra ver stats").
+
+3.4 [Backend] Implementação + testes
 
     Ordem de entrega (uma versão por arquivo por resposta):
-
-        stats_service.py (completo)
-        schemas/stats.py (completo)
-        tests/test_stats.py (completo)
-
+        users.py (completo)
+        test_stats.py (completo)
     Cada um: usuário cola Get-Content -Encoding UTF8, assistente entrega
-    arquivo completo, usuário confirma com Select-String (padrão S17),
-    depois pytest -q.
+    arquivo completo, usuário confirma com Select-String, depois pytest.
 
-    Rounds:
+    users.py:
+        - +helper _ensure_can_view_stats(db, viewer_id, target_id):
+          viewer == target → return; db.get(User, target_id) → 404 se None;
+          is_following → 403 se False.
+        - +4 endpoints declarados ANTES de @router.get("/{user_id}"):
+          /{user_id}/stats/summary, /weekly, /monthly, /by-type.
+        - Mensagens consistentes: 403 = "Você precisa seguir este usuário
+          pra ver as estatísticas dele"; 404 = "Usuário não encontrado".
+        - Confirmado com Select-String: 1 definição + 4 chamadas.
+        - ruff All checks passed; pytest 129 passed (aditivo).
 
-        stats_service.py: 124 passed (o campo previous não estava no
-        schema ainda, então testes antigos intocados).
+    test_stats.py:
+        - +helpers _make_follow e _client_as (este último monta AsyncClient
+          com override local de get_db e get_current_user, reaproveitando
+          test_engine session-scoped; NÃO toca no conftest).
+        - +7 testes na seção S19.
+        - Confirmado com Select-String.
+        - ruff All checks passed; pytest 136 passed in 32.68s.
 
-        schemas/stats.py: 124 passed.
+    Commit 229e36b, push aceito. Render redeploya.
 
-        tests/test_stats.py: 3 FAILED, 126 passed.
-        Falhas: test_get_by_type_previous_90d, test_get_by_type_previous_1y,
-        test_route_by_type_previous_shape — todos com
-        "assert prev is not None" falhando.
+    Validação em produção:
+        /auth/me → id 01a12c83-be2a-71fa-b966-1c93ca64f341 (prod).
+        /users/{prod}/stats/summary → 6 atividades, 26.443,22 m, 18.679 s,
+          5.411,6 m elev, 1.091 cal, pace 706,38 s/km, speed 1,42 m/s.
+        weekly {weeks: 8, items} com period_start sempre segunda.
+        monthly {months: 6, items} com period_start sempre dia 01.
+        by-type?period=90d → items [{activity_type: "walk", ..., previous:
+          null}] — previous presente (prova do deploy), null porque prod
+          não tem walk na janela [now-180d, now-90d). Não é bug.
+        (Erro inicial: usei /users/me → 422. Correto é /auth/me. Lição
+        registrada.)
 
-    Diagnóstico (S18 — lição principal):
-
-        O get_by_type usava WHERE started_at >= now - N (só janela atual)
-        e CASE WHEN <janela_anterior> para previous. O WHERE descartava
-        as linhas da janela anterior ANTES do CASE WHEN — previous vinha
-        sempre null. Os 3 testes capturaram o bug corretamente.
-
-    Fix (entregue em stats_service.py completo, uma versão só):
-
-        - Novo helper _current_window_expr(period).
-        - Quando period != "all": WHERE vira started_at >= now - 2*N.
-        - Métricas atuais (5 originais) viram SUM(CASE WHEN <janela_atual>
-          THEN col ELSE 0 END), inclusive count
-          (SUM(CASE WHEN ... THEN 1 ELSE 0 END)).
-        - Loop pós-SQL pula linhas com curr_activities == 0.
-        - previous montado em Python; null quando prev_total_activities == 0.
-
-    Após o fix: 129 passed em 34.83s.
-
-3.4 [Front] Implementação
+3.5 [Front] Implementação
 
     Ordem de entrega (uma versão por arquivo por resposta, com build):
 
-        api/stats.ts (só docstring — tipos moram em types/api.ts)
-        types/api.ts (tipo novo StatsByTypePrevious + campo previous)
-        hooks/useStats.ts (só comentários — sem mudança de código)
-        pages/ProfilePage.tsx (coluna vs. anterior)
+        api/stats.ts (só adiciona 4 funções; as originais intocadas)
+        hooks/useStats.ts (só adiciona keys namespaced e 4 hooks novos)
+        pages/ProfilePage.tsx (adiciona canView/showOtherStats, 8 hooks,
+          seleção de fonte, e troca {isSelf &&} por {canView &&})
 
-    Build verde em cada um. ProfilePage cresceu 14.95 kB → 15.98 kB
-    (+1.03 kB, dentro do esperado).
+    Build verde em cada um:
+        stats.ts: 824 modules, ProfilePage 15.98 kB (sem consumidor novo).
+        useStats.ts: 824 modules, ProfilePage 16.23 kB (+0.25 kB — tree-shaking
+          não removeu porque o módulo já é importado pelo ProfilePage).
+        ProfilePage.tsx: 824 modules, ProfilePage 17.52 kB (+1.29 kB).
 
-    ERRO DO ASSISTENTE (registrado como lição):
+    Nenhum erro de TS.
 
-        O ProfilePage foi entregue DUAS VEZES na mesma resposta — a primeira
-        versão tinha um bug de design no PreviousDelta (recebia só
-        `previous`, não o item inteiro, e não conseguia computar delta/cor).
-        O assistente tentou remendar com comentário "NOTA DE IMPLEMENTAÇÃO"
-        e entregou a versão corrigida logo abaixo. Isso violou a regra
-        "UMA versão por arquivo por resposta". O usuário não salvou a
-        errada (avisado com "⚠️ Pare — antes de salvar, preciso corrigir"),
-        então não houve retrabalho, mas foi erro de processo.
-        PRÓXIMAS SESSÕES: se errar no meio da escrita, cortar a versão
-        errada e entregar SÓ a corrigida.
+3.6 Validação visual (produção)
 
-3.5 Estado final da sessão
+    Conta prod@rumo.com (id 01a12c83-...), logado no navegador.
+    prod segue Prod2 (id 01a141e7-..., 2 atividades, 14.643,22 m, pace
+    496,89 s/km, 0 kcal).
 
-    Working tree limpo, main == origin/main == b0e3a29.
+    Cenário 1 — /users/01a12c83-... (self):
+        Seção de stats normal: 6 atividades, 26.443 m, pace ~11:46/km.
+        Network: 4 requests para /activities/stats/*, nenhuma para
+        /users/.../stats/*. OK.
 
-    npm run build: verde (824 modules).
+    Cenário 2 — /users/01a141e7-... (Prod2, seguido):
+        Seção de stats com 2 atividades, 14.643 m, pace ~8:17/km, 0 kcal.
+        Network: 4 requests para /users/01a141e7-.../stats/*, nenhuma para
+        /activities/stats/*. OK — dados do alvo, sem vazamento.
 
-    pytest -q: 129 passed, 0 warnings (local).
+    Cenário 3 — terceiro não seguido:
+        Sem seção de stats. Network: zero requests no filtro "stats". OK.
 
+    Resultado do usuário: "tudo ok, aparentemente".
+
+3.7 Estado final da sessão
+
+    Working tree limpo, main == origin/main == HEAD == 0df0b9f.
+    npm run build: verde (824 modules, ProfilePage 17.52 kB).
+    pytest -q: 136 passed, 0 warnings (local).
     ruff check .: All checks passed.
-
-    flutter analyze: No issues found (não tocado na S18).
-
-    Backend em produção: "previous": null presente no period=90d
-    (Sessão 18 deployada no Render).
-
+    flutter analyze: No issues found (não tocado na S19).
+    Backend em produção: 4 endpoints /users/{id}/stats/* respondendo.
+    Front em produção: validado visualmente nos 3 cenários.
     Nenhuma pendência de git.
 
 ===============================================================================
@@ -583,99 +645,71 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
     {
     "activity_id": "uuid",
     "type": "LineString",
-    "coordinates": [[lon, lat], [lon, lat], ...], // GeoJSON
+    "coordinates": [[lon, lat], ...],   // GeoJSON
     "bbox": [minLon, minLat, maxLon, maxLat],
     "n_points": 60,
     "simplified": false
     }
 
     ActivityResponse (feed/lista/detalhe/busca):
-    {
-    ...,
-    "bbox": [minLon, minLat, maxLon, maxLat] // ou null
-    }
+    { ..., "bbox": [minLon, minLat, maxLon, maxLat] | null }
     Ordem GeoJSON. Null quando route IS NULL. Sem N+1.
 
-    ActivityResponse NÃO inclui route nem coordinates (polyline só via /track).
-
     GET /activities/stats/summary?activity_type=<opcional>
-    → StatsSummary:
-    {
-    "total_activities": 6,
-    "total_distance_m": 26443.22,
-    "total_duration_s": 18679,
-    "total_elevation_gain_m": 5411.6,
-    "total_calories": 1091,
-    "avg_pace_s_per_km": 706.38,
-    "avg_speed_mps": 1.42
-    }
+    → StatsSummary: total_activities, total_distance_m, total_duration_s,
+      total_elevation_gain_m, total_calories, avg_pace_s_per_km,
+      avg_speed_mps.
 
     GET /activities/stats/weekly?weeks=N&activity_type=<opcional>
-    → StatsWeeklyResponse:
-    {
-    "weeks": 8,
-    "items": [
-    {
-    "period_start": "2026-11-02", // sempre segunda-feira
-    "total_activities": 1,
-    "total_distance_m": 1000.0,
-    "total_duration_s": 600,
-    "total_calories": 41
-    },
-    ...
-    ]
-    }
+    → StatsWeeklyResponse: { weeks, items: [StatsPeriod] }.
+      StatsPeriod: period_start (segunda), total_activities,
+      total_distance_m, total_duration_s, total_calories.
 
     GET /activities/stats/monthly?months=N&activity_type=<opcional>
-    → StatsMonthlyResponse: mesmo shape do weekly, period_start é sempre
-    "YYYY-MM-01", chave "months".
+    → StatsMonthlyResponse: mesmo shape, chave "months", period_start
+      "YYYY-MM-01".
 
     GET /activities/stats/by-type?period=<all|90d|1y> (S17 + S18)
-    → StatsByTypeResponse:
-    {
-    "items": [
-    {
-    "activity_type": "run", // string
-    "total_activities": 12,
-    "total_distance_m": 84000.0,
-    "total_duration_s": 25200,
-    "total_elevation_gain_m": 1200.0,
-    "total_calories": 4200,
-    // S18: janela imediatamente anterior, ou null.
-    "previous": {
-    "total_activities": 9,
-    "total_distance_m": 61000.0,
-    "total_duration_s": 18300,
-    "total_elevation_gain_m": 900.0,
-    "total_calories": 3100
-    } // ou null
-    },
-    ...
-    ]
-    }
-    Só tipos com >= 1 atividade NA JANELA ATUAL aparecem.
-    Ordenação garantida: total_activities DESC, activity_type ASC (Python).
-    period: "all" (default) | "90d" | "1y". Valores inválidos → 422.
-    Janela atual: started_at >= now - N. Janela anterior:
-    started_at >= now - 2N e started_at < now - N.
-    previous: null se period="all" ou se não há atividade do tipo na
-    janela anterior (todas as 5 métricas zero).
+    → StatsByTypeResponse: { items: [StatsByTypeItem] }.
+      StatsByTypeItem: activity_type, total_activities, total_distance_m,
+      total_duration_s, total_elevation_gain_m, total_calories,
+      previous: StatsByTypePreviousItem | null.
+      StatsByTypePreviousItem: as 5 métricas (sem activity_type).
+      Só tipos com >= 1 atividade na janela ATUAL aparecem.
+      Ordenação: total_activities DESC, activity_type ASC (Python).
+      period inválido → 422. previous null para period="all" ou tipo
+      ausente na janela anterior.
 
-    Todos os endpoints de stats são do current_user (não aceitam user_id).
-    A UI só mostra stats no próprio perfil (isSelf).
+    [Sessão 19] GET /users/{user_id}/stats/summary    (mesmo shape acima)
+    [Sessão 19] GET /users/{user_id}/stats/weekly     (mesmo shape; weeks 1-52)
+    [Sessão 19] GET /users/{user_id}/stats/monthly    (mesmo shape; months 1-24)
+    [Sessão 19] GET /users/{user_id}/stats/by-type    (mesmo shape; period all|90d|1y)
+    Permissão (helper _ensure_can_view_stats):
+      - self: 200.
+      - viewer segue target: 200.
+      - viewer não segue: 403 "Você precisa seguir este usuário pra ver as
+        estatísticas dele".
+      - target inexistente: 404 "Usuário não encontrado".
+    Os 4 reaproveitam stats_service.* sem mudança de assinatura.
+    by-type mantém previous (mesma semântica da S18).
+
+    Endpoints de stats (todos, /activities e /users) NÃO aceitam user_id
+    para "ver de outro" fora da regra de follow. A UI só mostra stats no
+    perfil quando canView = isSelf || isFollowing.
+
+    GET /auth/me — identidade do usuário logado (S19: NÃO é /users/me).
+    Resposta: { id, email, username, full_name, weight_kg, height_cm,
+    birth_date, is_active, created_at }.
 
 ===============================================================================
 
     COMMITS PENDENTES / ESTADO DO REPO
     ===============================================================================
 
-    Sessões 9 a 18 commitadas e pushadas.
-
-    origin/main == main == HEAD == b0e3a29.
-
-    Sessão 18 fechada com este handoff (a commitar como
-    "docs: handoff da Sessao 18" na próxima ação).
-
+    Sessões 9 a 19 commitadas e pushadas.
+    origin/main == main == HEAD == 0df0b9f.
+    Sessão 19 fechada com este handoff (a commitar como
+    "docs: handoff da Sessao 19" na próxima ação).
     Nenhuma pendência conhecida de git.
 
 ===============================================================================
@@ -683,16 +717,16 @@ ACORDOS DE TRABALHO (válidos em todas as sessões)
     SCRIPTS ÚTEIS (PowerShell)
     ===============================================================================
 
-[Sessão 19 — primeira ação] Abrir PowerShell via Win+R → "powershell"
+[Sessão 20 — primeira ação] Abrir PowerShell via Win+R → "powershell"
 (NÃO abrir de dentro do VS Code / Windows Terminal)
 Depois:
-[Sessão 19 — primeira ação] Estado do repo (sem abrir o less)
+[Sessão 20 — primeira ação] Estado do repo (sem abrir o less)
 
 cd D:\Rumo
 git push
 git --no-pager log --oneline -8
 git status --short
-[Sessão 19 — primeira ação] Descoberta da estrutura do repo
+[Sessão 20 — primeira ação] Descoberta da estrutura do repo
 
 Get-ChildItem -Directory | Select-Object Name
 Get-ChildItem D:\Rumo\web\src -Directory | Select-Object Name
@@ -703,162 +737,145 @@ Get-ChildItem D:\Rumo\backend -Directory | Select-Object Name
 Get-ChildItem D:\Rumo\backend\app -Directory | Select-Object Name
 Get-ChildItem D:\Rumo\backend\app\routers -File | Select-Object Name
 Get-ChildItem D:\Rumo\backend\tests -File | Select-Object Name
-[Sessão 19 — primeira ação] Sanidade de build
+[Sessão 20 — primeira ação] Sanidade de build
 
 cd D:\Rumo\web
 npm run build
-
 cd D:\Rumo\mobile
 & "C:\Users\nasci\flutter\bin\flutter.bat" analyze
-[Sessão 19 — primeira ação] Docker + pytest local
+[Sessão 20 — primeira ação] Docker + pytest local
 
 docker version
 docker compose version
 cd D:\Rumo\backend
 docker compose -f docker-compose.test.yml up -d
 docker ps
-# Se o prompt já mostra (.venv), PULE a linha abaixo.
-..venv\Scripts\Activate.ps1
-pytest -q
+# Se o prompt já mostra (venv), PULE a linha abaixo.
+.\venv\Scripts\Activate.ps1      # UM ponto, NÃO dois
+python -m pytest -q              # esperado: 136 passed
 Verificar que fitdecode está instalado e fitparse NÃO
 
-python -c "import fitdecode; print('fitdecode OK:', fitdecode.version)"
-python -c "import fitparse" 2>&1 # esperado: ModuleNotFoundError
-[Sessão 19 — primeira ação] Detecção de versão em produção (S18 — campo previous)
+python -c "from importlib.metadata import version; print('fitdecode', version('fitdecode'))"
+python -c "import fitparse" 2>&1   # esperado: ModuleNotFoundError
+[Sessão 20 — primeira ação] Detecção de versão em produção (S19 — stats de terceiros)
 
 $body = "username=prod@rumo.com&password=senha12345"
 $login = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/login" -Method Post -ContentType "application/x-www-form-urlencoded" -Body $body
 $token = $login.access_token
-$resp = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=90d" -Headers @{ Authorization = "Bearer $token" }
-$first = $resp.items | Select-Object -First 1
-if ($first.PSObject.Properties.Name -contains "previous") {
-    Write-Host "RESULTADO: S18 no ar (campo previous presente; valor = $($first.previous))"
-} else {
-    Write-Host "RESULTADO: backend AINDA na S17 (sem campo previous)"
-}
-Login (produção)
+$me = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/me" -Headers @{ Authorization = "Bearer $token" }
+$meId = $me.id
+$resp = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$meId/stats/summary" -Headers @{ Authorization = "Bearer $token" }
+Write-Host "RESULTADO: S19 no ar (summary do /users/{id}/stats: $($resp.total_activities) atividades)"
+Login (produção) — ATENÇÃO: identidade é /auth/me, NÃO /users/me
 
 $body = "username=prod@rumo.com&password=senha12345"
 $login = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/login" -Method Post -ContentType "application/x-www-form-urlencoded" -Body $body
 $token = $login.access_token
-Feed com bbox (produção)
+$me = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/me" -Headers @{ Authorization = "Bearer $token" }
+$meId = $me.id
+Stats de terceiros (S19)
 
-$feed = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/feed?limit=5" -Headers @{ Authorization = "Bearer $token" }
-$feed | ForEach-Object { "$($_.id.Substring(0,8))  $($_.title)  bbox=$($_.bbox -join ',')" }
-Stats (produção)
+Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$meId/stats/summary" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
+Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$meId/stats/weekly?weeks=8" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
+Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$meId/stats/monthly?months=6" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
+Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$meId/stats/by-type?period=90d" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 4
+Quem prod segue (para o cenário "terceiro seguido")
+
+$prod2Id = "01a141e7-5ea4-7600-8959-19145475ad0a"
+Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$prod2Id/stats/summary" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
+Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/01a12c83-be2a-71fa-b966-1c93ca64f341/following" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
+Stats do self (comportamento antigo, para comparar)
 
 Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/summary" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
-Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/weekly?weeks=8" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
-Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/monthly?months=6" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
 Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=all" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 4
-Track (produção)
-
-$t = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/<id>/track" -Headers @{ Authorization = "Bearer $token" }
 Ruff (backend)
 
 cd D:\Rumo\backend
-..venv\Scripts\Activate.ps1
+# Se o prompt já mostra (venv), pule:
+.\venv\Scripts\Activate.ps1
 ruff check .
-
 ===============================================================================
 
     DÍVIDAS TÉCNICAS
     ===============================================================================
 
-    (ARMADILHA CONHECIDA — decisão da Sessão 14, documentada na S15/S16/S17)
-    Enums nativos do Postgres ordenam pela ORDEM DE DECLARAÇÃO, não pela
-    string. Activity.activity_type é Enum nativo (run, walk, cycle, hike,
-    swim, other). ORDER BY activity_type no SQL devolve nessa ordem.
-    DECISÃO: get_by_type (stats_service.py) faz o desempate final em Python:
-    items.sort(key=lambda r: (-r["total_activities"], r["activity_type"]))
-    REGRA PARA O FUTURO: qualquer novo ORDER BY em coluna Enum DEVE (a) fazer
-    o sort final em Python, ou (b) ser explicitamente testado contra a ordem
-    de declaração do enum. Não confiar em ORDER BY direto em coluna Enum.
+    (CONHECIDA — Sessão 19) Existem duas pastas de venv em D:\Rumo\backend:
+    .venv (antiga, provavelmente Python 3.12 ou 3.11, não usada) e venv
+    (Python 3.13.7, ativa). O `Remove-Item -Recurse -Force .\.venv` falhou
+    na S19 com "acesso negado a ruff.exe" (processo do VS Code segurando o
+    binário). Higiene pendente: com VS Code fechado, rodar
+        Get-Process ruff -ErrorAction SilentlyContinue | Stop-Process -Force
+        cd D:\Rumo\backend
+        Remove-Item -Recurse -Force .\.venv
+    Não bloqueia nada, mas confunde o Pylance (ver lição S19 de
+    "interpretador errado").
 
-    (CONHECIDA — Sessão 17) Filtro `period` usa `now()` do Postgres.
-    A janela retroativa é calculada com `func.now() - timedelta(...)` — ou
-    seja, o relógio de referência é o do servidor de banco, não o do
-    processo Python. Testes determinísticos com `_dt(2026, 1, 5)` NÃO servem
-    para testar `period` — precisam usar datas relativas a `now()`. Foi por
-    isso que a S17 adicionou `_dt_ago(days)` no test_stats.py. REGRA:
-    qualquer teste de `period` (ou de outra feature baseada em `now()`) DEVE
-    usar `datetime.now(timezone.utc) - timedelta(days=N)` com margem ≥ 10
-    dias entre dentro e fora da janela. Não misturar com `_dt` fixo.
+    (CONHECIDA — S19) Pylance pode reclamar de imports (fastapi, sqlalchemy,
+    pytest, httpx) porque o VS Code aponta para o interpretador errado.
+    Terminal está certo. Correção documentada na seção 0 (Select Interpreter
+    → D:\Rumo\backend\venv\Scripts\python.exe). Se persistir, criar
+    .vscode/settings.json com python.defaultInterpreterPath.
 
-    (NOVA — Sessão 18) WHERE mata a janela anterior antes do CASE WHEN.
-    Quando um único SELECT precisa somar duas janelas de tempo, o WHERE do
-    SELECT não pode filtrar só a janela atual — ele descarta as linhas da
-    janela anterior ANTES de o CASE WHEN chegar nelas, e `previous` vem
-    sempre null. O bug foi pego por 3 testes (previous_90d, previous_1y,
-    previous_shape) e corrigido na S18.
-    REGRA PARA O FUTURO: sempre que uma query precisar de métricas de
-    múltiplas janelas no mesmo SELECT, o WHERE deve cobrir a união das
-    janelas (ex.: started_at >= now - 2N) e cada métrica recorta sua
-    própria janela via SUM(CASE WHEN <janela> THEN col ELSE 0 END) —
-    inclusive a contagem, que vira SUM(CASE WHEN ... THEN 1 ELSE 0 END).
-    Depois, filtrar em Python as linhas cuja janela "principal" ficou zerada
-    (para não mostrar tipos que só existem na janela secundária).
+    (ARMADILHA CONHECIDA — Sessão 14) Enums nativos do Postgres ordenam pela
+    ORDEM DE DECLARAÇÃO, não pela string. get_by_type faz o desempate final
+    em Python: items.sort(key=lambda r: (-r["total_activities"],
+    r["activity_type"])). REGRA: qualquer novo ORDER BY em coluna Enum DEVE
+    (a) fazer o sort final em Python, ou (b) ser testado contra a ordem de
+    declaração.
 
-    (CONHECIDA — Sessão 17, reafirmada na S18) StatsCards.tsx mostra
-    summary "todos os tempos", não filtrado por `period` nem por
-    `previous`. O segmented control de período afeta APENAS a tabela por
-    tipo. Isso é intencional — summary é "totais gerais" e fica no topo
-    da página; a tabela é drill-down. Se um dia o usuário quiser filtro
-    no summary, é feature nova.
+    (CONHECIDA — Sessão 17) Filtro `period` usa `now()` do Postgres. Testes
+    de `period` DEVEM usar `datetime.now(timezone.utc) - timedelta(days=N)`
+    com margem >= 10 dias entre dentro e fora da janela. Não misturar com
+    `_dt` fixo.
 
-    (CONHECIDA — Sessão 17, reafirmada na S18) Conta prod@rumo.com sem
-    atividades com mais de 90 dias. Por isso period=all, period=90d e
-    period=1y retornam IGUAIS em produção, e previous vem null em todos
-    os itens. Para testar o filtro e o previous em produção com diferença
-    visível, seria preciso (a) upload de GPX com data no passado, ou
-    (b) aceitar os 129 testes locais como prova (recomendado — são mais
-    fortes que qualquer teste de produção nessa conta). NÃO PERDER TEMPO
-    achando que está quebrado.
+    (CONHECIDA — Sessão 18) WHERE mata a janela anterior antes do CASE WHEN.
+    Quando um SELECT precisa somar duas janelas, o WHERE deve cobrir a união
+    (ex.: started_at >= now - 2N) e cada métrica recorta sua janela via
+    SUM(CASE WHEN <janela> THEN col ELSE 0 END) — inclusive a contagem.
+    Depois, filtrar em Python as linhas cuja janela principal ficou zerada.
 
-    (Oportunidade) RouteMap.tsx é reutilizável em qualquer página que
-    renderize uma rota. Hoje só é usado em ActivityDetailPage. Se aparecer
-    um segundo uso, considerar React.lazy() para tirar o leaflet (163.60 kB)
-    do chunk da página que não mostra mapa. Ganho hoje é marginal.
+    (CONHECIDA — Sessão 17/18, reafirmada na S19) StatsCards mostra summary
+    "todos os tempos", não filtrado por period nem por previous. O segmented
+    control de período afeta APENAS a tabela por tipo. Intencional.
 
-    (Oportunidade — S18) Delta "vs. anterior" hoje cobre 3 métricas
+    (CONHECIDA — Sessão 17/18/19) Conta prod@rumo.com não tem atividade
+    >90d (na janela anterior). Por isso period=all, 90d e 1y retornam iguais
+    em produção para prod, e previous vem null em todos os itens. Para ver
+    diferença em produção, usar Prod2 ou upload de GPX com data no passado.
+    NÃO PERDER TEMPO achando que está quebrado — os 136 testes locais
+    (com _dt_ago(120), _dt_ago(500)) provam o filtro e o previous.
+
+    (Oportunidade — S18/S19) Delta "vs. anterior" cobre 3 métricas
     (atividades, distância, elevação). Tempo e calorias ficaram fora por
-    legibilidade (3 linhas curtas por célula). Se virar requisito, é
-    extensão trivial: adicionar mais 2 DeltaLine no PreviousDelta. Não é
-    bug nem dívida — é decisão de UI documentada.
+    legibilidade. Extensão trivial se virar requisito (mais 2 DeltaLine).
 
-    (Oportunidade — S18) Semântica do delta é NEUTRA: subiu=verde,
-    desceu=vermelho, igual=cinza. Não há juízo de "melhor/pior" (ex.:
-    pace menor é melhor, mas pace não entra no delta). Se o produto quiser
-    semântica de meta ("atingiu objetivo"), é feature nova.
+    (Oportunidade — S18/S19) Semântica do delta é NEUTRA (subiu=verde,
+    desceu=vermelho, igual=cinza). Sem juízo de "melhor/pior". Se o produto
+    quiser meta, é feature nova.
 
-    (Oportunidade) Drill-down de stats por tipo poderia ganhar:
-        - Comparação "este período vs. MESMO período do ano anterior" (a
-          S18 entregou "janela imediatamente anterior"; a alternativa
-          year-over-year é outra feature, com outro contrato).
+    (Oportunidade — S19) Stats públicas hoje só aparecem quando viewer segue
+    o alvo. Se o produto quiser "stats públicas sempre" (ex.: perfil aberto),
+    é mudança de regra no _ensure_can_view_stats (endpoint + teste + front).
+    Não é bug — é decisão de privacidade documentada.
+
+    (Oportunidade) RouteMap.tsx é reutilizável. Se aparecer segundo uso,
+    considerar React.lazy() para tirar o leaflet (163.60 kB) do chunk.
+
+    (Oportunidade) Drill-down por tipo poderia ganhar:
+        - Comparação year-over-year (Opção 1 do handoff da S18).
         - Filtro de período custom (ex.: "últimos 180 dias"). Hoje é
-          all|90d|1y fixo. Se virar requisito, o param `period` pode
-          ganhar mais valores (aditivo, sem quebrar).
+          all|90d|1y fixo; adicionar valor ao Literal é aditivo.
+        - Export CSV/GPX (Opção 3).
 
-    (Oportunidade) Stats no perfil: /activities/stats/summary, /weekly,
-    /monthly e /by-type são só do current_user. Se um dia o requisito for
-    "ver stats de outro usuário", precisa de novos endpoints (com
-    privacidade, provavelmente via follow).
-
-    (Oportunidade) Export de atividades (CSV/GPX). Fora do escopo atual.
-    Requer: desenhar contrato + schema + teste + UI no front.
-
-    Mobile: sem inclinação/rotação 3D (flutter_map é 2D). Se 3D for
-    requisito, avaliar maplibre_gl (decisão maior, pesada).
-
+    Mobile: sem drill-down de stats no app. Sem inclinação/rotação 3D.
     TimeoutException do app mobile não reproduzido desde a Sessão 9.
-    Registrar se voltar (tela + log do flutter run).
 
 ===============================================================================
 
-    PRÓXIMOS PASSOS RECOMENDADOS (Sessão 19 e além)
+    PRÓXIMOS PASSOS RECOMENDADOS (Sessão 20 e além)
     ===============================================================================
 
-PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 19 (antes de qualquer mudança de código):
+PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 20 (antes de qualquer mudança de código):
 
     No terminal (PowerShell via Win+R → "powershell"):
     cd D:\Rumo
@@ -868,7 +885,7 @@ PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 19 (antes de qualquer mudança de códig
     cd web ; npm run build
     cd ..\mobile
     & "C:\Users\nasci\flutter\bin\flutter.bat" analyze
-    Confirmar: push aceito, HEAD == origin/main == b0e3a29 (ou o commit do
+    Confirmar: push aceito, HEAD == origin/main == 0df0b9f (ou o commit do
     handoff, se for o caso), build e analyze verdes, working tree limpo.
 
     DOCKER + PYTEST LOCAL:
@@ -877,16 +894,16 @@ PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 19 (antes de qualquer mudança de códig
     cd D:\Rumo\backend
     docker compose -f docker-compose.test.yml up -d
     docker ps
-    # Se prompt já mostra (.venv), pular:
-    ..venv\Scripts\Activate.ps1
-    pytest -q
-    Esperado: 129 passed, 0 warnings.
+    # Se prompt já mostra (venv), pular:
+    .\venv\Scripts\Activate.ps1     # UM ponto
+    python -m pytest -q
+    Esperado: 136 passed, 0 warnings.
 
-    DETECÇÃO DE VERSÃO EM PRODUÇÃO (S18 — campo previous):
-    Rodar o script da seção 6 ("Detecção de versão em produção (S18 —
-    campo previous)"). Esperado: "S18 no ar (campo previous presente;
-    valor = )". Se aparecer "backend AINDA na S17", o Render não
-    redeployou — checar dashboard do Render.
+    DETECÇÃO DE VERSÃO EM PRODUÇÃO (S19 — stats de terceiros):
+    Rodar o script da seção 6 ("Detecção de versão em produção (S19 —
+    stats de terceiros)"). Esperado: "S19 no ar (summary do
+    /users/{id}/stats: 6 atividades)". Se der 404, o Render não redeployou
+    — checar dashboard do Render.
 
     DESCOBERTA DE ESTRUTURA (obrigatória — não adivinhar):
     cd D:\Rumo
@@ -900,62 +917,60 @@ PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 19 (antes de qualquer mudança de códig
     Get-ChildItem D:\Rumo\backend\tests -File | Select-Object Name
     Colar as saídas no chat ANTES de pedir ou reescrever qualquer arquivo.
 
-ESTADO DA ROTA B (Sessão 18): PRIMEIRO E SEGUNDO ITENS FECHADOS.
-Filtro de período (S17) + comparação com janela anterior (S18) → FEITOS
-e em produção (b0e3a29). Backend: /stats/by-type?period=all|90d|1y com
-previous opcional. Web: segmented control (S17) + coluna "vs. anterior"
-(S18). StatsCards e mobile intocados.
+    HIGIENE OPCIONAL (recomendada): remover .venv antiga com VS Code
+    fechado (ver Dívidas Técnicas).
+
+ESTADO DA ROTA B (Sessão 19): TRÊS ITENS FECHADOS.
+Filtro de período (S17) + comparação com janela anterior (S18) + stats
+públicas em perfis de terceiros (S19) → FEITOS e em produção (0df0b9f).
 
 A ROTA B SEGUE ABERTA para os demais itens. Próximos passos exigem
 ESCOLHA entre:
 
-OPÇÃO 1 — Comparação "este período vs. MESMO período do ano anterior".
-    Backend: nova semântica (year-over-year), provavelmente um param
-    adicional (ex.: compare=prev|yoy) ou um endpoint novo.
-    MEXE EM CONTRATO — decidir antes de codar.
-    Front: reaproveita PreviousDelta, mas com rótulo "vs. ano anterior".
-    ATENÇÃO: a conta de teste não tem dado >90d, então year-over-year
-    com 90d não vai mostrar diferença em produção. Testável só local.
+OPÇÃO 1 — Comparação "este período vs. MESMO período do ano anterior"
+    (year-over-year).
+    Backend: nova semântica, provavelmente param adicional (compare=prev|yoy)
+    ou endpoint novo. MEXE EM CONTRATO — decidir antes de codar.
+    Front: reaproveita PreviousDelta, rótulo "vs. ano anterior".
+    ATENÇÃO: prod não tem dado >90d, então year-over-year com 90d não mostra
+    diferença em produção. Testável só local (ou com Prod2).
 
-OPÇÃO 2 — Stats públicas em perfis de terceiros.
-    Backend: novos endpoints com user_id + regra de follow.
-    Escopo médio-grande. Define privacidade.
-
-OPÇÃO 3 — Export de atividades (CSV/GPX).
+OPÇÃO 2 — Export de atividades (CSV/GPX).
     Escopo maior. Desenhar contrato + schema + teste + UI.
-    GPX já existe no backend (gpx_service.py) — provavelmente
-    reutilizável. CSV é mais simples (Excel/Sheets).
+    GPX já existe no backend (gpx_service.py) — provavelmente reutilizável.
+    CSV é mais simples (Excel/Sheets).
 
-OPÇÃO 4 — Resíduos de baixo risco da Rota A+ (b)/(c).
+OPÇÃO 3 — Stats no app mobile (drill-down por tipo no Flutter).
+    Mobile está parado desde S11. Se for evoluir, é sessão grande.
+    Decidir se vale antes de começar.
+
+OPÇÃO 4 — Resíduos de baixo risco da Rota A+ (b)/(c) + higiene.
     (b) RouteMap com React.lazy() — prepara terreno para segundo uso.
     (c) Cheat sheet de endpoints num README.
+    (d) Remover .venv antiga (higiene, dívida da S19).
     Ganho marginal. Recomendação: só se não houver Rota B clara.
 
-RECOMENDAÇÃO PARA A SESSÃO 19:
+RECOMENDAÇÃO PARA A SESSÃO 20:
 
 Antes de escolher, VALIDAR ESTADO (seção 6 — primeira ação). Se estiver
-tudo verde (build, analyze, pytest 129, previous presente em produção),
+tudo verde (build, analyze, pytest 136, endpoints /users/{id}/stats/* no ar),
 aí escolher.
 
-Se a escolha for Rota B, minha recomendação é OPÇÃO 2 (stats públicas
-em perfis de terceiros) pelos motivos:
+Minha recomendação de rota: OPÇÃO 4 (higiene) **primeiro**, como
+aquecimento de 30–60 min, seguida de OPÇÃO 1 (year-over-year) ou OPÇÃO 2
+(export). Motivos:
+  - A higiene da .venv é trivial e elimina a confusão do Pylance de vez.
+  - A S19 entregou uma feature visível e arriscada (privacidade); a S20
+    pode começar com algo de baixo risco para "esquentar" e reduzir a
+    chance de regressão.
+  - Entre year-over-year e export, year-over-year reaproveita 100% da
+    infra das S17/S18 (previous, delta, PreviousDelta no front) e é
+    testável 100% local — menor risco. Export é maior e mexe em contrato
+    novo (CSV schema, UI de download).
 
-  - É evolução natural do produto: o app já mostra perfil de terceiros
-    (atividades, seguidores, seguindo), mas esconde stats.
-  - Não é mudança de contrato em endpoint existente — é adição de
-    endpoints novos. Menos risco de regressão.
-  - Valida 100% localmente com pytest (endpoint + service + permissão).
-  - Front: 1 condicional no ProfilePage (mostrar StatsCards/PeriodChart/
-    by-type para não-self, respeitando follow).
-  - Privacidade: só mostra stats se o viewer segue o alvo (mesma regra
-    de /activities/{id}/track e do feed).
+  Se o usuário preferir escopo maior e visível, OPÇÃO 2 (export GPX/CSV).
+  Se preferir mobile, OPÇÃO 3 — mas é sessão grande, avisar antes.
 
-  ATENÇÃO: a S18 entregou "comparação com janela anterior" recente, e
-  a Opção 2 é uma feature visível, mas de escopo maior que a S18 (envolve
-  permissão e privacidade). Se o usuário preferir escopo menor, a Opção 1
-  (year-over-year) reaproveita toda a infra da S18, mas tem a limitação
-  da conta de teste.
-
-Em qualquer rota, handoff preventivo em ~70-80% do contexto — antes
-do fim, parar e entregar o HANDOFF completo da Sessão 19 neste mesmo
-formato (seções 0 a 8).
+Em qualquer rota, handoff preventivo em ~70-80% do contexto — antes do
+fim, parar e entregar o HANDOFF completo da Sessão 20 neste mesmo formato
+(seções 0 a 8).
