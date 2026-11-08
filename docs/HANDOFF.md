@@ -1,4 +1,4 @@
-HANDOFF — Rumo (backend + frontend + mobile) — gerado ao fim da Sessão 20
+HANDOFF — Rumo (backend + frontend + mobile) — gerado ao fim da Sessão 21
 SEÇÃO 0 — LEIA PRIMEIRO (contexto operacional)
 Regra de ouro para o assistente novo (leia antes de qualquer coisa)
 
@@ -7,18 +7,33 @@ VOCÊ NÃO TEM ACESSO AO DISCO DO USUÁRIO. Não existe "listar pasta", "abrir a
 (a) o usuário cola o conteúdo de um arquivo com Get-Content -Encoding UTF8
 (b) o usuário cola a saída de um comando de terminal
 
-NUNCA invente caminho de arquivo. NUNCA diga "vou olhar o arquivo X". NUNCA reescreva um arquivo que você não recebeu nesta sessão. Se precisar de um arquivo, PEÇA e espere o usuário colar. Se a estrutura de pastas for necessária, PEÇA a saída de Get-ChildItem (há script pronto na seção 6).
+NUNCA invente caminho de arquivo. NUNCA diga "vou olhar o arquivo X". NUNCA reescreva um arquivo que você não recebeu nesta sessão. Se precisar de um arquivo, PEÇA e espere o usuário colar. Se a estrutura de pastas for necessária, PEÇA a saída de Get-ChildItem.
 
 Sessões anteriores perderam tempo porque o assistente tentou "adivinhar" a árvore de diretórios e errou. Não repetir.
+⚠️ REGRA NOVA DA SESSÃO 21 — nunca placeholder no código entregue
+
+A S21 teve dois tropeços causados pela mesma causa raiz: eu entreguei um bloco de código com o marcador # ... (resto do arquivo INALTERADO ...) ... como "rascunho didático". O usuário colou no activity_service.py (arquivo grande, com get_activity/get_activity_track/create_activity/etc.) e sobrescreveu o arquivo inteiro — o placeholder virou o arquivo real, e todas as funções-base sumiram. Recuperado com git restore (o arquivo não tinha sido commitado; git log confirmou que o último commit que o tocou foi b8e4084, da S10).
+
+Regra permanente: quando eu não tiver o conteúdo de um arquivo existente, NÃO entrego nem "rascunho de bloco". Peço o arquivo (Get-Content -Encoding UTF8) e só entrego completo, pronto para Ctrl+A → colar → salvar. Nunca marcador no meio do código, mesmo com aviso em negrito. É o único jeito de eliminar esse tipo de erro.
+Regra nova — não adivinhar nomes de símbolos do projeto
+
+No test_export.py, eu escrevi ActivityType.run (era ActivityType.RUN) e Follow(followed_id=...) (era following_id=...). O ruff não pega (é semântico, não sintático) — só o pytest pegou, com tracebacks claros. Custou 1 ida e volta para pegar o follow.py e outro para corrigir o teste.
+
+Regra permanente: antes de escrever teste ou código que referencia símbolo de model/enum/schema do projeto, peça o arquivo (models/activity.py, models/follow.py, schemas/activity.py, etc.). É barato (são pequenos) e elimina a classe de erro. Se o arquivo for grande, peça só as primeiras N linhas (Select-Object -First 100) — o suficiente para ver a assinatura.
+Regra nova — git status antes de qualquer git restore/git checkout
+
+Sempre rodar git status --short <arquivo> + git --no-pager log --oneline -3 -- <arquivo> antes de tentar restaurar. Se o último commit que tocou o arquivo for anterior à mudança quebrada, git checkout/git restore restaura. Se a versão quebrada já foi commitada, git show <commit-anterior>:<caminho> > <caminho> é o caminho.
 O que é LOCAL vs. o que é PRODUÇÃO
 
 LOCAL (na máquina do usuário): D:\Rumo (repo git), D:\Rumo\backend (FastAPI + Postgres/PostGIS + Alembic + pytest), D:\Rumo\web (React 19 + Vite 8 + TypeScript + Tailwind + react-leaflet + recharts), D:\Rumo\mobile (Flutter). O assistente NÃO tem acesso a esses arquivos — o usuário precisa colar conteúdo e saídas de terminal.
 
-PRODUÇÃO (na nuvem, acessível por HTTP): backend no Render (https://rumo-api-5s0b.onrender.com), frontend web na Vercel (https://rumo-wheat.vercel.app). O backend de produção usa Postgres/PostGIS gerenciado. Testar via HTTP é sempre possível.
+PRODUÇÃO (nuvem, acessível por HTTP): backend no Render (https://rumo-api-5s0b.onrender.com), frontend web na Vercel (https://rumo-wheat.vercel.app). Backend de produção usa Postgres/PostGIS gerenciado. Testar via HTTP é sempre possível.
 
 IMPORTANTE — usuário NÃO tem ambiente local rodando. Fluxo: editar em D:\Rumo, rodar pytest localmente (Docker de teste na 5433), commitar, push, Render + Vercel redeployam automaticamente, validar via HTTP em produção. Não presumir que o usuário vai "rodar o app localmente" para testar UI.
 
-DOCKER: instalado e funcional no Windows local. pytest -q local verde (143 passed ao fim da Sessão 20). Container de teste rumo_postgres_test na porta 5433.
+DOCKER: instalado e funcional no Windows local. pytest -q local verde (153 passed ao fim da Sessão 21 — 143 + 10 novos do export). Container de teste rumo_postgres_test na porta 5433.
+
+ATENÇÃO — docker ps sozinho esconde container parado. Na abertura da S21, pytest -q falhou com 126 erros de ConnectionRefusedError: [WinError 1225] porque o container rumo_postgres_test estava Exited (255) (Docker Desktop encerrou/reiniciou entre S20 e S21). O docker ps -a --filter "name=rumo_postgres_test" mostrou Exited; up -d subiu; pg_isready respondeu accepting connections; pytest voltou a 143. Primeira verificação da S22+ deve ser docker ps -a --filter "name=rumo_postgres_test" (com -a), não só docker ps.
 
 Para reativar numa sessão nova:
 
@@ -30,29 +45,34 @@ Para reativar numa sessão nova:
 
     docker compose -f docker-compose.test.yml up -d
 
+    docker ps -a --filter "name=rumo_postgres_test" (deve mostrar Up … (healthy))
+
+    docker exec rumo_postgres_test pg_isready -h 127.0.0.1 -p 5432 (deve dizer accepting connections)
+
     .\venv\Scripts\Activate.ps1 (UM ponto, não dois)
 
     python -m pytest -q
 
-VENV: ao fim da S20, a única venv é D:\Rumo\backend\venv (sem ponto), criada com Python 3.13.7. A .venv antiga (fantasma, quebrada) foi removida na S20 — dívida técnica da S19 fechada. .vscode/settings.json corrigido para apontar para backend/venv (não mais .venv) e ganhou python.analysis.extraPaths com backend.
+VENV: ao fim da S21, a única venv é D:\Rumo\backend\venv (sem ponto), Python 3.13.7. A .venv antiga (fantasma) foi removida na S20. .vscode/settings.json aponta para backend/venv + python.analysis.extraPaths: ["${workspaceFolder}/backend"].
 
-ATENÇÃO: o py -3 deste Windows aponta para Python 3.14 (incompatível com as versões fixadas em requirements.txt — sem wheels cp314). Se precisar recriar a venv: py -3.13 -m venv D:\Rumo\backend\venv ou C:\Python313\python.exe -m venv D:\Rumo\backend\venv.
+ATENÇÃO: py -3 deste Windows aponta para Python 3.14 (incompatível com requirements.txt). Se precisar recriar a venv: py -3.13 -m venv D:\Rumo\backend\venv ou C:\Python313\python.exe -m venv D:\Rumo\backend\venv.
 Estrutura do repo (referência — NÃO É PARA ASSUMIR, É PARA CONFERIR)
 
-Árvore de alto nível REAL, confirmada na Sessão 19 e inalterada na S20 (só arquivos modificados, nenhum criado/removido):
+Árvore de alto nível REAL, confirmada na Sessão 19 e inalterada em estrutura na S20/S21 (só arquivos modificados/criados, nenhum removido):
 text
 
 D:\Rumo
 ├── .vscode
-│   └── settings.json              # corrigido na S20 (backend/venv + extraPaths)
+│   └── settings.json
 ├── backend
 │   ├── .pytest_cache
 │   ├── .ruff_cache
-│   ├── venv\                      # ATIVA (Python 3.13.7) — a única
+│   ├── venv\                      # ATIVA (Python 3.13.7)
 │   ├── alembic
 │   ├── app
 │   │   ├── core
-│   │   ├── models
+│   │   ├── models                  # activity.py, follow.py, user.py, like.py,
+│   │   │                          # comment.py, notification.py, activity_photo.py
 │   │   ├── routers\               # activities.py, auth.py, comments.py, feed.py,
 │   │   │                          # notifications.py, photos.py, users.py, __init__.py
 │   │   ├── schemas\               # activity.py, like.py, stats.py, user.py, ...
@@ -64,13 +84,14 @@ D:\Rumo
 │   ├── samples
 │   ├── scripts
 │   ├── tests\                     # conftest.py + test_calories.py + test_comment.py +
-│   │                              # test_follow.py + test_like.py + test_stats.py + __init__.py
+│   │                              # test_export.py (NOVO na S21) + test_follow.py +
+│   │                              # test_like.py + test_stats.py + __init__.py
 │   ├── _scratch
 │   ├── docker-compose.test.yml
 │   ├── pytest.ini
 │   └── requirements.txt
 ├── docs
-│   └── HANDOFF.md                 # este arquivo
+│   └── HANDOFF.md
 ├── mobile
 │   └── lib
 │       ├── models\                # activity.dart, activity_track.dart, comment.dart
@@ -94,40 +115,24 @@ D:\Rumo
         │                          # NotificationsPage, ProfilePage, RegisterPage, SearchPage, UploadPage
         └── types\                 # api.ts
 
-Divergências vs handoff da Sessão 19: nenhuma estrutural. Só modificação de conteúdo em 7 arquivos (backend: stats_service.py, routers/activities.py, routers/users.py, tests/test_stats.py; web: api/stats.ts, hooks/useStats.ts, pages/ProfilePage.tsx) + remoção de .venv e correção de .vscode/settings.json.
 Como rodar comandos Flutter no Windows deste usuário
 
-Flutter instalado em C:\Users\nasci\flutter (bin em ...\flutter\bin). Versões: Flutter 3.47.9 (stable) / Dart 3.13.7 / DevTools 2.60.0.
+Flutter instalado em C:\Users\nasci\flutter (bin em ...\flutter\bin). Versões: Flutter 3.47.9 / Dart 3.13.7 / DevTools 2.60.0.
 
-PROBLEMA CONHECIDO: mesmo com C:\Users\nasci\flutter\bin no PATH, o PowerShell frequentemente NÃO reconhece o comando flutter (cache de sessão do terminal/VS Code). SOLUÇÃO QUE FUNCIONA: & "C:\Users\nasci\flutter\bin\flutter.bat" <comando>.
+PROBLEMA CONHECIDO: mesmo com C:\Users\nasci\flutter\bin no PATH, o PowerShell frequentemente NÃO reconhece flutter (cache de sessão). SOLUÇÃO QUE FUNCIONA: & "C:\Users\nasci\flutter\bin\flutter.bat" <comando>.
 Como rodar Docker e pytest local (Windows deste usuário)
 
-Docker Desktop instalado em C:\Users\nasci\AppData\Local\Programs\DockerDesktop. docker.exe em ...\DockerDesktop\resources\bin\docker.exe. Esse caminho está no PATH do usuário. Se docker não for reconhecido, é porque o PowerShell foi aberto de dentro do VS Code / Windows Terminal (herda PATH antigo). SOLUÇÃO: abrir PowerShell via Win+R → "powershell".
+Docker Desktop instalado em C:\Users\nasci\AppData\Local\Programs\DockerDesktop. Se docker não for reconhecido, abrir PowerShell via Win+R → powershell.
 
 Container de teste: rumo_postgres_test (5433). Containers permanentes rumo-redis (6379) e rumo-postgres (5432) NÃO são de teste.
-
-Passos para pytest local:
-text
-
-PowerShell via Win+R → "powershell"
-docker version (Client + Server) e docker compose version
-cd D:\Rumo\backend
-docker compose -f docker-compose.test.yml up -d
-docker ps (rumo_postgres_test Up healthy na 5433)
-.\venv\Scripts\Activate.ps1     # UM ponto, NÃO dois
-python -m pytest -q             # esperado: 143 passed
-
-Se Activate.ps1 der erro de política: Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass.
 Como testar o backend de produção sem o app (PowerShell)
-
-Login (retorna JWT):
 powershell
 
 $body = "username=prod@rumo.com&password=senha12345"
 $login = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/login" -Method Post -ContentType "application/x-www-form-urlencoded" -Body $body
 $token = $login.access_token
 
-⚠️ "Quem sou eu" é GET /auth/me, NÃO /users/me. /users/me devolve 422 (FastAPI tenta parsear "me" como UUID).
+⚠️ "Quem sou eu" é GET /auth/me, NÃO /users/me. /users/me devolve 422.
 powershell
 
 $me = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/me" -Headers @{ Authorization = "Bearer $token" }
@@ -137,19 +142,21 @@ Contas de teste:
 
     prod@rumo.com / senha12345 — id 01a12c83-be2a-71fa-b966-1c93ca64f341 (6 atividades, 26.443 m).
 
-    Prod2 (id 01a141e7-5ea4-7600-8959-19145475ad0a) — 2 atividades, 14.643 m, pace 496,89 s/km, 0 kcal. prod segue Prod2 (útil para cenário "terceiro seguido").
+    Prod2 (id 01a141e7-5ea4-7600-8959-19145475ad0a) — 2 atividades, 14.643 m, pace 496,89 s/km, 0 kcal. prod segue Prod2.
 
-Para o cenário "terceiro NÃO seguido": usar a busca (/users/search?q=a) e escolher um id que não seja prod nem Prod2.
+    Para o cenário "terceiro NÃO seguido": usar a busca (/users/search?q=a) e escolher um id que não seja prod nem Prod2.
 
-⚠️ Lições S18/S19/S20 — detecção de versão no ar:
+⚠️ Lições S18/S19/S20/S21 — detecção de versão no ar:
 
-    422 de versão NÃO distingue S17 de S18. O endpoint /activities/stats/by-type?period=30d devolve 422 desde a S17.
+    422 de versão NÃO distingue S17 de S18. /activities/stats/by-type?period=30d devolve 422 desde a S17.
 
     Para S19: GET /users/{meId}/stats/summary responde 200 (não 404) e GET /users/me responde 422.
 
-    Para S20: GET /activities/stats/by-type?period=90d&compare=yoy responde 200. E ?compare=xpto responde 422 (se der 200, o backend ainda está na S19).
+    Para S20: GET /activities/stats/by-type?period=90d&compare=yoy responde 200. E ?compare=xpto responde 422.
 
-⚠️ Lição S20 — previous: null em prod/Prod2 não é bug. Nenhuma das contas de teste tem atividade na janela de comparação (prod não tem >90d; Prod2 idem). previous: null é o esperado. Os 143 testes locais (com _dt_ago(400) para yoy) provam que a janela funciona.
+    Para S21: GET /activities/{id}/export?format=csv e ?format=gpx respondem 200; ?format=xpto responde 422. Se der 404 em format=csv num id válido, o backend ainda está na S20.
+
+⚠️ Lição S20/S21 — previous: null em prod/Prod2 não é bug. Nenhuma das contas de teste tem atividade na janela de comparação. Os 143/153 testes locais provam que a janela funciona.
 O que o assistente precisa pedir ao usuário (não tem acesso a arquivos)
 
     Conteúdo de arquivos via Get-Content -Encoding UTF8 <caminho>. SEMPRE passar -Encoding UTF8; sem isso, acentos viram inÃ­cio.
@@ -162,20 +169,20 @@ ATENÇÃO — arquivos truncados/duplicados: se um Get-Content vier com a últim
 
 ATENÇÃO — arquivo "salvo" que não salvou. SINTOMA: build ou pytest falha dizendo que um símbolo novo não existe, mesmo o assistente tendo entregado o arquivo. DIAGNÓSTICO: Get-Content -Encoding UTF8 <caminho> | Select-String -Pattern "<simbolo>". Se não aparecer, o disco ainda é o antigo. REGRA: depois de entregar um arquivo que muda contrato, pedir a confirmação com Get-Content | Select-String ANTES de rodar build/test.
 
-ATENÇÃO — git diff pipeado no PowerShell pode exibir acentos como mojibake. É artefato de codepage do pipe, NÃO corrupção do arquivo.
+ATENÇÃO — git diff pipeado no PowerShell pode exibir acentos como mojibake. Artefato de codepage do pipe, NÃO corrupção.
 
-ATENÇÃO — git log --oneline no PowerShell às vezes cola a última linha com o prompt seguinte. Não é corrupção; é formatação.
+ATENÇÃO — git log --oneline no PowerShell às vezes cola a última linha com o prompt. Formatação, não corrupção.
 
 ATENÇÃO — git log sem --no-pager abre o less e trava o terminal. SEMPRE usar git --no-pager log ... ou prefixar com $env:PAGER="".
 
-ATENÇÃO — Pylance reclamando de imports (fastapi/sqlalchemy/pytest) NÃO é erro de código. É interpretador errado. Na S20 a causa raiz foi identificada e corrigida: o .vscode/settings.json apontava para backend/.venv (removida) e não tinha python.analysis.extraPaths. Correção aplicada na S20: "python.defaultInterpreterPath": "${workspaceFolder}/backend/venv/Scripts/python.exe" + "python.analysis.extraPaths": ["${workspaceFolder}/backend"]. Se voltar a acontecer: Ctrl+Shift+P → "Python: Select Interpreter" → D:\Rumo\backend\venv\Scripts\python.exe → Developer: Reload Window.
+ATENÇÃO — Pylance reclamando de imports (fastapi/sqlalchemy/pytest) NÃO é erro de código. Interpretador errado. Causa raiz corrigida na S20: .vscode/settings.json aponta para backend/venv + python.analysis.extraPaths: ["${workspaceFolder}/backend"]. Se voltar: Ctrl+Shift+P → "Python: Select Interpreter" → D:\Rumo\backend\venv\Scripts\python.exe → Developer: Reload Window.
 
-ATENÇÃO — save confirmado via Select-String (lição S20): o assistente previu "esperado vazio" e "esperado 0 ocorrências" em checks de validação, mas o output real tinha 4 e 9 ocorrências legítimas. Priorizar SEMPRE o output real do terminal em vez da expectativa do assistente. Quando o output divergir da previsão, investigar o output primeiro.
-Acordos de trabalho (válidos em todas as sessões)
+ATENÇÃO — save confirmado via Select-String (lição S20/S21): prever "esperado vazio" ou "esperado 0 ocorrências" em checks de validação é fonte de falso alarme. Priorizar SEMPRE o output real do terminal em vez da expectativa do assistente. Quando o output divergir da previsão, investigar o output primeiro.
+Acordos de trabalho (válidos em todas as sessões — REFORÇADOS na S21)
 
-    SEMPRE seguir a recomendação do assistente. Quando houver decisão pendente, executar a recomendada salvo instrução explícita em contrário. (Usuário reforçou isso nas S15–S20.)
+    SEMPRE seguir a recomendação do assistente. Quando houver decisão pendente, executar a recomendada salvo instrução explícita em contrário. (Usuário reforçou isso nas S15–S21.) O assistente decide e recomenda; não fica perguntando "qual opção você prefere?".
 
-    SEMPRE entregar o CÓDIGO COMPLETO ao atualizar um arquivo — nunca diff parcial, nunca "// resto igual". Preservar imports, comentários e trechos que já funcionam. Destacar o trecho alterado com comentário curto acima (// [Sessão N] ou // [Sessão N — fix]).
+    SEMPRE entregar o CÓDIGO COMPLETO ao atualizar um arquivo — nunca diff parcial, nunca // resto igual, nunca placeholder no meio do código. Preservar imports, comentários e trechos que já funcionam. Destacar o trecho alterado com comentário curto acima (// [Sessão N] ou // [Sessão N — fix]).
 
     UMA versão por arquivo por resposta. Se errar no meio do raciocínio, cortar a versão errada e entregar só a corrigida com nota de 1 linha. NUNCA duas versões do mesmo arquivo na mesma resposta.
 
@@ -185,9 +192,32 @@ Acordos de trabalho (válidos em todas as sessões)
 
     VERIFICAR SAVE ANTES DE BUILD: quando o assistente entrega um arquivo com símbolo novo (tipo, função, param), pedir ao usuário Get-Content -Encoding UTF8 <caminho> | Select-String -Pattern "<simbolo>" antes de rodar build/test.
 
+    (NOVA S21) NUNCA placeholder no código entregue. Se o assistente não tem o conteúdo de um arquivo existente, peça e espere — não entregue "rascunho de bloco". Violar essa regra quebrou o activity_service.py (recuperado com git restore).
+
+    (NOVA S21) Não adivinhar nomes de símbolos. Antes de referenciar ActivityType.X, Follow(...), campos de schema, etc., peça o arquivo do model/enum/schema. ruff não pega, pytest pega com traceback claro — mas custa ida e volta.
+
+    (NOVA S21) Antes de git restore/git checkout, rodar git status --short <arquivo> + git --no-pager log --oneline -3 -- <arquivo>. Confirmar que o último commit que tocou o arquivo é anterior à mudança quebrada.
+
+Processo que o usuário elogiou na S21 (para manter)
+
+O usuário disse textualmente: "gostei da sua forma de trabalho código e teste. ficou bem fluido o trabalho." O que funcionou:
+
+    Ordem clara: Fase 0 (validação de estado) → Fase 1 (descoberta, pedir arquivos) → Fase 2 (contrato travado) → Fase 3 (entrega incremental, 1 arquivo por vez) → Fase 4 (validação em produção) → Fase 5 (handoff).
+
+    Descoberta antes de codar: pedir gpx_service.py, routers/activities.py, schemas/activity.py, tests/conftest.py, test_stats.py (primeiras 80 linhas), requirements.txt, web/api/activities.ts, web/pages/ActivityDetailPage.tsx, web/api/client.ts, models/activity.py, models/follow.py. Cada pedido com motivo.
+
+    Validação entre cada entrega: Select-String (save) + ruff + pytest no backend; npm run build + npm run lint no front. Nunca acumular 2 arquivos sem validar.
+
+    Contrato travado escrito antes de codar: endpoint, auth, 404 vs 422, headers, formato CSV/GPX. O usuário leu e aprovou tacitamente ("sempre seguir recomendação").
+
+    Commits pequenos e temáticos: docs: handoff da Sessao 20, feat(activities): export CSV/GPX (Sessao 21), feat(web): botoes baixar CSV/GPX no detalhe (Sessao 21).
+
+    Validação em produção separada da local: local verde é pré-requisito, mas prod via HTTP/browser é o que fecha.
+
+Pedido explícito do usuário para o próximo chat: "se tiver como pedir para que sempre trabalhe desta forma". Manter o processo acima em todas as sessões.
 SEÇÃO 1 — TL;DR para quem chega agora
 
-Backend: 143 testes passando LOCALMENTE (pytest -q verde na Sessão 20), 0 warnings. Activity.route é PostGIS LINESTRING. GET /activities/{id}/track devolve TrackResponse com coordinates em ordem GeoJSON [lon, lat], bbox [minLon,minLat,maxLon,maxLat], n_points, simplified. 404 quando route é NULL.
+Backend: 153 testes passando LOCALMENTE (pytest -q verde na Sessão 21 — 143 + 10 novos do export), 0 warnings. Activity.route é PostGIS LINESTRING. GET /activities/{id}/track devolve TrackResponse com coordinates em ordem GeoJSON [lon, lat], bbox [minLon,minLat,maxLon,maxLat], n_points, simplified. 404 quando route é NULL.
 
 ActivityResponse (feed/lista/detalhe/busca) inclui bbox: list[float] | None, calculado via ST_XMin/YMin/XMax/YMax do PostGIS no mesmo SELECT (sem N+1). None quando route é NULL.
 
@@ -201,118 +231,67 @@ Endpoints de stats (todos validados em produção):
 
     GET /activities/stats/by-type?period=<all|90d|1y>&compare=<prev|yoy> — StatsByTypeResponse.
 
-        (S17) period opcional, default "all". Inválidos → 422.
+Stats públicas em perfis de terceiros (S19 + S20): GET /users/{user_id}/stats/{summary,weekly,monthly,by-type}. Regra (helper _ensure_can_view_stats em routers/users.py): self → 200; viewer segue target → 200; viewer não segue → 403; target não existe → 404.
 
-        (S18) cada item tem previous (janela de comparação) ou null.
+NOVO na S21 — Export:
 
-        (S20) compare opcional, default "prev". prev = janela imediatamente anterior. yoy = mesmo período do ano anterior. Inválido → 422.
+    GET /activities/{activity_id}/export?format=csv|gpx — auth dono OU seguidor (mesma regra do /track; senão 404). Retorna Response com Content-Disposition: attachment; filename="rumo_<id>_<type>.<ext>".
 
-Stats públicas em perfis de terceiros (S19 + S20):
+        CSV: text/csv; charset=utf-8, 1 header + 1 linha. Colunas: id, activity_type, title, started_at, finished_at, duration_s, distance_m, elevation_gain_m, calories, avg_pace_s_per_km, avg_speed_mps, bbox_min_lon, bbox_min_lat, bbox_max_lon, bbox_max_lat. None → string vazia. bbox_* vazios quando route IS NULL. lineterminator="\n" (não \r\n). CSV funciona sem rota.
 
-    GET /users/{user_id}/stats/summary → StatsSummary
+        GPX: application/gpx+xml; charset=utf-8, <trk><name>{title}</name><trkseg><trkpt lat="…" lon="…">. Exige route IS NOT NULL (404 "Atividade não possui rota", consistente com /track). coordinates vêm em ordem GeoJSON [lon, lat] e são invertidos para lat/lon no atributo. format inválido → 422 (Literal do Pydantic). format omitido → default csv.
 
-    GET /users/{user_id}/stats/weekly → StatsWeeklyResponse
+Frontend Web: React 19 + Vite 8 + TypeScript + Tailwind; react-leaflet (RouteMap no detalhe) + recharts (gráficos no perfil). Drill-down por tipo tem segmented control de janela temporal (S17), coluna "vs. anterior" com delta colorido (S18), 2º segmented control "Comparar com:" (prev/yoy) que só aparece quando period !== "all" (S20). S21: botões "Baixar CSV" (sempre) e "Baixar GPX" (condicional a track) no cabeçalho do ActivityDetailPage. Helper apiFetchBlob em client.ts (aditivo, não mexe no apiFetch). downloadActivityExport(id, format) em activities.ts.
 
-    GET /users/{user_id}/stats/monthly → StatsMonthlyResponse
+Mobile: mapa de rota no detalhe (flutter_map, OSM/Esri satélite), alternância Mapa/Satélite, miniatura no feed via CameraFit.bounds. Intocado desde a S11. Sem drill-down de stats no app. Sem export no app.
+Entregas da Sessão 21
 
-    GET /users/{user_id}/stats/by-type?period=X&compare=Y → StatsByTypeResponse
+Backend — export CSV/GPX:
 
-Regra de acesso (helper _ensure_can_view_stats em routers/users.py):
+    gpx_service.py: + to_gpx(activity, coordinates) -> str (usa gpxpy.gpx.GPX() + GPXTrackPoint). Só parse existia; agora tem geração também. Import novo: import gpxpy.gpx.
 
-    self → 200, sem consulta extra.
+    activity_service.py: + bloco # ===== Export (CSV / GPX) — [Sessão 21] ===== no fim: _CSV_COLUMNS, _activity_type_str, _activity_to_csv, _export_filename, export_activity(db, viewer_id, activity_id, fmt) -> tuple[bytes, str, str]. Reusa get_activity (CSV) e get_activity_track (GPX) — herda auth dono-ou-seguidor sem reimplementar. import csv, import io, from typing import Literal (topo). to_gpx adicionado ao import de gpx_service (já existente: map_gpx_type, parse_gpx).
 
-    viewer segue target → 200.
+    routers/activities.py: + Response no import do FastAPI; + rota GET /{activity_id}/export entre /track e DELETE /{activity_id}. Response(content=body, media_type=content_type, headers={"Content-Disposition": ...}).
 
-    viewer não segue target → 403 ("Você precisa seguir este usuário pra ver as estatísticas dele").
+    tests/test_export.py (NOVO): 10 testes:
 
-    target não existe → 404 ("Usuário não encontrado") — 404, não 403, para não vazar existência.
+        test_export_csv_owner_ok — 200, text/csv, Content-Disposition correto, header + 1 linha, valores batem.
 
-Semântica de compare (S20):
-period	compare	janela de comparação
-all	qualquer	null (period all ignora compare)
-90d	prev (default)	[now-180d, now-90d)
-90d	yoy	[now-455d, now-365d)
-1y	prev	[now-730d, now-365d)
-1y	yoy	[now-730d, now-365d) (coincide com prev — coincidência matemática documentada em teste)
+        test_export_csv_no_route_owner_ok — funciona sem rota; bbox_* vazios.
 
-Frontend Web: React 19 + Vite 8 + TypeScript + Tailwind; react-leaflet (RouteMap no detalhe) + recharts (gráficos no perfil). Drill-down por tipo tem segmented control de janela temporal (S17), coluna "vs. anterior" com delta colorido (S18), e desde a S20 um 2º segmented control "Comparar com:" (prev/yoy) que só aparece quando period !== "all". Header do delta alterna entre "vs. anterior" e "vs. ano anterior".
+        test_export_csv_nonexistent_activity_404.
 
-Mobile: mapa de rota no detalhe (flutter_map, OSM/Esri satélite), alternância Mapa/Satélite, miniatura no feed via CameraFit.bounds. Intocado desde a S11. Sem drill-down de stats no app.
-Entregas da Sessão 20
+        test_export_csv_not_follower_404.
 
-Backend — comparação year-over-year no drill-down por tipo.
+        test_export_csv_follower_ok (usa Follow(follower_id=..., following_id=...) — não followed_id, ver lição S21).
 
-    stats_service.py:
+        test_export_gpx_owner_ok — 200, application/gpx+xml, <trkpt> reparseado via gpxpy.parse, compara lat/lon com activity.raw_track_points[i] (pytest.approx(abs=1e-6)) → prova a inversão [lon,lat]→lat/lon.
 
-        Nova _yoy_window_expr(period) — simétrica à _previous_window_expr, deslocada 365 dias.
+        test_export_gpx_no_route_404 (checa "rota" no detail).
 
-        Nova _comparison_window_expr(period, compare) — despacha para prev ou yoy.
+        test_export_gpx_not_follower_404.
 
-        Nova _where_floor_days(period, compare) — limite inferior do WHERE: prev = 2N (inalterado), yoy = N + 365.
+        test_export_invalid_format_422.
 
-        get_by_type(..., compare: Literal["prev","yoy"] = "prev") — assinatura nova. prev byte-idêntico ao S18 (regressão zero). yoy usa _yoy_window_expr + _where_floor_days.
+        test_export_default_format_is_csv (sem ?format → csv).
 
-    routers/activities.py: +1 param compare em stats_by_type, repassado ao service.
+        Helper _client_as(user, test_engine): sobrescreve get_db E get_current_user (a v1 só sobrescrevia get_current_user e o _client_as tentaria conectar no Postgres de produção — corrigido antes de commitar).
 
-    routers/users.py: +1 param compare em get_user_stats_by_type, repassado ao service.
+        Assert de filename é dinâmico: activity.activity_type.value, não "run" hardcoded (o sample_run.gpx tem <type> que o map_gpx_type traduz para "walk" — nome do arquivo engana).
 
-    tests/test_stats.py: +7 testes na seção # ===== compare=prev|yoy ... [Sessão 20] =====:
+Front — botões de download:
 
-        test_get_by_type_compare_yoy_90d_uses_year_ago_window — prova que yoy pega _dt_ago(400) (yoy) e ignora _dt_ago(120) (prev), enquanto prev pega o inverso.
+    client.ts: + BlobResult, _parseContentDispositionFilename(header), apiFetchBlob(path, options?). Espelha auth/erro do apiFetch mas usa res.blob(). 401 limpa token. Content-Disposition é parseado com regex /filename="?([^";]+)"?/i. Não modifica apiFetch (caminho quente JSON fica intocado).
 
-        test_get_by_type_compare_yoy_90d_null_when_no_data_in_yoy_window — sem dado na yoy → previous: null mesmo com dado em prev.
+    activities.ts: + ActivityExportFormat = "csv" | "gpx", _triggerDownload(blob, filename) (privado, URL.createObjectURL + <a download> + revokeObjectURL em setTimeout(0)), downloadActivityExport(id, format) (usa apiFetchBlob, fallback rumo_<id>.<format> se o header faltar).
 
-        test_get_by_type_compare_yoy_1y_equals_prev — documenta coincidência 1y+prev ≡ 1y+yoy.
+    ActivityDetailPage.tsx: + import { useState } (não tinha — o componente usava só hooks do TanStack), + import { downloadActivityExport }, + const [busyCsv, setBusyCsv], + const [busyGpx, setBusyGpx], + handleDownload(format) com try/catch (ApiError.detail → alert), + const hasTrack = !!track && track.coordinates.length > 0, + o <h1> foi envolvido em <div className="flex items-start justify-between gap-2 flex-wrap"> com os botões à direita. CSV sempre visível; GPX condicional a hasTrack. Visível para dono E seguidor (backend aceita os dois).
 
-        test_get_by_type_compare_yoy_all_is_none — period=all ignora compare.
+Estado final da S21: working tree limpo. HEAD == origin/main == 8936415 (backend) — aguardando o commit do front (S21 termina sem ter commitado o front; ver Seção 5).
 
-        test_route_by_type_compare_yoy_param — rota propaga compare=yoy.
-
-        test_route_by_type_compare_invalid_returns_422 — compare=xpto → 422.
-
-        test_route_by_type_compare_default_is_prev — sem compare, comportamento S18 preservado.
-
-        Total: 143 passed.
-
-Web — toggle year-over-year no drill-down.
-
-    api/stats.ts:
-
-        Novo export type StatsCompare = "prev" | "yoy".
-
-        getStatsByType(period, compare?) e getUserStatsByType(userId, period, compare?) — compare opcional. Quando omitido, NÃO envia o param (if (compare) qs.set(...)), URL idêntica à S18/S19. Quando passado, envia ?compare=....
-
-    hooks/useStats.ts:
-
-        statsKeys.byType(period, compare?) → ["stats","by-type",period,compare ?? "prev"] (4 elementos).
-
-        statsKeys.userByType(userId, period, compare?) → 6 elementos.
-
-        useStatsByType(period, enabled, compare?) e useUserStatsByType(userId, canView, period?, compare?) — compare na key (default "prev" via ??), no queryFn (passa undefined se omitido → URL limpa).
-
-    pages/ProfilePage.tsx:
-
-        Novo estado byTypeCompare (default "prev").
-
-        Novo COMPARE_FILTERS (pt-BR): "Período anterior" / "Mesmo período do ano anterior".
-
-        Hook self: useStatsByType(byTypePeriod, isSelf, byTypeCompare).
-
-        Hook user: useUserStatsByType(id, showOtherStats, byTypePeriod, byTypeCompare).
-
-        Header do drill-down virou flex-col gap-2: linha 1 = título + period; linha 2 = compare (condicional a byTypePeriod !== "all").
-
-        Header da coluna do delta: {byTypeCompare === "yoy" ? "vs. ano anterior" : "vs. anterior"}.
-
-        Conteúdo interno (TYPE_FILTERS, TYPE_LABELS, PACE_TYPES, PERIOD_FILTERS, StatsCards, PeriodChart, PreviousDelta, DeltaLine, lista de atividades, abas, UserRow, computePace) intocado.
-
-Higiene da S19 (fechada na S20):
-
-    .venv fantasma removida (VS Code fechado + Stop-Process Code antes). Única venv agora é D:\Rumo\backend\venv.
-
-    .vscode/settings.json corrigido: backend/.venv → backend/venv + python.analysis.extraPaths: ["${workspaceFolder}/backend"]. Pylance parou de reclamar.
-
-Estado final: working tree limpo, HEAD == origin/main == 2ca4c81. pytest 143 passed / 0 warnings (local). ruff All checks passed. npm run build verde (824 modules, ProfilePage 18.32 kB). npm run lint limpo. flutter analyze sem issues (mobile não tocado). Render deployado (endpoints compare=prev|yoy respondendo em produção; compare=xpto → 422). Vercel redeployado e validado visualmente nos 4 cenários (self com period=90d, terceiro seguido, terceiro não seguido, Network sem compare=undefined).
+Render: /activities/{id}/export respondendo em produção (validado pelo usuário: "tudo como esperado").
+Vercel: front deployado; validação visual no browser não foi colada nesta sessão — fica como primeira ação da S22 (ver Seção 8).
 SEÇÃO 2 — PRODUÇÃO E AMBIENTE
 
     Backend: https://rumo-api-5s0b.onrender.com
@@ -337,10 +316,14 @@ SEÇÃO 2 — PRODUÇÃO E AMBIENTE
 
     Venv backend: D:\Rumo\backend\venv (ativa com .\venv\Scripts\Activate.ps1)
 
-Git (estado ao fim da Sessão 20):
+    Deps novas em S21: nenhuma (gpxpy==1.6.2 já estava em requirements.txt desde a S13 para o upload; reaproveitado no export).
+
+Git (estado ao fim da Sessão 21)
 text
 
-2ca4c81 (HEAD -> main, origin/main) feat(web): toggle year-over-year no drill-down por tipo (Sessao 20)
+8936415 (HEAD -> main, origin/main) feat(activities): export CSV/GPX (Sessao 21)
+19ebc3b docs: handoff da Sessao 20
+2ca4c81 feat(web): toggle year-over-year no drill-down por tipo (Sessao 20)
 879d885 feat(stats): comparacao year-over-year no drill-down por tipo (Sessao 20)
 09a6596 docs: handoff da Sessao 19
 0df0b9f feat(web): stats no perfil de terceiros seguidos (Sessao 19)
@@ -351,117 +334,62 @@ b0e3a29 feat(stats): comparacao com janela anterior no drill-down por tipo (Sess
 5925a03 feat(stats): filtro de periodo no drill-down por tipo (90d|1y|all)
 0f1c6ef chore(web): remove bboxToOsmTileUrl deprecated da Sessao 16
 
-Todos os commits estão em origin/main (pushados). Render e Vercel deployam automático a cada push em main.
-SEÇÃO 3 — O QUE FOI FEITO NA SESSÃO 20
+⚠️ O commit do front da S21 NÃO foi feito ainda (o usuário validou o build local mas parou antes de commitar o feat(web): botoes baixar CSV/GPX no detalhe (Sessao 21)). Os 3 arquivos estão modificados no working tree:
+
+    web/src/api/client.ts
+
+    web/src/api/activities.ts
+
+    web/src/pages/ActivityDetailPage.tsx
+
+Primeira ação da S22 (ver Seção 8) inclui commitar isso.
+SEÇÃO 3 — O QUE FOI FEITO NA SESSÃO 21
 3.1 Validação de estado inicial
 
-PowerShell via Win+R, repo em D:\Rumo. git push: Everything up-to-date. HEAD == origin/main == 09a6596 (handoff da S19). git status --short: limpo. npm run build: 824 modules, verde. flutter analyze: No issues found. Docker/compose OK. docker ps: rumo_postgres_test healthy na 5433. pytest -q: 136 passed. Endpoint /users/{meId}/stats/summary: 200 → S19 no ar.
-3.2 Higiene da S19 (dívida técnica da venv)
+PowerShell via Win+R. git push: Everything up-to-date. HEAD == origin/main == 2ca4c81 (S20). git status --short: só M docs/HANDOFF.md (handoff da S20 não commitado, herdado). npm run build: verde, 824 modules. flutter analyze: No issues. Docker/compose OK.
 
-    .venv fantasma identificada: só Scripts\ (sem pyvenv.cfg, sem Lib). venv (ativa) tinha home = C:\Python313, version = 3.13.7.
+Primeiro pytest -q falhou com 126 erros de ConnectionRefusedError: [WinError 1225]. Causa: rumo_postgres_test estava Exited (255) (Docker Desktop encerrou entre S20 e S21). docker ps sozinho não mostrava. docker ps -a --filter "name=rumo_postgres_test" mostrou. up -d subiu. pg_isready OK. pytest -q → 143 passed. Lição incorporada na Seção 0.
+3.2 Decisão de rota: Opção 2 (export CSV/GPX)
 
-    ruff.exe em .venv\Scripts estava sendo segurado pelo VS Code (processo ruff — PID 23264). Stop-Process -Force não resolvia sozinho (VS Code reiniciava).
+Escolhida na S20 como recomendação. Justificativa: evolução natural depois das stats (dados agregados → dados brutos), reaproveita gpxpy já em uso no upload, contrato aditivo puro, testável 100% local, cabe em 1 sessão de tamanho médio.
+3.3 Contrato travado antes de codar
 
-    Solução: Get-Process Code | Stop-Process -Force → Remove-Item -Recurse -Force .\.venv funcionou.
+GET /activities/{activity_id}/export?format=csv|gpx. Auth dono-ou-seguidor (herdada). 404 para inexistente/sem permissão. 404 para gpx sem rota. 422 para format inválido. Content-Disposition: attachment; filename="rumo_<id>_<type>.<ext>". CSV com 15 colunas (1 header + 1 linha). GPX com <trk>/<trkseg>/<trkpt> invertendo [lon, lat] → lat/lon. Contrato escrito e apresentado ao usuário antes da 1ª linha de código.
+3.4 Ordem de entrega (validada incrementalmente)
 
-    .vscode/settings.json corrigido: backend/.venv → backend/venv + adicionado python.analysis.extraPaths: ["${workspaceFolder}/backend"]. Verificado com Select-String.
+Backend: gpx_service.py → activity_service.py → routers/activities.py → tests/test_export.py (cada um com Select-String de save + ruff + pytest antes do próximo). Front: client.ts → activities.ts → ActivityDetailPage.tsx (cada um com Select-String + npm run build + npm run lint).
+3.5 Tropeços e correções
 
-3.3 Decisão de rota: Opção 1 (year-over-year)
+Tropeço 1 — placeholder no activity_service.py (grave).
+Entreguei o bloco de export com # ... (resto do arquivo INALTERADO ...) ... como marcador. O usuário colou no arquivo real e sobrescreveu tudo. Ruff/Pylance acusaram get_activity/get_activity_track undefined. Diagnóstico: o arquivo estava com o placeholder no disco; git status --short backend/app/services/activity_service.py vazio (não commitado), git log --oneline -3 -- ... mostrou que o último commit que o tocou era b8e4084 (S10). git restore backend/app/services/activity_service.py recuperou. Regra nova na Seção 0.
 
-Rota escolhida após higiene. Motivos: evolução natural do drill-down; reaproveita 100% da infra das S17/S18; contrato aditivo (compare default "prev"); testável 100% local.
+Tropeço 2 — _client_as sem get_db override.
+Na v1 do test_export.py, _client_as(user) só sobrescrevia get_current_user. Resultado: usaria o get_db real (engine de produção) e os testes de permissão falhariam com erro de conexão. Corrigido para _client_as(user, test_engine) sobrescrevendo os dois (get_db com session nova por request usando test_engine, e get_current_user com o user do cenário).
 
-Contrato travado:
+Tropeço 3 — 3 nomes errados no test_export.py.
 
-    compare=prev|yoy, default prev.
+    ActivityType.run → ActivityType.RUN (o enum é RUN = "run", UPPER_CASE). Peguei no models/activity.py que o usuário colou.
 
-    previous mantém shape StatsByTypePreviousItem — sem campo comparison no response (decisão: o cliente sabe o que pediu, o label é decisão de UI).
+    Follow(followed_id=...) → Follow(following_id=...) (model usa following_id, não followed_id). Peguei no models/follow.py que o usuário colou.
 
-    period="all" ignora compare → previous = null.
+    rumo_<id>_run.csv hardcoded → rumo_<id>_<activity.activity_type.value>.csv dinâmico (o sample_run.gpx traduz para "walk", não "run" — nome do arquivo engana).
+    Lição na Seção 0.
 
-    period="1y" faz yoy ≡ prev (coincidência matemática, documentada em teste).
+3.6 Resultado da suíte
 
-    UI: 2 segmented controls separados (period + compare); compare só aparece quando period !== "all".
+pytest -q → 153 passed (143 + 10 novos). ruff check . → All checks passed. npm run build → 824 modules verde, ActivityDetailPage 13.00 kB (+0.99 kB vs. S20). npm run lint → limpo.
+3.7 Commits pushados
 
-3.4 Backend — implementação e testes
+    19ebc3b docs: handoff da Sessao 20 (pendência herdada; 688 inserções, 866 deleções).
 
-Ordem de entrega (1 arquivo por resposta): stats_service.py → routers/activities.py → tests/test_stats.py → routers/users.py. Cada um com ruff check + pytest.
+    8936415 feat(activities): export CSV/GPX (Sessao 21) (4 files, 556 insertions, 4 deletions; create mode 100644 backend/tests/test_export.py).
 
-Entrega 1 — stats_service.py: adicionado _yoy_window_expr, _comparison_window_expr, _where_floor_days; get_by_type ganhou compare param; WHERE ampliado para now - (N + 365) no modo yoy. Validado: ruff OK, pytest 136 (regressão zero), _where_floor_days sanity check: yoy 90d = 455, prev 90d = 180, yoy all = None.
+O commit do front ficou pendente (build verde, mas o usuário parou aqui — ver Seção 5).
+3.8 Validação em produção (backend)
 
-Entrega 2 — routers/activities.py: +1 param compare em stats_by_type. Validado: ruff OK, pytest 136, rota registrada.
+Render redeployou após 8936415. Usuário confirmou: "tudo como esperado". /activities/{id}/export respondendo. (Não foi colada a saída crua dos curls nesta sessão, mas o usuário deu OK explícito.)
 
-Entrega 3 — tests/test_stats.py: +7 testes S20 (detalhes na seção 1). Primeira entrega falhou em 2 testes (compare_yoy_90d_uses_year_ago_window e compare_default_is_prev) com previous is None em vez de 2000.0. Diagnóstico: os testes usavam _dt_ago(200), que cai fora da janela prev de 90d ([now-180, now-90)) e fora da yoy ([now-455, now-365)) — no "buraco" [now-365, now-180). Erro do teste, não do código. Corrigido: _dt_ago(200) → _dt_ago(120). 143 passed.
-
-Entrega 4 — routers/users.py: +1 param compare em get_user_stats_by_type. Validado: ruff OK, pytest 143, rota registrada.
-
-Commit 879d885 (feat(stats): comparacao year-over-year no drill-down por tipo (Sessao 20)) — push aceito.
-
-Validação em produção:
-
-    GET /activities/stats/by-type?period=90d&compare=yoy → 200, walk 3 atividades / 15.643,22 m / previous: null (esperado — prod não tem dado na janela yoy).
-
-    GET /activities/stats/by-type?period=90d&compare=prev → 200, idêntico (regressão preservada).
-
-    GET /users/{Prod2}/stats/by-type?period=90d&compare=yoy → 200, dados do alvo (2 atividades / 14.643,22 m / 0 kcal) — target_id respeitado.
-
-    GET ...?compare=xpto → 422 — Literal do Pydantic.
-
-3.5 Front — implementação
-
-Ordem de entrega (1 arquivo por resposta, build entre cada):
-
-    api/stats.ts: +StatsCompare, getStatsByType(period, compare?) e getUserStatsByType(userId, period, compare?). if (compare) qs.set(...) protege contra compare=undefined na URL. Validado: build verde (824 modules, ProfilePage 17.57 kB), tsc --noEmit limpo.
-
-    hooks/useStats.ts: +statsKeys.byType(period, compare?) com compare ?? "prev" (determinístico, evita duplicação de cache entre undefined e "prev"), statsKeys.userByType(userId, period, compare?) idem. useStatsByType(period, enabled, compare?) e useUserStatsByType(userId, canView, period?, compare?). Validado: build verde (ProfilePage 17.61 kB).
-
-    pages/ProfilePage.tsx: +StatsCompare import, +COMPARE_FILTERS, +estado byTypeCompare (default "prev"), hook self e user ganham byTypeCompare como último arg, header do drill-down virou flex-col gap-2 (linha 1 = título + period; linha 2 = compare, condicional), header da coluna delta alterna "vs. anterior" ↔ "vs. ano anterior". Validado: build verde (ProfilePage 18.32 kB), npm run lint limpo.
-
-Commit 2ca4c81 (feat(web): toggle year-over-year no drill-down por tipo (Sessao 20)) — push aceito.
-3.6 Validação visual (produção)
-
-Conta prod@rumo.com. 4 cenários validados pelo usuário ("aparentemente tudo certo"):
-
-    Self, period=90d: 2º control "Comparar com:" aparece com Período anterior ativo e Mesmo período do ano anterior. Ao trocar para yoy, header da coluna delta muda para "vs. ano anterior". Ao trocar period para "Todos", 2º control some e coluna delta some.
-
-    Terceiro seguido (Prod2): mesmas ações, dados do Prod2 (2 atividades / 14.643 m / 0 kcal).
-
-    Terceiro não seguido: sem seção de stats (regra S19 preservada).
-
-    Network: URLs distintas para compare=prev e compare=yoy; quando period=all, URL fica ?period=all sem compare.
-
-3.7 Estado final da sessão
-
-    Working tree limpo, main == origin/main == HEAD == 2ca4c81.
-
-    npm run build: verde (824 modules, ProfilePage 18.32 kB).
-
-    npm run lint: limpo.
-
-    pytest -q: 143 passed, 0 warnings (local).
-
-    ruff check .: All checks passed.
-
-    flutter analyze: No issues found (não tocado na S20).
-
-    Backend em produção: endpoints compare=prev|yoy respondendo; compare=xpto → 422.
-
-    Front em produção: validado visualmente nos 4 cenários.
-
-    Nenhuma pendência de git.
-
-3.8 Lições da Sessão 20 (importante)
-
-O código entregue estava correto; as previsões de validação erraram 3 vezes:
-
-    Disse "esperado 142 passed" — o correto era 143 (são 7 testes S20, não 6).
-
-    Disse "esperado vazio" no Select-String de _dt_ago(200) — havia 4 ocorrências legítimas (dos testes S18/S20 pré-existentes).
-
-    Disse "esperado 0 ocorrências" em previous.*total_distance_m.*3000.0 — regex mal-escrita (. sem escape, .* amplo). Output real tinha 9.
-
-Regra para a S21: quando o output do terminal divergir da previsão do assistente, investigar o output real primeiro. Não assumir que o código quebrou — pode ser a previsão que está errada.
-
-Os 2 testes que falharam na primeira entrega do test_stats.py eram erros de teste, não de código: _dt_ago(200) cai fora da janela prev de 90d e fora da yoy de 90d (no "buraco"). Corrigidos para _dt_ago(120).
+Front em produção (Vercel): deployado, mas validação visual no browser NÃO foi colada. Fica para a S22.
 SEÇÃO 4 — CONTRATOS DO BACKEND RELEVANTES
 GET /activities/{id}/track (auth: Bearer JWT)
 
@@ -485,6 +413,17 @@ json
 { ..., "bbox": [minLon, minLat, maxLon, maxLat] | null }
 
 Ordem GeoJSON. Null quando route IS NULL. Sem N+1.
+GET /activities/{id}/export?format=csv|gpx (auth: Bearer JWT) — NOVO na S21
+
+    Permissão: dono OU seguidor do dono. Caso contrário, 404 ("Atividade não encontrada" — não vaza existência).
+
+    format=csv (default): 200, Content-Type: text/csv; charset=utf-8, Content-Disposition: attachment; filename="rumo_<id>_<type>.csv". 1 header + 1 linha. Funciona com ou sem rota (bbox vazio se sem rota). None → string vazia. lineterminator="\n". Colunas:
+    id, activity_type, title, started_at, finished_at, duration_s, distance_m, elevation_gain_m, calories, avg_pace_s_per_km, avg_speed_mps, bbox_min_lon, bbox_min_lat, bbox_max_lon, bbox_max_lat
+
+    format=gpx: 200, Content-Type: application/gpx+xml; charset=utf-8, Content-Disposition: attachment; filename="rumo_<id>_<type>.gpx". <trk><name>{title}</name><trkseg><trkpt lat="…" lon="…"> por ponto. Inverte [lon, lat] (GeoJSON) → lat/lon no atributo. Exige rota → 404 "Atividade não possui rota" se route IS NULL.
+
+    format inválido → 422 (Literal do Pydantic).
+
 GET /activities/stats/summary?activity_type=<opcional>
 
 → StatsSummary: total_activities, total_distance_m, total_duration_s, total_elevation_gain_m, total_calories, avg_pace_s_per_km, avg_speed_mps.
@@ -496,56 +435,45 @@ GET /activities/stats/monthly?months=N&activity_type=<opcional>
 → StatsMonthlyResponse: mesmo shape, chave months, period_start "YYYY-MM-01".
 GET /activities/stats/by-type?period=<all|90d|1y>&compare=<prev|yoy>
 
-S17 + S18 + S20.
+→ StatsByTypeResponse: { items: [StatsByTypeItem] }. StatsByTypeItem: activity_type, total_activities, total_distance_m, total_duration_s, total_elevation_gain_m, total_calories, previous: StatsByTypePreviousItem | null. Só tipos com ≥1 atividade na janela atual. Ordenação: total_activities DESC, activity_type ASC (Python — enum nativo ordena pela ordem de declaração). period inválido → 422. compare inválido → 422. previous null para period="all" ou tipo ausente na janela.
 
-→ StatsByTypeResponse: { items: [StatsByTypeItem] }.
-
-StatsByTypeItem: activity_type, total_activities, total_distance_m, total_duration_s, total_elevation_gain_m, total_calories, previous: StatsByTypePreviousItem | null.
-
-StatsByTypePreviousItem: as 5 métricas (sem activity_type).
-
-    Só tipos com >= 1 atividade na janela ATUAL aparecem.
-
-    Ordenação: total_activities DESC, activity_type ASC (Python — enum nativo do Postgres ordena pela ordem de declaração, então desempate final é em Python).
-
-    period inválido → 422. compare inválido → 422.
-
-    previous null para period="all" ou tipo ausente na janela de comparação.
-
-Janelas (S20):
+Janelas:
 period	compare	janela
 all	qualquer	null
-90d	prev	[now-180d, now-90d)
+90d	prev (default)	[now-180d, now-90d)
 90d	yoy	[now-455d, now-365d)
 1y	prev	[now-730d, now-365d)
-1y	yoy	[now-730d, now-365d) (coincide)
-GET /users/{user_id}/stats/{summary,weekly,monthly,by-type} (S19 + S20)
+1y	yoy	[now-730d, now-365d) (coincide — documentado em teste)
+GET /users/{user_id}/stats/{summary,weekly,monthly,by-type}
 
-Mesmos shapes acima. by-type aceita period + compare (S20).
-
-Permissão (helper _ensure_can_view_stats):
-
-    self → 200.
-
-    viewer segue target → 200.
-
-    viewer não segue → 403 ("Você precisa seguir este usuário pra ver as estatísticas dele").
-
-    target inexistente → 404 ("Usuário não encontrado").
-
-Os 4 reaproveitam stats_service.* sem mudança de assinatura (by-type ganhou compare na S20).
+Mesmos shapes. by-type aceita period + compare. Permissão (_ensure_can_view_stats em routers/users.py): self → 200; viewer segue target → 200; viewer não segue → 403 ("Você precisa seguir este usuário pra ver as estatísticas dele"); target inexistente → 404 ("Usuário não encontrado").
 GET /auth/me — identidade do usuário logado (NÃO é /users/me)
 
 Resposta: { id, email, username, full_name, weight_kg, height_cm, birth_date, is_active, created_at }.
 SEÇÃO 5 — COMMITS PENDENTES / ESTADO DO REPO
 
-Sessões 9 a 20 commitadas e pushadas. origin/main == main == HEAD == 2ca4c81.
+Sessões 9 a 20 commitadas e pushadas. origin/main == main == HEAD == 8936415.
 
-Sessão 20 fechada com este handoff (a commitar como docs: handoff da Sessao 20 na próxima ação — geralmente primeira ação da S21).
+Sessão 21: backend commitado (8936415), front NÃO commitado — os 3 arquivos estão no working tree:
+text
 
-Nenhuma pendência conhecida de git.
+M web/src/api/client.ts
+M web/src/api/activities.ts
+M web/src/pages/ActivityDetailPage.tsx
+
+Primeira ação da S22: commitar o front:
+powershell
+
+cd D:\Rumo
+git add web/src/api/client.ts web/src/api/activities.ts web/src/pages/ActivityDetailPage.tsx
+git commit -m "feat(web): botoes baixar CSV/GPX no detalhe (Sessao 21)"
+git push
+
+Sessão 21 também entrega este handoff (a commitar como docs: handoff da Sessao 21 — geralmente primeira ação da S22, junto com o commit do front).
+
+Nenhuma outra pendência conhecida de git.
 SEÇÃO 6 — SCRIPTS ÚTEIS (PowerShell)
-[Sessão 21 — primeira ação] Abrir PowerShell via Win+R → "powershell"
+[Sessão 22 — primeira ação] Abrir PowerShell via Win+R → powershell
 
 NÃO abrir de dentro do VS Code / Windows Terminal. Depois:
 powershell
@@ -555,38 +483,41 @@ git push
 git --no-pager log --oneline -8
 git status --short
 
-[Sessão 21 — primeira ação] Descoberta da estrutura do repo
+[Sessão 22 — primeira ação] Descobrir o estado do front pendente
 powershell
 
-Get-ChildItem -Directory | Select-Object Name
-Get-ChildItem D:\Rumo\web\src -Directory | Select-Object Name
-Get-ChildItem D:\Rumo\web\src\pages | Select-Object Name
-Get-ChildItem D:\Rumo\web\src\components | Select-Object Name
-Get-ChildItem D:\Rumo\mobile\lib -Directory | Select-Object Name
-Get-ChildItem D:\Rumo\backend -Directory | Select-Object Name
-Get-ChildItem D:\Rumo\backend\app -Directory | Select-Object Name
-Get-ChildItem D:\Rumo\backend\app\routers -File | Select-Object Name
-Get-ChildItem D:\Rumo\backend\tests -File | Select-Object Name
+cd D:\Rumo
+git status --short
+# Esperado: 3 linhas M em web/src/...
+# Se estiver vazio, o front da S21 já foi commitado em outra sessão — conferir com git log.
 
-[Sessão 21 — primeira ação] Sanidade de build
+# Commitar o front pendente (se ainda não foi):
+git add web/src/api/client.ts web/src/api/activities.ts web/src/pages/ActivityDetailPage.tsx
+git commit -m "feat(web): botoes baixar CSV/GPX no detalhe (Sessao 21)"
+git push
+
+[Sessão 22 — primeira ação] Sanidade de build
 powershell
 
 cd D:\Rumo\web
 npm run build
-cd D:\Rumo\mobile
+npm run lint
+cd ..\mobile
 & "C:\Users\nasci\flutter\bin\flutter.bat" analyze
 
-[Sessão 21 — primeira ação] Docker + pytest local
+[Sessão 22 — primeira ação] Docker + pytest local
 powershell
 
 docker version
 docker compose version
 cd D:\Rumo\backend
 docker compose -f docker-compose.test.yml up -d
-docker ps
+docker ps -a --filter "name=rumo_postgres_test"      # ATENÇÃO: -a, não só ps
+docker exec rumo_postgres_test pg_isready -h 127.0.0.1 -p 5432
 # Se o prompt já mostra (venv), PULE a linha abaixo.
 .\venv\Scripts\Activate.ps1      # UM ponto, NÃO dois
-python -m pytest -q              # esperado: 143 passed
+python -m pytest -q              # esperado: 153 passed
+ruff check .
 
 Verificar que fitdecode está instalado e fitparse NÃO:
 powershell
@@ -594,26 +525,38 @@ powershell
 python -c "from importlib.metadata import version; print('fitdecode', version('fitdecode'))"
 python -c "import fitparse" 2>&1   # esperado: ModuleNotFoundError
 
-[Sessão 21 — primeira ação] Detecção de versão em produção (S20 — year-over-year)
+[Sessão 22 — primeira ação] Detecção de versão em produção (S21 — export CSV/GPX)
 powershell
 
 $body = "username=prod@rumo.com&password=senha12345"
 $login = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/login" -Method Post -ContentType "application/x-www-form-urlencoded" -Body $body
 $token = $login.access_token
-$me = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/me" -Headers @{ Authorization = "Bearer $token" }
-$meId = $me.id
-$resp = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=90d&compare=yoy" -Headers @{ Authorization = "Bearer $token" }
-Write-Host "RESULTADO: S20 no ar (by-type?compare=yoy respondeu 200, items: $($resp.items.Count))"
 
-Se der 404/422 → backend ainda está na S19. Se der 200 → S20 no ar. Para confirmar 422 no inválido:
-powershell
+# Pega uma activity do prod para testar
+$acts = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities?limit=5" -Headers @{ Authorization = "Bearer $token" }
+$id = $acts[0].id
 
-try {
-  Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=90d&compare=xpto" -Headers @{ Authorization = "Bearer $token" }
-  Write-Host "ERRO: deveria ter dado 422"
-} catch {
-  Write-Host "OK: compare invalido deu $($_.Exception.Response.StatusCode.value__)"
+# CSV
+$csv = Invoke-WebRequest -Uri "https://rumo-api-5s0b.onrender.com/activities/$id/export?format=csv" -Headers @{ Authorization = "Bearer $token" }
+Write-Host "CSV: $($csv.StatusCode) $($csv.Headers['Content-Type'])"
+Write-Host $csv.Content
+
+# GPX (só se a activity tiver rota — has_bbox=True)
+if ($acts[0].bbox) {
+  $gpx = Invoke-WebRequest -Uri "https://rumo-api-5s0b.onrender.com/activities/$id/export?format=gpx" -Headers @{ Authorization = "Bearer $token" }
+  Write-Host "GPX: $($gpx.StatusCode) $($gpx.Headers['Content-Type'])"
+  Write-Host ($gpx.Content.Substring(0, [Math]::Min(300, $gpx.Content.Length)))
 }
+
+# Validação
+try {
+  Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/$id/export?format=xpto" -Headers @{ Authorization = "Bearer $token" }
+  Write-Host "ERRO: format invalido deveria dar 422"
+} catch {
+  Write-Host "OK: format invalido deu $($_.Exception.Response.StatusCode.value__)"
+}
+
+# Se compare=yoy responde 200 e format=xpto responde 422, o backend está na S21.
 
 Login (produção) — ATENÇÃO: identidade é /auth/me, NÃO /users/me
 powershell
@@ -628,25 +571,7 @@ Stats de terceiros (S19/S20)
 powershell
 
 Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$meId/stats/summary" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
-Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$meId/stats/weekly?weeks=8" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
-Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$meId/stats/monthly?months=6" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
-Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$meId/stats/by-type?period=90d&compare=prev" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 4
 Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$meId/stats/by-type?period=90d&compare=yoy" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 4
-
-Quem prod segue (para o cenário "terceiro seguido")
-powershell
-
-$prod2Id = "01a141e7-5ea4-7600-8959-19145475ad0a"
-Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$prod2Id/stats/summary" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
-Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/01a12c83-be2a-71fa-b966-1c93ca64f341/following" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
-
-Stats do self (comparar com S18/S19)
-powershell
-
-Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/summary" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
-Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=all" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 4
-Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=90d&compare=prev" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 4
-Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/activities/stats/by-type?period=90d&compare=yoy" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 4
 
 Ruff (backend)
 powershell
@@ -656,143 +581,195 @@ cd D:\Rumo\backend
 .\venv\Scripts\Activate.ps1
 ruff check .
 
+Recuperação de arquivo corrompido (lição S21)
+powershell
+
+cd D:\Rumo
+git status --short <arquivo>                                   # "M" se modificado, vazio se igual ao HEAD
+git --no-pager log --oneline -3 -- <arquivo>                    # último commit que tocou
+# Se o último commit for anterior à mudança quebrada:
+git restore <arquivo>                                          # ou git checkout -- <arquivo>
+# Se a versão quebrada JÁ foi commitada:
+git show <commit-anterior>:<arquivo> > <arquivo>
+# Conferir que voltou:
+Get-Content -Encoding UTF8 <arquivo> | Select-String -Pattern "async def "
+
+Validação do front em produção (browser) — primeira ação da S22
+
+Manual em https://rumo-wheat.vercel.app:
+
+    Login prod@rumo.com / senha12345.
+
+    Abrir uma activity que tenha rota (mapa aparece).
+
+    Conferir: "Baixar CSV" e "Baixar GPX" no cabeçalho, ao lado do título. "Baixar GPX" só aparece se houver rota.
+
+    Clicar "Baixar CSV" → arquivo rumo_<id>_<type>.csv baixa; abrir no Excel/LibreOffice: 2 linhas, bbox_* preenchidos.
+
+    Clicar "Baixar GPX" → arquivo rumo_<id>_<type>.gpx baixa; abrir em https://gpx.studio → trilha desenhada.
+
+    Numa activity sem rota, "Baixar GPX" não aparece.
+
 SEÇÃO 7 — DÍVIDAS TÉCNICAS
 
-(FECHADA na S20) ~~Existem duas pastas de venv~~: .venv (fantasma, só Scripts\) removida na S20 após Stop-Process Code. Única venv agora é backend\venv (Python 3.13.7).
+(FECHADA na S20) ~~Existem duas pastas de venv~~: .venv (fantasma) removida. Única venv é backend\venv (Python 3.13.7).
 
-(FECHADA na S20) ~~Pylance reclamando de imports~~: causa raiz era .vscode/settings.json apontando para .venv. Corrigido para backend/venv + python.analysis.extraPaths.
+(FECHADA na S20) ~~Pylance reclamando de imports~~: .vscode/settings.json aponta para backend/venv + python.analysis.extraPaths: ["${workspaceFolder}/backend"].
 
-(CONHECIDA — Sessão 14) Enums nativos do Postgres ordenam pela ORDEM DE DECLARAÇÃO, não pela string. get_by_type faz o desempate final em Python: items.sort(key=lambda r: (-r["total_activities"], r["activity_type"])). REGRA: qualquer novo ORDER BY em coluna Enum DEVE (a) fazer o sort final em Python, ou (b) ser testado contra a ordem de declaração.
+(CONHECIDA — Sessão 14) Enums nativos do Postgres ordenam pela ORDEM DE DECLARAÇÃO. get_by_type faz desempate em Python: items.sort(key=lambda r: (-r["total_activities"], r["activity_type"])). Qualquer novo ORDER BY em coluna Enum DEVE (a) fazer o sort final em Python, ou (b) ser testado contra a ordem de declaração.
 
-(CONHECIDA — Sessão 17) Filtro period usa now() do Postgres. Testes de period DEVEM usar datetime.now(timezone.utc) - timedelta(days=N) com margem >= 10 dias entre dentro e fora da janela. Não misturar com _dt fixo.
+(CONHECIDA — Sessão 17) Filtro period usa now() do Postgres. Testes de period DEVEM usar datetime.now(timezone.utc) - timedelta(days=N) com margem ≥10 dias. Não misturar com _dt fixo.
 
-(CONHECIDA — Sessão 18) WHERE mata a janela anterior antes do CASE WHEN. Quando um SELECT precisa somar duas janelas, o WHERE deve cobrir a união (ex.: started_at >= now - 2N para prev, started_at >= now - (N+365) para yoy), e cada métrica recorta sua janela via SUM(CASE WHEN <janela> THEN col ELSE 0 END) — inclusive a contagem. Depois, filtrar em Python as linhas cuja janela principal ficou zerada.
+(CONHECIDA — Sessão 18) WHERE mata a janela anterior antes do CASE WHEN. Quando um SELECT soma duas janelas, o WHERE deve cobrir a união. Cada métrica recorta via SUM(CASE WHEN <janela> THEN col ELSE 0 END).
 
-(CONHECIDA — Sessão 17/18/19/20) StatsCards mostra summary "todos os tempos", não filtrado por period nem por previous. O segmented control de período afeta APENAS a tabela por tipo. Intencional.
+(CONHECIDA — Sessão 17/18/19/20/21) StatsCards mostra summary "todos os tempos", não filtrado por period nem por previous. O segmented control de período afeta APENAS a tabela por tipo. Intencional.
 
-(CONHECIDA — Sessão 17/18/19/20) Conta prod@rumo.com não tem atividade >90d (na janela anterior nem na yoy). Por isso period=all, 90d e 1y retornam iguais em produção para prod, e previous vem null em todos os itens. Isso NÃO é bug. Para ver diferença em produção, usar Prod2 ou upload de GPX com data no passado. Não perder tempo achando que está quebrado — os 143 testes locais (com _dt_ago(120), _dt_ago(400), _dt_ago(500)) provam filtro e previous.
+(CONHECIDA — Sessão 17/18/19/20) Conta prod@rumo.com não tem atividade >90d. period=all, 90d e 1y retornam iguais em produção para prod; previous vem null. Isso NÃO é bug. Os 153 testes locais provam filtro e previous.
 
-(CONHECIDA — Sessão 20) period="1y" faz compare=yoy ≡ compare=prev por definição matemática (a janela imediatamente anterior a 1 ano é o mesmo período do ano anterior). Documentado em teste (test_get_by_type_compare_yoy_1y_equals_prev). Não é bug.
+(CONHECIDA — Sessão 20) period="1y" faz compare=yoy ≡ compare=prev por definição matemática. Documentado em teste. Não é bug.
 
-(CONHECIDA — Sessão 20) compare só tem efeito visível em period="90d" (e em futuros períodos custom, tipo 30d/180d). Em period="1y", os dois valores dão o mesmo resultado. Em period="all", ambos dão null.
+(CONHECIDA — Sessão 21) sample_run.gpx em backend/samples/ não é "run" — o <type> interno traduz para "walk" via map_gpx_type. Os testes de export usam activity.activity_type.value dinâmico em vez de hardcodar. Se trocar o sample, os testes continuam passando.
 
-(Oportunidade — S18/S19/S20) Delta "vs. anterior / vs. ano anterior" cobre 3 métricas (atividades, distância, elevação). Tempo e calorias ficaram fora por legibilidade. Extensão trivial se virar requisito (mais 2 DeltaLine).
+(CONHECIDA — Sessão 21) to_gpx não emite <time> por <trkpt> (a geometria guardada em route é só LineString, sem stream temporal — decisão da S10). O <trk> tem <name> e <type>, mas os pontos não têm timestamp individual. Strava/Garmin aceitam GPX assim. Se um dia a feature "export com timestamps" virar requisito, precisa ler raw_track_points (que tem [[lat, lon, ele, ts], ...]) em vez de route — mudança pontual em to_gpx + assinatura.
+
+(CONHECIDA — Sessão 21) apiFetchBlob não tem skipAuth. Não há caso de uso hoje (todo export exige auth). Adicionar quando aparecer (YAGNI).
+
+(Oportunidade — S18/S19/S20/S21) Delta "vs. anterior / vs. ano anterior" cobre 3 métricas (atividades, distância, elevação). Tempo e calorias ficaram fora por legibilidade. Extensão trivial se virar requisito.
 
 (Oportunidade — S18/S19/S20) Semântica do delta é NEUTRA (subiu=verde, desceu=vermelho, igual=cinza). Sem juízo de "melhor/pior". Se o produto quiser meta, é feature nova.
 
-(Oportunidade — S19/S20) Stats públicas hoje só aparecem quando viewer segue o alvo. Se o produto quiser "stats públicas sempre" (ex.: perfil aberto), é mudança de regra no _ensure_can_view_stats (endpoint + teste + front). Não é bug — é decisão de privacidade documentada.
+(Oportunidade — S19/S20) Stats públicas só aparecem quando viewer segue o alvo. "Stats públicas sempre" é mudança de regra em _ensure_can_view_stats (endpoint + teste + front). Não é bug — é decisão de privacidade documentada.
 
 (Oportunidade) RouteMap.tsx é reutilizável. Se aparecer segundo uso, considerar React.lazy() para tirar o leaflet (163.60 kB) do chunk.
 
-(Oportunidade) Drill-down por tipo poderia ganhar:
+(Oportunidade — S21) Export em lote (ex.: GET /activities/export?format=gpx para todas as atividades do usuário, ou por período) — extensão natural do export unitário. Precisa decidir formato de ZIP vs. concatenado, e quais regras de auth (só as próprias? seguidas também?).
 
-    Filtro de período custom (ex.: "últimos 180 dias"). Hoje é all|90d|1y fixo; adicionar valor ao Literal é aditivo.
+(Oportunidade — S21) Export no app mobile (mesma feature do web). Mobile está parado desde S11; seria sessão grande.
 
-    Export CSV/GPX (Opção 2 da Rota B — recomendada para S21).
+Mobile: sem drill-down de stats. Sem inclinação/rotação 3D. Sem export. TimeoutException do app mobile não reproduzido desde a Sessão 9.
+SEÇÃO 8 — PRÓXIMOS PASSOS RECOMENDADOS (Sessão 22 e além)
+PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 22 (antes de qualquer mudança de código)
 
-    Year-over-year já implementado (S20). ✅
-
-Mobile: sem drill-down de stats no app. Sem inclinação/rotação 3D. TimeoutException do app mobile não reproduzido desde a Sessão 9.
-SEÇÃO 8 — PRÓXIMOS PASSOS RECOMENDADOS (Sessão 21 e além)
-PRIMEIRA AÇÃO OBRIGATÓRIA DA SESSÃO 21 (antes de qualquer mudança de código)
-
-No terminal (PowerShell via Win+R → "powershell"):
+No terminal (PowerShell via Win+R → powershell):
 powershell
 
 cd D:\Rumo
 git push
 git --no-pager log --oneline -8
 git status --short
-cd web ; npm run build
-cd ..\mobile
-& "C:\Users\nasci\flutter\bin\flutter.bat" analyze
 
-Confirmar: push aceito, HEAD == origin/main == 2ca4c81 (ou o commit do handoff, se for o caso), build e analyze verdes, working tree limpo.
+Esperado: git push "Everything up-to-date"; HEAD == origin/main == 8936415 (ou o commit do handoff da S21, se já commitado); git status --short deve mostrar 3 linhas M (web/src/api/client.ts, web/src/api/activities.ts, web/src/pages/ActivityDetailPage.tsx) + M docs/HANDOFF.md se este handoff ainda não foi commitado.
 
-DOCKER + PYTEST LOCAL:
+Se as 3 linhas M estiverem lá: commitar o front (Seção 6). Se estiverem vazias: o front da S21 já foi commitado em outra sessão — conferir com git log e pular.
+
+Depois, sanidade de build:
 powershell
 
-docker version
-docker compose version
+cd D:\Rumo\web ; npm run build ; npm run lint
+cd ..\mobile ; & "C:\Users\nasci\flutter\bin\flutter.bat" analyze
+
+Depois, Docker + pytest (com docker ps -a, não só ps):
+powershell
+
+docker version ; docker compose version
 cd D:\Rumo\backend
 docker compose -f docker-compose.test.yml up -d
-docker ps
+docker ps -a --filter "name=rumo_postgres_test"
+docker exec rumo_postgres_test pg_isready -h 127.0.0.1 -p 5432
 # Se prompt já mostra (venv), pular:
-.\venv\Scripts\Activate.ps1     # UM ponto
-python -m pytest -q
+.\venv\Scripts\Activate.ps1
+python -m pytest -q     # esperado: 153 passed
+ruff check .
 
-Esperado: 143 passed, 0 warnings.
+Depois, detecção de versão em produção (S21):
+powershell
 
-DETECÇÃO DE VERSÃO EM PRODUÇÃO (S20 — year-over-year):
+# bloco completo na Seção 6 ("Detecção de versão em produção (S21 — export CSV/GPX)")
+# Esperado: CSV 200, GPX 200 (se rota), format=xpto 422
 
-Rodar o script da seção 6 ("Detecção de versão em produção (S20 — year-over-year)"). Esperado: by-type?compare=yoy responde 200 e compare=xpto responde 422. Se der 404/200 no inválido, o Render não redeployou — checar dashboard do Render.
+Depois, validação visual do front em produção (Seção 6 — bloco "Validação do front em produção (browser)"). Essa é a única parte da S21 não validada ainda. Se algo falhar, diagnosticar antes de qualquer outra coisa.
+Estado da Rota B (fim da Sessão 21)
 
-DESCOBERTA DE ESTRUTURA (obrigatória — não adivinhar):
+Quatro itens fechados na S20 (filtro de período, comparação com janela anterior, stats públicas em perfis de terceiros, comparação year-over-year). A S21 abriu e fechou a OPÇÃO 2 (export CSV/GPX). A Rota B "original" está concluída.
+Próximos passos (escolha entre opções)
 
-Rodar os Get-ChildItem da seção 6. Colar as saídas no chat ANTES de pedir ou reescrever qualquer arquivo.
-Estado da Rota B (fim da Sessão 20)
+OPÇÃO 1 — Export em lote (CSV/GPX). ← RECOMENDADA
 
-Quatro itens fechados:
+    Evolução natural do export unitário. Backend: GET /activities/export?format=csv|gpx&user_id=<opcional>&from=&to= (decidir se ZIP ou concatenado). Reaproveita to_gpx e _activity_to_csv.
 
-    Filtro de período (S17) — FEITO.
+    Front: botão "Exportar tudo" na ActivitiesPage ou ProfilePage.
 
-    Comparação com janela anterior (S18) — FEITO.
+    Escopo: 1 sessão de tamanho médio.
 
-    Stats públicas em perfis de terceiros (S19) — FEITO.
+    Motivos: valor de produto direto (usuário já baixa 1; agora baixa N), contrato aditivo puro, testável 100% local.
 
-    Comparação year-over-year (S20) — FEITO.
+OPÇÃO 2 — Export no app mobile (paridade com web).
 
-Higiene da S19 (venv + settings.json) — FEITA na S20.
-Rota B — próximos passos (ESCOLHA entre opções)
+    Mobile parado desde S11. Sessão grande. Só se houver demanda real.
 
-OPÇÃO 2 — Export de atividades (CSV/GPX). ← RECOMENDADA
+    Não recomendo para S22 — sessão grande, alto risco, e o app mobile tem outras lacunas (sem stats drill-down, sem share).
 
-    Backend: endpoint novo GET /activities/{id}/export?format=csv|gpx (ou variante em lote). gpx_service.py já existe (parse de GPX no upload) — provavelmente reutilizável para geração (inverso).
+OPÇÃO 3 — Resíduos de baixo risco (Rota A+).
 
-    Front: botão "Baixar" no detalhe da atividade ou na lista. Precisa lidar com download de Blob (URL.createObjectURL).
+    (b) RouteMap com React.lazy() — prepara para segundo uso. ~30 min.
 
-    Escopo maior que year-over-year, mas coeso. Feature visível nova. Testável 100% local.
+    (c) Cheat sheet de endpoints num README.md. ~30 min.
 
-    Motivos para recomendar: valor de produto direto, reaproveita infra existente, contrato aditivo, sem dependência de terceiros.
-
-OPÇÃO 3 — Stats no app mobile (drill-down por tipo no Flutter).
-
-    Mobile está parado desde S11. Se for evoluir, é sessão grande.
-
-    Decidir se vale antes de começar. Paridade com web está longe.
-
-    Não recomendo para a S21 — sessão grande, alto risco, pouco valor incremental no estado atual do app.
-
-OPÇÃO 4 — Resíduos de baixo risco da Rota A+.
-
-    (b) RouteMap com React.lazy() — prepara terreno para segundo uso.
-
-    (c) Cheat sheet de endpoints num README.
-
-    (d) ~~Remover .venv antiga~~ — FEITO na S20.
+    (d) ~~Remover .venv antiga~~ — feito na S20.
 
     Ganho marginal. Só se não houver Rota B clara.
 
-Recomendação final para a Sessão 21
+OPÇÃO 4 — Export com timestamps por ponto.
 
-Antes de escolher, VALIDAR ESTADO (seção 6 — primeira ação). Se estiver tudo verde (build, analyze, pytest 143, compare=yoy no ar, compare=xpto → 422), aí escolher.
+    Muda to_gpx para ler raw_track_points (que tem [[lat, lon, ele, ts], ...]) em vez de route (que é só LineString). Mantém route para o mapa; export lê raw_track_points.
 
-Rota recomendada: OPÇÃO 2 (export CSV/GPX).
+    Feature de nicho (Strava/Garmin aceitam GPX sem <time>, mas apps de análise preferem com). Custa pouco, mas não é prioridade.
+
+OPÇÃO 5 — Export no mobile (paridade) ou "exportar tudo" via app.
+
+    Combina com a Opção 1 + Opção 2. Só depois de decidir se o mobile vai evoluir.
+
+Recomendação final para a Sessão 22
+
+Antes de escolher, VALIDAR ESTADO (Seção 8 — primeira ação). Se tudo verde (build, lint, analyze, pytest 153, export respondendo em prod, botão funcionando no browser), aí escolher.
+
+Rota recomendada: OPÇÃO 1 (export em lote).
 
 Motivos:
 
-    É a evolução natural do produto depois das stats. O usuário já vê seus dados agregados; agora quer levar os dados brutos.
+    É a evolução natural do export unitário. O usuário baixa 1 atividade agora; a próxima pergunta é "e se eu quiser todas?".
 
-    gpx_service.py já existe (parse no upload) — inverso (geração) reaproveita a mesma lib (gpxpy).
+    Reaproveita to_gpx e _activity_to_csv sem tocar em nada existente.
 
-    Contrato aditivo puro: endpoint novo, nada existente muda.
+    Contrato aditivo puro: endpoint novo.
 
     Testável 100% local.
 
     Feature visível em ~1 sessão de tamanho médio.
 
-Se o usuário preferir escopo menor: OPÇÃO 4 (React.lazy no RouteMap + README) — aquecimento de 30-60 min.
+Se o usuário preferir escopo menor: OPÇÃO 3 (React.lazy no RouteMap + README) — aquecimento de 30-60 min.
 
-Se o usuário preferir escopo maior: OPÇÃO 3 (mobile) — mas avisar antes que é sessão grande.
+Se preferir escopo maior: OPÇÃO 2 (mobile) — mas avisar antes que é sessão grande.
 
-Em qualquer rota, handoff preventivo em ~70-80% do contexto — antes do fim, parar e entregar o HANDOFF completo da Sessão 21 neste mesmo formato (seções 0 a 8).
+Em qualquer rota, handoff preventivo em ~70-80% do contexto — antes do fim, parar e entregar o HANDOFF completo da Sessão 22 neste mesmo formato (seções 0 a 8).
+SEÇÃO 9 — PEDIDO EXPLÍCITO DO USUÁRIO PARA O PRÓXIMO CHAT
+
+O usuário disse textualmente ao fim da S21: "gostei da sua forma de trabalho código e teste. ficou bem fluido o trabalho. faça um handoff bem detalhado para o proximo chat e se tiver como pedir para que sempre trabalhe desta forma."
+
+Pedido para o assistente da S22 (e além): manter o processo da S21. Concretamente:
+
+    Fase 0 obrigatória: validar estado (git, build, lint, analyze, docker -a, pytest, detecção de versão em prod) antes de tocar em qualquer código.
+
+    Fase 1 — descoberta: pedir os arquivos relevantes (Get-Content -Encoding UTF8) com motivo. Não adivinhar estrutura, nomes de símbolos, campos de model/enum/schema. Pedir também models/activity.py, models/follow.py quando a feature tocar esses models.
+
+    Fase 2 — contrato travado: escrever endpoint/auth/404/422/headers/formato antes de codar. Apresentar ao usuário.
+
+    Fase 3 — entrega incremental: 1 arquivo por resposta, código completo (nunca placeholder — regra nova da S21), com Select-String (save) + ruff/pytest (backend) ou npm run build/npm run lint (front) entre cada entrega. Nunca acumular 2 arquivos sem validar.
+
+    Fase 4 — validação em produção: local verde é pré-requisito; prod via HTTP/browser é o que fecha.
+
+    Fase 5 — handoff preventivo em ~70-80% do contexto, no formato completo (seções 0 a 8), sem resumir.
+
+Regras novas da S21 (Seção 0, itens 7, 8, 9): nunca placeholder no código, não adivinhar nomes de símbolos, git status + git log antes de git restore.
+
+O que funcionou nesta sessão (manter): ordem clara de fases, validação entre cada arquivo, contrato escrito antes, commits pequenos e temáticos, honestidade sobre os próprios erros (o placeholder, o _client_as sem get_db, os 3 nomes errados) e correção com base no output real do terminal, não na previsão.
