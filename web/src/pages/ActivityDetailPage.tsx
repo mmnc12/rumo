@@ -1,8 +1,9 @@
 // [Sessão 11 — fix] toggle Mapa/Satélite no mapa do detalhe (igual mobile).
 // [Sessão 13] Mapa extraído para components/RouteMap.tsx (reutilizável).
 // [Sessão 21] Botões "Baixar CSV" e "Baixar GPX" no cabeçalho do detalhe.
+// [Sessão 25] RouteMap carregado com React.lazy + Suspense (tira leaflet do chunk principal).
 
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { AppHeader } from "../components/AppHeader";
@@ -10,8 +11,11 @@ import { CommentsSection } from "../components/CommentsSection";
 import { LikeButton } from "../components/LikeButton";
 import { PhotoGallery } from "../components/PhotoGallery";
 import { PhotoUpload } from "../components/PhotoUpload";
-// [Sessão 13] Mapa da rota extraído (encapsula Leaflet + toggle Mapa/Satélite).
-import { RouteMap } from "../components/RouteMap";
+// [Sessão 25] RouteMap agora entra via React.lazy — named export resolvido
+// com `.then(m => ({ default: m.RouteMap }))` para o `lazy` aceitar.
+const RouteMap = lazy(() =>
+  import("../components/RouteMap").then((m) => ({ default: m.RouteMap })),
+);
 import { useAuth } from "../hooks/useAuth";
 import {
   useActivity,
@@ -161,8 +165,21 @@ export default function ActivityDetailPage() {
 
         {/* Mapa — [Sessão 13] extraído para RouteMap. O componente cuida do
             estado vazio ("Sem rota disponível…"), do toggle Mapa/Satélite
-            e do fit bounds. */}
-        <RouteMap track={track} className="mb-6" />
+            e do fit bounds. [Sessão 25] Carregado via React.lazy; o fallback
+            mantém a altura de 24rem (default do RouteMap) para não haver
+            salto de layout enquanto o chunk do leaflet baixa. */}
+        <Suspense
+          fallback={
+            <div
+              className="mb-6 rounded-lg bg-gray-100 flex items-center justify-center"
+              style={{ height: "24rem" }}
+            >
+              <p className="text-gray-500">Carregando mapa…</p>
+            </div>
+          }
+        >
+          <RouteMap track={track} className="mb-6" />
+        </Suspense>
 
         {/* Fotos */}
         {(isOwner || (photos && photos.length > 0)) && (
