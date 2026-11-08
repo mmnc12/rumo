@@ -3,7 +3,7 @@
  * (Upload GPX entra aqui no 13a.3 — por enquanto só lista e detalhe.)
  */
 
-import { apiFetch } from "./client";
+import { apiFetch, apiFetchBlob } from "./client";
 import type { Activity, ActivityDetail } from "../types/api";
 import type { TrackResponse } from "../types/api";
 
@@ -90,4 +90,50 @@ export async function uploadGpx(
  */
 export function getActivityTrack(id: string): Promise<TrackResponse> {
   return apiFetch<TrackResponse>(`/activities/${id}/track`);
+}
+
+// ===== Export CSV/GPX — [Sessão 21] =====
+
+export type ActivityExportFormat = "csv" | "gpx";
+
+/**
+ * Dispara o download de um blob como arquivo, sem vazar memória.
+ *
+ * Cria uma URL temporária pro Blob, ancora num `<a download>`, clica e
+ * revoga. `setTimeout(0)` no `revokeObjectURL` porque o Chrome pode
+ * começar o download de forma assíncrona — revogar imediatamente cancela.
+ */
+function _triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  // `style.display = "none"` evita flash do link no DOM em alguns browsers.
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+/**
+ * GET /activities/{id}/export?format=csv|gpx — baixa a atividade.
+ *
+ * CSV: metadados (1 linha). GPX: geometria completa (exige rota no
+ * backend — 404 "Atividade não possui rota").
+ *
+ * Auth: mesma regra do detalhe (dono ou seguidor; senão 404). Erros
+ * sobem como `ApiError` (o chamador trata 404 mostrando aviso, por ex.).
+ *
+ * Filename: vem do `Content-Disposition` do backend
+ * (`rumo_<id>_<type>.<ext>`); se faltar, cai em `rumo_<id>.<format>`.
+ */
+export async function downloadActivityExport(
+  id: string,
+  format: ActivityExportFormat
+): Promise<void> {
+  const { blob, filename } = await apiFetchBlob(
+    `/activities/${id}/export?format=${format}`
+  );
+  _triggerDownload(blob, filename ?? `rumo_${id}.${format}`);
 }

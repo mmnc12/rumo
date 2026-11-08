@@ -1,6 +1,8 @@
 // [Sessão 11 — fix] toggle Mapa/Satélite no mapa do detalhe (igual mobile).
 // [Sessão 13] Mapa extraído para components/RouteMap.tsx (reutilizável).
+// [Sessão 21] Botões "Baixar CSV" e "Baixar GPX" no cabeçalho do detalhe.
 
+import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { AppHeader } from "../components/AppHeader";
@@ -17,6 +19,7 @@ import {
   useDeleteActivity,
 } from "../hooks/useActivities";
 import { useActivityPhotos, useDeletePhoto } from "../hooks/usePhotos";
+import { downloadActivityExport } from "../api/activities";
 import {
   activityEmoji,
   formatActivityType,
@@ -38,11 +41,33 @@ export default function ActivityDetailPage() {
   const deleteMutation = useDeleteActivity();
   const deletePhoto = useDeletePhoto(id ?? "");
 
+  // [Sessão 21] Estado local por botão (evita acoplar dois downloads).
+  const [busyCsv, setBusyCsv] = useState(false);
+  const [busyGpx, setBusyGpx] = useState(false);
+
   async function handleDelete() {
     if (!id) return;
     if (!confirm("Tem certeza que quer apagar esta atividade?")) return;
     await deleteMutation.mutateAsync(id);
     navigate("/activities");
+  }
+
+  async function handleDownload(format: "csv" | "gpx") {
+    if (!id) return;
+    const setBusy = format === "csv" ? setBusyCsv : setBusyGpx;
+    setBusy(true);
+    try {
+      await downloadActivityExport(id, format);
+    } catch (err) {
+      // ApiError tem .detail; mostramos o mais informativo que houver.
+      const detail =
+        err && typeof err === "object" && "detail" in err
+          ? String((err as { detail: unknown }).detail)
+          : "Não foi possível baixar o arquivo.";
+      alert(detail);
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (isLoading) {
@@ -71,6 +96,7 @@ export default function ActivityDetailPage() {
   }
 
   const isOwner = !!user && user.id === activity.user_id;
+  const hasTrack = !!track && track.coordinates.length > 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -98,12 +124,36 @@ export default function ActivityDetailPage() {
             </p>
           )}
 
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <span>{activityEmoji(activity.activity_type)}</span>
-            <span>
-              {activity.title || formatActivityType(activity.activity_type)}
-            </span>
-          </h1>
+          <div className="flex items-start justify-between gap-2 flex-wrap">
+            <h1 className="text-2xl font-bold flex items-center gap-2 min-w-0">
+              <span>{activityEmoji(activity.activity_type)}</span>
+              <span className="truncate">
+                {activity.title || formatActivityType(activity.activity_type)}
+              </span>
+            </h1>
+            {/* [Sessão 21] Botões de export — CSV sempre, GPX se houver rota.
+                Ficam visíveis para dono e seguidor (backend aceita os dois). */}
+            <div className="flex gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => handleDownload("csv")}
+                disabled={busyCsv}
+                className="text-xs px-3 py-1.5 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {busyCsv ? "Baixando…" : "Baixar CSV"}
+              </button>
+              {hasTrack && (
+                <button
+                  type="button"
+                  onClick={() => handleDownload("gpx")}
+                  disabled={busyGpx}
+                  className="text-xs px-3 py-1.5 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {busyGpx ? "Baixando…" : "Baixar GPX"}
+                </button>
+              )}
+            </div>
+          </div>
           <p className="text-sm text-gray-500 mt-1">
             {formatDateTime(activity.started_at)}
           </p>

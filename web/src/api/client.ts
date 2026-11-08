@@ -6,6 +6,7 @@
  * - Injetar o JWT automaticamente (se existir em localStorage)
  * - Tratar erros da API de forma previsível (lançar ApiError)
  * - Lidar com respostas 204 (sem body)
+ * - [Sessão 21] Baixar blobs (export CSV/GPX) sem quebrar o JSON.parse
  *
  * Por que não usar axios? fetch nativo + um wrapper resolve e evita uma
  * dependência extra. TanStack Query cuida de cache/retry/loading.
@@ -120,4 +121,79 @@ export async function apiFetch<T>(
   }
 
   return payload as T;
+}
+
+// [Sessão 21] Download de blobs (export CSV/GPX).
+//
+// `apiFetch` destrói o binário ao chamar `res.text()` + `JSON.parse()`.
+// Este helper espelha a injeção de auth e o tratamento de erro, mas usa
+// `res.blob()` e devolve `{ blob, filename }`. O filename vem do header
+// `Content-Disposition` quando o servidor manda (nosso export manda).
+//
+// Por que não sobrecarregar `apiFetch` com `responseType`: o caminho JSON
+// é o quente (usado em todas as outras chamadas) — evitar branch dentro
+// dele. Um helper de ~35 linhas é mais legível e não regride nada.
+export interface BlobResult {
+  blob: Blob;
+  /** Extraído de Content-Disposition; null se o servidor não mandou. */
+  filename: string | null;
+}
+
+function _parseContentDispositionFilename(
+  header: string | null
+): string | null {
+  if (!header) return null;
+  // Suporta: filename="foo.csv"  e  filename=foo.csv  (sem quotes)
+  const match = /filename="?([^";]+)"?/i.exec(header);
+  return match ? match[1] : null;
+}
+
+export async function apiFetchBlob(
+  path: string,
+  options: Omit<FetchOptions, "body" | "rawBody"> = {}
+): Promise<BlobResult> {
+  const { skipAuth, headers, ...rest } = options;
+
+  const finalHeaders = new Headers(headers);
+
+  if (!skipAuth) {
+    const token = getToken();
+    if (token) {
+      finalHeaders.set("Authorization", `Bearer ${token}`);
+    }
+  }
+
+  const res = await fetch(`${API_URL}${path}`, {
+    ...rest,
+    headers: finalHeaders,
+  });
+
+  if (!res.ok) {
+    // Mesmo tratamento de erro do apiFetch: tenta ler { detail } do JSON
+    // de erro; se não der, guarda o texto cru.
+    let detail: unknown = null;
+    const text = await res.text();
+    if (text) {
+      try {
+        detail = JSON.parse(text);
+      } catch {
+        detail = text;
+      }
+    }
+    if (detail && typeof detail === "object" && "detail" in detail) {
+      detail = (detail as { detail: unknown }).detail;
+    }
+
+    if (res.status === 401 && !skipAuth) {
+      clearToken();
+    }
+
+    throw new ApiError(res.status, detail);
+  }
+
+  const blob = await res.blob();
+  const filename = _parseContentDispositionFilename(
+    res.headers.get("Content-Disposition")
+  );
+  return { blob, filename };
 }
