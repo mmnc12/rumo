@@ -1,30 +1,23 @@
-# Rumo
+Rumo
 
-App de registro e acompanhamento de atividades físicas (corrida, caminhada, ciclismo, trilha, natação, outro). Backend FastAPI + Postgres/PostGIS, frontend web React, app mobile Flutter. Importa GPX/FIT, calcula métricas (distância, pace, elevação, calorias), guarda a rota como `LINESTRING` PostGIS e permite exportar em CSV/GPX (unitário e em lote em ZIP).
+App de registro e acompanhamento de atividades físicas (corrida, caminhada, ciclismo, trilha, natação, outro). Backend FastAPI + Postgres/PostGIS, frontend web React, app mobile Flutter. Importa GPX/FIT, calcula métricas (distância, pace, elevação, calorias), guarda a rota como LINESTRING PostGIS e permite exportar em CSV/GPX (unitário e em lote em ZIP).
 
-**Estado atual:** ver [`docs/HANDOFF.md`](docs/HANDOFF.md) — é a fonte da verdade do que está feito, do que está pendente e dos contratos travados. Este README é só um cheat sheet.
-
----
-
-## Estrutura
-
-D:\Rumo
-├── backend/ FastAPI + SQLAlchemy + Alembic + PostGIS + pytest
-├── web/ React 19 + Vite + TypeScript + Tailwind + react-leaflet + recharts
-├── mobile/ Flutter (flutter_map + OSM/Esri)
-├── docs/
-│ └── HANDOFF.md handoff da sessão mais recente
-└── README.md este arquivo
+Estado atual: ver docs/HANDOFF.md — é a fonte da verdade do que está feito, do que está pendente e dos contratos travados. Este README é só um cheat sheet.
+Estrutura
 text
 
+D:\Rumo
+├── backend/        FastAPI + SQLAlchemy + Alembic + PostGIS + pytest
+├── web/            React 19 + Vite + TypeScript + Tailwind + react-leaflet + recharts
+├── mobile/         Flutter (flutter_map + OSM/Esri)
+├── docs/
+│   └── HANDOFF.md  handoff da sessão mais recente
+└── README.md       este arquivo
 
----
+Rodar local
+Backend (pytest com Docker de teste na 5433)
+powershell
 
-## Rodar local
-
-### Backend (pytest com Docker de teste na 5433)
-
-```powershell
 # PowerShell via Win+R (fora do VS Code / Windows Terminal)
 cd D:\Rumo\backend
 docker compose -f docker-compose.test.yml up -d
@@ -121,33 +114,3 @@ Convenções rápidas
     Validar deploy antes de acusar bug: backend → checar /openapi.json para a rota nova; front → baixar index-*.js da Vercel e procurar o chunk dentro dele (não procurar no HTML). Se o hash antigo aparecer, aguardar 90 s e refazer o teste (Vercel pode demorar >90 s no primeiro deploy após push).
 
     Antes de git restore/git checkout: rodar git status --short <arquivo> + git --no-pager log --oneline -3 -- <arquivo> para confirmar que o último commit é anterior à mudança quebrada.
-
-text
-
-
----
-
-## Validação (regra S21 — save antes de build)
-
-**Passo 1 — confirme que o arquivo existe e salvou:**
-
-```powershell
-cd D:\Rumo
-Get-Content -Encoding UTF8 README.md | Select-String -Pattern "Rumo|RouteMap|lazy|prod@rumo.com|rumo-api-5s0b"
-
-Esperado: vários matches, incluindo o título # Rumo, o link para docs/HANDOFF.md, o prod@rumo.com e a URL do Render. Se o Get-Content der "não encontrado", o save não pegou — me avise.
-
-Passo 2 — git status:
-powershell
-
-git status --short
-
-Esperado:
-text
-
- M web/src/pages/ActivityDetailPage.tsx
-?? README.md
-
-(O ActivityDetailPage.tsx da 2a ainda não foi commitado; o README.md é novo.)
-
-Passo 3 — não precisa build/lint/test agora. O README.md é Markdown puro, zero impacto em build. flutter analyze e pytest intocados.
