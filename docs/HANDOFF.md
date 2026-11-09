@@ -1,4 +1,4 @@
-HANDOFF — Rumo (backend + frontend + mobile) — Sessão 27
+HANDOFF — Rumo (backend + frontend + mobile) — Sessão 28
 
 SEÇÃO 0 — LEIA PRIMEIRO (contexto operacional)
 
@@ -75,13 +75,21 @@ Contar <time> distintos com regex no Content responde a pergunta "o S26 está no
 
 Não é bug. Se a primeira validação em prod mostrar o comportamento antigo (S25: todos os <time> iguais), esperar 2 min e rodar de novo. Se após ~5 min continuar antigo, então sim: ir ao dashboard do Render → Manual Deploy. Não presumir bug no código antes de ~5 min.
 
-⚠️ REGRA S27a (NOVA) — ao abrir sessão, commitar o handoff pendente ANTES de qualquer outra coisa
+⚠️ REGRA S27a — ao abrir sessão, commitar o handoff pendente ANTES de qualquer outra coisa
 
 Se git status --short mostrar M docs/HANDOFF.md no início da sessão, esse é o handoff da sessão anterior ainda não commitado. Commitar primeiro (mensagem docs: handoff da Sessao N), push, confirmar HEAD == origin/main, e SÓ ENTÃO rodar os demais blocos da Fase 0. Motivo: se a Fase 0 revelar algo que exija reverter ou reescrever, o handoff precisa estar preservado no histórico — nunca em risco de ser sobrescrito por uma edição no working tree.
 
-⚠️ REGRA S27b (NOVA) — a ordem dos blocos da Fase 0 é: handoff pendente → log/status → build/lint/analyze → docker/pytest/ruff → prod backend → prod frontend
+⚠️ REGRA S27b — a ordem dos blocos da Fase 0 é: handoff pendente → log/status → build/lint/analyze → docker/pytest/ruff → prod backend → prod frontend
 
 Cada bloco só começa depois do anterior verde. Se algum falhar, PARAR e mostrar ao usuário antes de seguir. Nunca encadear os 4 blocos num só comando e "ver depois" — o diagnóstico fica ambíguo.
+
+⚠️ REGRA S28a (NOVA) — antes de entregar código de feature, confirmar o escopo real pedindo TODOS os arquivos que o contrato toca, incluindo os "óbvios"
+
+Na S28, o handoff S27 descrevia a OPÇÃO 1 como "delta de tempo/calorias nos stats", sugerindo mudança em schema+service+router+testes+ProfilePage. A descoberta real (pedir schemas/stats.py, services/stats_service.py, ProfilePage.tsx, StatsCards.tsx, lib/format.ts) revelou que: schema já tinha os 5 campos, service já calculava os 5 no `previous`, StatsCards já renderizava os 5, e o único gap era o componente `PreviousDelta` mostrar 3 de 5. Escopo real: 1 arquivo, 24 linhas. Lição: sempre pedir os arquivos antes de aceitar o escopo do handoff anterior como verdade. O handoff pode estar desatualizado (foi escrito com base em memória, não no código).
+
+⚠️ REGRA S28b (NOVA) — quando o build gerar chunks com hash diferente do esperado mas TAMANHO idêntico, é renomeação de referência cruzada, não mudança de código
+
+Na S28, `ActivityDetailPage` e `SearchPage` mudaram de hash (`J23GpMg5` → `BOuCLIUn`, `CvOmHzdZ` → `DVVs61sJ`) sem nenhuma linha alterada nesses arquivos. Motivo: o `__vite__mapDeps` do index renumera índices de chunks quando um chunk muda de tamanho. Se o tamanho do chunk é o mesmo e só o hash mudou, é renomeação de referência, não regressão. Não investigar como bug.
 
 O que é LOCAL vs. o que é PRODUÇÃO
 
@@ -91,7 +99,7 @@ PRODUÇÃO (nuvem, acessível por HTTP): backend no Render (https://rumo-api-5s0
 
 IMPORTANTE — usuário não tem ambiente local rodando. Fluxo: editar em D:\Rumo, rodar pytest localmente (Docker de teste na 5433), commitar, push, Render + Vercel redeployam, validar via HTTP em produção.
 
-DOCKER: instalado e funcional no Windows local. pytest -q local verde (166 passed ao fim da S27). Container de teste rumo_postgres_test na porta 5433.
+DOCKER: instalado e funcional no Windows local. pytest -q local verde (166 passed ao fim da S28). Container de teste rumo_postgres_test na porta 5433.
 
 ⚠️ docker ps sozinho esconde container parado — usar sempre docker ps -a --filter "name=rumo_postgres_test" (com -a).
 
@@ -131,7 +139,7 @@ Prod2 — id 01a141e7-5ea4-7600-8959-19145475ad0a, 2 atividades, 14.643 m, pace 
 
 ⚠️ "Quem sou eu" é GET /auth/me, NÃO /users/me (esse devolve 422).
 
-Acordos de trabalho (válidos em todas as sessões — reforçados na S21/S22/S23/S24/S25/S26/S27)
+Acordos de trabalho (válidos em todas as sessões — reforçados na S21/S22/S23/S24/S25/S26/S27/S28)
 
 SEMPRE seguir a recomendação do assistente. Quando houver decisão pendente, executar a recomendada salvo instrução explícita em contrário.
 
@@ -179,7 +187,11 @@ Commitar o handoff pendente ANTES de qualquer outra coisa na abertura (S27a).
 
 Ordem fixa dos blocos da Fase 0: handoff → log/status → build → docker/pytest → prod back → prod front (S27b).
 
-Processo que o usuário elogiou na S21–S27 (para manter)
+Antes de aceitar o escopo do handoff anterior como verdade, pedir TODOS os arquivos que o contrato toca e confirmar o gap real (S28a).
+
+Chunk com hash novo e tamanho idêntico = renomeação de referência cruzada, não mudança de código (S28b).
+
+Processo que o usuário elogiou na S21–S28 (para manter)
 
 Fase 0 (validar estado) → Fase 1 (descoberta, pedir arquivos) → Fase 2 (contrato travado) → Fase 3 (entrega incremental, 1 arquivo por vez) → Fase 3.5 (verificar save + commit) → Fase 4 (validação em produção) → Fase 5 (handoff).
 
@@ -229,23 +241,53 @@ Validado em produção: atividade 01a1b36a-0951-71e8-9044-c55c71558441 retornou 
 
 CSV, ZIP, auth, headers, filename: intactos.
 
-Frontend Web: React 19 + Vite 8 + TypeScript + Tailwind; react-leaflet (RouteMap no detalhe, lazy desde S25) + recharts (gráficos no perfil). S21: botões "Baixar CSV" (sempre) e "Baixar GPX" (condicional a track) no ActivityDetailPage. S23: card "Exportar tudo" no ProfilePage (só isSelf). S24: aviso "Se nenhuma atividade casar com o período, o ZIP virá vazio." + feedback "Download iniciado." por ~4s. Intocado na S26 e na S27 — o .gpx baixado é opaco para o browser; nada muda em web/.
+S27: sessão SÓ de Fase 0. Nenhuma feature. Handoff S26 commitado como 585839f na abertura.
+
+S28 (delta de tempo/calorias no drill-down por tipo):
+
+ESCOPO REAL descoberto via Fase 1 (6 arquivos + lib/format.ts): o handoff S27 descrevia a opção como "adicionar total_duration_s e total_calories ao delta", sugerindo mudança em schema+service+router+testes+frontend. A descoberta revelou que:
+
+- backend/app/schemas/stats.py: StatsByTypePreviousItem JÁ TEM total_duration_s: int e total_calories: int. StatsByTypeItem JÁ TEM os dois. StatsSummary/StatsPeriod JÁ TÊM ambos. → Zero mudança de schema.
+
+- backend/app/services/stats_service.py: get_by_type JÁ CALCULA prev_total_duration_s e prev_total_calories via SUM(CASE WHEN cmp_cond THEN Activity.duration_s/calories). O previous do item JÁ CARREGA os 5 campos reais. → Zero mudança de service/router.
+
+- web/src/components/StatsCards.tsx: JÁ RENDERIZA 5 cards (Atividades, Distância, Tempo, Elevação, Calorias) do StatsSummary. → Zero mudança.
+
+- web/src/pages/ProfilePage.tsx → PreviousDelta: mostrava SÓ 3 das 5 métricas (Ativ., Dist., Elev.) — faltavam Tempo e Calorias. Esse era o ÚNICO gap real.
+
+- web/src/lib/format.ts: formatDuration(seconds: number | null | undefined): string e formatCalories(kcal: number | null | undefined): string — assinaturas compatíveis com DeltaLine.formatter?: (n: number) => string por contravariância (number é subtipo de number | null | undefined). Sem cast, sem wrapper.
+
+MUDANÇA EXECUTADA — 1 arquivo, 24 inserções + 1 deleção em web/src/pages/ProfilePage.tsx:
+
+1) Import ganhou formatCalories.
+
+2) PreviousDelta ganhou 2 DeltaLine novas (label="Tempo", label="Cal.") com formatter={formatDuration} e formatter={formatCalories}.
+
+3) Comentários de doc/header atualizados.
+
+FORA DE ESCOPO (decisão registrada, não fazer): não adicionar delta de Pace — pace é ratio (duration/distance), delta percentual dele é ambíguo e o DeltaLine colore "+" como verde (que inverteria o significado em pace). Ficou fora.
+
+Validação: tsc -b verde (tipagem OK sem cast), 824 modules, ProfilePage-xtlegScf.js 21.08kB (era 20.88kB local; +0.20kB ≈ +50 linhas compiladas). Vercel redeployou como ProfilePage-DuN1Ag-6.js (hash novo, tamanho equivalente). ActivityDetailPage e SearchPage mudaram de hash mas tamanho idêntico — renomeação de referência cruzada, não regressão (REGRA S28b).
+
+Commit: ba43fad feat(web): delta de tempo e calorias na tabela por tipo (Sessao 28). Push OK.
+
+Frontend Web: React 19 + Vite 8 + TypeScript + Tailwind; react-leaflet (RouteMap no detalhe, lazy desde S25) + recharts (gráficos no perfil). S21: botões "Baixar CSV" (sempre) e "Baixar GPX" (condicional a track) no ActivityDetailPage. S23: card "Exportar tudo" no ProfilePage (só isSelf). S24: aviso "Se nenhuma atividade casar com o período, o ZIP virá vazio." + feedback "Download iniciado." por ~4s. S26 e S27 intocados em web/. S28: delta de tempo/calorias no PreviousDelta.
 
 Mobile: mapa de rota no detalhe (flutter_map, OSM/Esri satélite), alternância Mapa/Satélite, miniatura no feed via CameraFit.bounds. Intocado desde a S11. Sem drill-down de stats, sem export.
 
-Estado final da S27:
+Estado final da S28:
 
-git log: 585839f docs: handoff da Sessao 26 no topo, 15ccccb feat(activities): GPX export com <time> por ponto (Sessao 26), 7bf5bc2 docs: handoff da Sessao 25.
+git log: ba43fad feat(web): delta de tempo e calorias na tabela por tipo (Sessao 28), db2e224 docs: handoff da Sessao 27, 585839f docs: handoff da Sessao 26.
 
-Render: backend redeployado com S26 (validado via HTTP na abertura da S27 — 60/60 <time> distintos, primeiro 2026-11-06T21:30:33Z, último 2026-11-06T21:40:23Z).
+Render: backend idêntico ao S27 (S26 no ar, 60/60 <time> distintos na atividade de teste). Nenhum redeploy relevante na S28 (zero mudança backend).
 
-Vercel: bundle inalterado desde S25 (index-DV3loxrJ.js com ActivityDetailPage-J23GpMg5.js, ProfilePage-Bfp0kvA2.js, SearchPage-CvOmHzdZ.js). Confirmado na abertura da S27.
+Vercel: bundle redeployado. index-Dz7xtpJW.js com ProfilePage-DuN1Ag-6.js (novo), ActivityDetailPage-BOuCLIUn.js, SearchPage-DVVs61sJ.js. RouteMap-BWdETDdy.js segue lazy, fora do mapDeps.
 
-pytest -q: 166 passed. ruff check .: All checks passed. npm run build: 824 modules. npm run lint: limpo. flutter analyze: No issues found.
+pytest -q: 166 passed (nenhum teste novo — nenhuma lógica backend mudou). ruff check .: All checks passed. npm run build: 824 modules. npm run lint: limpo. flutter analyze: No issues found.
 
-Nada pendente.
+Nada pendente de código.
 
-Sessão 27 foi SÓ Fase 0 — abertura limpa, sem feature nova. Zero código escrito. Estado do repo ao fim da S27 é idêntico ao da S26 (só o handoff S26 commitado em 585839f na abertura).
+Sessão 28 foi curta: Fase 0 limpa + descoberta revelou escopo mínimo + 1 arquivo de front + build + commit + validação em produção.
 
 SEÇÃO 2 — PRODUÇÃO E AMBIENTE
 
@@ -271,13 +313,15 @@ Python: 3.13.7 (venv em D:\Rumo\backend\venv) — NÃO usar 3.14
 
 Venv backend: D:\Rumo\backend\venv (ativa com .\venv\Scripts\Activate.ps1 — UM ponto, não dois)
 
-Deps novas em S27: nenhuma.
+Deps novas em S28: nenhuma.
 
-Git (estado ao fim da Sessão 27)
+Git (estado ao fim da Sessão 28)
 
 text
 
-585839f (HEAD -> main, origin/main) docs: handoff da Sessao 26
+ba43fad (HEAD -> main, origin/main) feat(web): delta de tempo e calorias na tabela por tipo (Sessao 28)
+db2e224 docs: handoff da Sessao 27
+585839f docs: handoff da Sessao 26
 15ccccb feat(activities): GPX export com <time> por ponto (Sessao 26)
 7bf5bc2 docs: handoff da Sessao 25
 4146c3a docs: corrige README (remove instrucoes de sessao por engano)
@@ -285,58 +329,93 @@ eb9ae35 docs: README com cheat sheet de endpoints e comandos
 1fbcf0e feat(web): RouteMap com React.lazy no detalhe (Sessao 25)
 a485eab feat(web): feedback de sucesso no exportar tudo (Sessao 24)
 f1ff9f0 docs: handoff da Sessao 23
-db092ce feat(web): botao exportar tudo no perfil (Sessao 23)
-18efeb0 docs: handoff da Sessao 22
-6cce475 feat(activities): export em lote CSV/GPX em ZIP (Sessao 22)
-ad7b99a docs: handoff da Sessao 21
-ee3215b feat(web): botoes baixar CSV/GPX no detalhe (Sessao 21)
-8936415 feat(activities): export CSV/GPX (Sessao 21)
 
-Pendente: docs/HANDOFF.md da S27 (este arquivo) — usuário salva e commita como docs: handoff da Sessao 27.
+Pendente: docs/HANDOFF.md da S28 (este arquivo) — usuário salva e commita como docs: handoff da Sessao 28.
 
-SEÇÃO 3 — O QUE FOI FEITO NA SESSÃO 27
+SEÇÃO 3 — O QUE FOI FEITO NA SESSÃO 28
 
 3.1 Fase 0 — validação de estado inicial
 
-Tudo verde. Nenhum código escrito, nenhum arquivo tocado além do HANDOFF S26 (já commitado na abertura). Execução na ordem fixa da REGRA S27b:
+Tudo verde. Execução na ordem fixa da REGRA S27b:
 
-    Handoff pendente. git status --short mostrou M docs/HANDOFF.md (handoff S26 ainda não commitado). Commitado como 585839f docs: handoff da Sessao 26 (1 file changed, +218/−124). Push OK. HEAD == origin/main == 585839f, working tree limpo. (Foi isso que motivou a REGRA S27a.)
+Handoff pendente. git status --short veio VAZIO na abertura — o commit do handoff S27 (db2e224) já estava feito ANTES do início da S28 (provável commit entre sessões). Confirmação: git add + git commit retornaram "nothing to commit, working tree clean"; git push retornou "Everything up-to-date". HEAD == origin/main == db2e224. (REGRA S27a cumprida — o handoff estava commitado e preservado.)
 
-    Log/status. git log confirmou 585839f no topo, 15ccccb abaixo. Working tree limpo.
+Log/status. git status: On branch main / up to date with 'origin/main' / nothing to commit, working tree clean. git log: db2e224 no topo, 585839f abaixo, 15ccccb, 7bf5bc2, 4146c3a, eb9ae35, 1fbcf0e, a485eab. Sem surpresas.
 
-    Build/lint/analyze. npm run build: 824 modules, 2.10s, chunks idênticos ao S25 (RouteMap-BWdETDdy.js 2.41 kB, ActivityDetailPage-CjI4Jf2W.js 11.38 kB, ProfilePage-DIsNjdrp.js 20.88 kB, SearchPage-B795Q3Kf.js 4.16 kB, leaflet-Bw7RoR_1.js 163.60 kB, recharts-DI5KUTLO.js 351.26 kB, index-BRwYOlv6.js 435.82 kB). npm run lint: limpo. flutter analyze: No issues found.
+Build/lint/analyze. npm run build: 824 modules, 1.95s, chunks idênticos ao S27 local (index-BRwYOlv6.js 435.82kB, ProfilePage-DIsNjdrp.js 20.88kB, ActivityDetailPage-CjI4Jf2W.js 11.38kB, SearchPage-B795Q3Kf.js 4.16kB, leaflet-Bw7RoR_1.js 163.60kB, recharts-DI5KUTLO.js 351.26kB, RouteMap-BWdETDdy.js 2.41kB). npm run lint: limpo. flutter analyze: No issues found (3.3s).
 
-    Docker + pytest. Docker 29.8.1 / compose v5.5.1 OK. rumo_postgres_test Up 8 hours (healthy), pg_isready OK. pytest -q: 166 passed in 44.39s. ruff check .: All checks passed.
+Docker + pytest. Docker 29.8.1 / compose v5.5.1 OK. rumo_postgres_test Up 8 hours (healthy), pg_isready OK. pytest -q: 166 passed in 43.91s. ruff check .: All checks passed.
 
-    Prod backend (S26). Login OK. Atividade 01a1b36a-0951-71e8-9044-c55c71558441: 60 pontos com <time>, 60 distintos. Primeiro 2026-11-06T21:30:33Z, último 2026-11-06T21:40:23Z. S26 NO AR confirmado via regex no Content (REGRA S26b).
+Prod backend (S26). Login OK. Atividade 01a1b36a-0951-71e8-9044-c55c71558441: 60 pontos com <time>, 60 distintos. Primeiro 2026-11-06T21:30:33Z, último 2026-11-06T21:40:23Z. S26 NO AR confirmado via regex no Content (REGRA S26b).
 
-    Prod frontend (Vercel). index servido: /assets/index-DV3loxrJ.js (idêntico ao S25). __vite__mapDeps confirma ActivityDetailPage-J23GpMg5.js, ProfilePage-Bfp0kvA2.js, SearchPage-CvOmHzdZ.js, leaflet-, recharts-. RouteMap-BWdETDdy.js fora do mapDeps — lazy via import() dentro do ActivityDetailPage, comportamento esperado (dívida registrada da S25).
+Prod frontend (Vercel). index servido: /assets/index-DV3loxrJ.js (idêntico ao S25/S26/S27). __vite__mapDeps confirma ActivityDetailPage-J23GpMg5.js, ProfilePage-Bfp0kvA2.js, SearchPage-CvOmHzdZ.js, leaflet-, recharts-. RouteMap-BWdETDdy.js fora do mapDeps — lazy via import() dentro do ActivityDetailPage, comportamento esperado.
 
-3.2 Fase 1/2 — decisão sobre a próxima feature
+3.2 Fase 1 — descoberta para a OPÇÃO 1 do handoff S27
 
-Apresentei as opções ao usuário (OPÇÃO 1 — encerrar e handoff; OPÇÃO 2 — emendar delta de tempo/calorias nos stats). Recomendei OPÇÃO 1 pelos seguintes motivos:
+Peço 6 arquivos + lib/format.ts com motivo declarado:
 
-S26 fechou a última lacuna de contrato do export; backend + front estão completos (S21+S22+S23+S24+S26).
+1) backend/app/schemas/stats.py — ver StatsByTypePreviousItem e StatsByTypeItem. Resultado: AMBOS JÁ TÊM total_duration_s e total_calories. Handoff S27 estava desatualizado.
 
-Repo limpo, 166 testes verdes, prod verde — melhor estado para começar próxima feature.
+2) backend/app/services/stats_service.py — ver como get_by_type monta previous. Resultado: JÁ CALCULA prev_total_duration_s e prev_total_calories via SUM(CASE WHEN cmp_cond THEN Activity.duration_s/calories). previous JÁ CARREGA os 5 campos. Zero mudança necessária.
 
-Delta de tempo/calorias toca ≥5 arquivos (schema, router, service, testes, ProfilePage.tsx + gráfico recharts). Emendar no meio de sessão sem handoff preparado arrisca ficar com código pela metade sem contrato travado.
+3) (não precisei pedir) backend/app/routers/activities.py — confirmado desnecessário: nada muda no handler.
 
-Sem urgência — é aditiva, sem dependência externa.
+4) (não precisei pedir) backend/tests/test_stats.py — confirmado desnecessário: nada muda na lógica.
 
-Handoff S27 é barato agora (contexto fresco) e caro depois.
+5) web/src/pages/ProfilePage.tsx — ver PreviousDelta. Resultado: mostrava 3 de 5 métricas (Ativ., Dist., Elev.). Faltavam Tempo e Calorias. ESTE É O GAP REAL.
 
-Usuário confirmou textualmente: "o que você recomenda?" — reforcei OPÇÃO 1 e ele pediu o handoff ("cadê handoff"). OPÇÃO 1 executada.
+6) web/src/components/StatsCards.tsx — ver summary no topo. Resultado: JÁ renderiza 5 cards (Atividades, Distância, Tempo, Elevação, Calorias). Zero mudança necessária.
 
-3.3 Resultado da suíte (S27)
+7) web/src/lib/format.ts — ver assinaturas de formatDuration e formatCalories. Resultado: ambas são (number | null | undefined) => string, compatíveis com DeltaLine.formatter sem cast.
 
-pytest -q → 166 passed. ruff → All checks passed. npm run build → 824 modules. npm run lint → limpo. flutter analyze → No issues found. Nenhuma linha de código tocada.
+3.3 Contrato travado
 
-3.4 Commits pushados (S27)
+Arquivo único: web/src/pages/ProfilePage.tsx.
 
-585839f docs: handoff da Sessao 26 — 1 file, +218/−124. (Este é o único commit da S27.)
+Mudança 1: import ganha formatCalories.
 
-Pendente: docs: handoff da Sessao 27 (este arquivo).
+Mudança 2: PreviousDelta ganha 2 DeltaLine novas:
+
+<DeltaLine label="Tempo" current={item.total_duration_s} previous={item.previous.total_duration_s} formatter={formatDuration} />
+<DeltaLine label="Cal." current={item.total_calories} previous={item.previous.total_calories} formatter={formatCalories} />
+
+Marcação // [Sessão 28] no import, no comentário de doc do PreviousDelta, no comentário do header da tabela e nas 2 DeltaLine.
+
+FORA DE ESCOPO: não adicionar delta de Pace (ratio com semântica ambígua para "+"/"-"); não alterar StatsCards; não alterar backend; não alterar schema; não adicionar testes backend; não alterar format.ts.
+
+3.4 Validação local
+
+Bloco de save check (S25c/S25d): Sessão 28 aparece 4x (import, header, doc, inline); formatCalories 4x (import + comentário + uso); DeltaLine 7 matches (5 <DeltaLine> + 1 function DeltaLine + 1 PreviousDelta que não casa — ver nota); total 913 linhas; git status mostra M; hash disco acebd147... ≠ hash HEAD 67f2e5e8.... Save confirmado.
+
+npm run build: tsc -b verde (tipagem OK — formatDuration e formatCalories casam com formatter por contravariância), 824 modules, 2.22s. ProfilePage-xtlegScf.js 21.08kB (era 20.88kB; +0.20kB ≈ +50 linhas JS compiladas). Demais chunks com hash novo mas tamanho idêntico — renomeação de referência cruzada (REGRA S28b).
+
+npm run lint: limpo.
+
+3.5 Commit + push
+
+git diff --stat: 1 file changed, 24 insertions(+), 1 deletion(-).
+
+Commit: ba43fad feat(web): delta de tempo e calorias na tabela por tipo (Sessao 28).
+
+Push: db2e224..ba43fad main -> main.
+
+HEAD == origin/main == ba43fad. Working tree limpo.
+
+3.6 Validação em produção
+
+Vercel redeployou (após Start-Sleep 90). index servido: /assets/index-Dz7xtpJW.js (novo). __vite__mapDeps mostra ProfilePage-DuN1Ag-6.js (novo, era ProfilePage-Bfp0kvA2.js), ActivityDetailPage-BOuCLIUn.js (hash novo, tamanho igual), SearchPage-DVVs61sJ.js (hash novo, tamanho igual), leaflet-Bw7RoR_1.js, recharts-DI5KUTLO.js (mesmos hashes). RouteMap segue lazy (fora do mapDeps).
+
+Validação visual do usuário: "tudo funcionando como esperado". Delta de 5 métricas (Ativ., Dist., Elev., Tempo, Cal.) renderizando na tabela "Por tipo de atividade" quando period != "all".
+
+3.7 Resultado da suíte (S28)
+
+pytest -q → 166 passed (nenhuma mudança backend — nenhum teste novo). ruff → All checks passed. npm run build → 824 modules. npm run lint → limpo. flutter analyze → No issues found.
+
+3.8 Commits pushados (S28)
+
+ba43fad feat(web): delta de tempo e calorias na tabela por tipo (Sessao 28) — 1 file, +24/−1.
+
+Pendente: docs: handoff da Sessao 28 (este arquivo).
 
 SEÇÃO 4 — CONTRATOS DO BACKEND RELEVANTES
 
@@ -352,9 +431,9 @@ GET /activities/{id}/export?format=csv|gpx (auth: Bearer JWT) — S21
 
 Permissão: dono OU seguidor do dono. Caso contrário, 404.
 
-format=csv (default): 200, text/csv; charset=utf-8, Content-Disposition: attachment; filename="rumo_<id><type>.csv". 1 header + 1 linha. Funciona com/sem rota (bbox* vazios se sem rota).
+format=csv (default): 200, text/csv; charset=utf-8, Content-Disposition: attachment; filename="rumo_<id>_<type>.csv". 1 header + 1 linha. Funciona com/sem rota.
 
-format=gpx: 200, application/gpx+xml; charset=utf-8, Content-Disposition: attachment; filename="rumo_<id>_<type>.gpx". <trk><name>{title}</name><trkseg><trkpt lat="…" lon="…"><time>…</time></trkpt>.... S26: <time> por <trkpt> usa timestamp real do raw_track_points quando alinhado; senão started_at (S25). Formato ISO 8601 UTC (YYYY-MM-DDTHH:MM:SSZ, com microssegundos quando o gpxpy serializa datetime.isoformat()). Exige rota → 404 "Atividade não possui rota" se route IS NULL.
+format=gpx: 200, application/gpx+xml; charset=utf-8, Content-Disposition: attachment; filename="rumo_<id>_<type>.gpx". <trk><name>{title}</name><trkseg><trkpt lat="…" lon="…"><time>…</time></trkpt>.... S26: <time> por <trkpt> usa timestamp real do raw_track_points quando alinhado; senão started_at. Formato ISO 8601 UTC. Exige rota → 404 "Atividade não possui rota" se route IS NULL.
 
 format inválido → 422.
 
@@ -362,16 +441,19 @@ GET /activities/export?format=csv|gpx[&from=YYYY-MM-DD][&to=YYYY-MM-DD] (auth: B
 
 Auth: self-only.
 
-Saída: ZIP (application/zip, Content-Disposition: attachment; filename="rumo_export_<YYYYMMDD-HHMMSS>.zip"). N arquivos internos, cada um no formato unitário. S26: arquivos .gpx internos herdam <time> real por ponto.
+Saída: ZIP (application/zip, Content-Disposition: attachment; filename="rumo_export_<YYYYMMDD-HHMMSS>.zip"). N arquivos internos. S26: .gpx internos herdam <time> real por ponto.
 
-format=csv (default): ZIP com N .csv (todas do filtro, com/sem rota). format=gpx: ZIP com N .gpx (só com rota).
+format=csv (default): ZIP com N .csv. format=gpx: ZIP com N .gpx (só com rota).
 
-Filtro from/to (YYYY-MM-DD, UTC, inclusivo). 0 atividades → 200 ZIP vazio; from > to → 422 "from deve ser <= to"; format inválido → 422.
+Filtro from/to (YYYY-MM-DD, UTC, inclusivo). 0 atividades → 200 ZIP vazio; from > to → 422; format inválido → 422.
 
-GET /activities/stats/summary?activity_type=<opcional> → StatsSummary.
+GET /activities/stats/summary?activity_type=<opcional> → StatsSummary. Inclui total_duration_s e total_calories.
+
 GET /activities/stats/weekly?weeks=N&activity_type=<opcional> → StatsWeeklyResponse.
+
 GET /activities/stats/monthly?months=N&activity_type=<opcional> → StatsMonthlyResponse.
-GET /activities/stats/by-type?period=<all|90d|1y>&compare=<prev|yoy> → StatsByTypeResponse. period/compare inválidos → 422. previous null para period="all" ou tipo ausente na janela.
+
+GET /activities/stats/by-type?period=<all|90d|1y>&compare=<prev|yoy> → StatsByTypeResponse. S18/S20: cada item carrega as 5 métricas; `previous` (nullable) carrega as mesmas 5 da janela de comparação. period/compare inválidos → 422. previous null para period="all" ou tipo ausente na janela.
 
 Janelas (S17/S18/S20):
 
@@ -388,29 +470,30 @@ GET /auth/me — identidade do usuário logado (NÃO é /users/me).
 
 SEÇÃO 5 — COMMITS PENDENTES / ESTADO DO REPO
 
-Sessões 9–26 commitadas e pushadas. HEAD == origin/main == 585839f. Working tree limpo (após commit do handoff S26 na abertura).
+Sessões 9–28 commitadas e pushadas. HEAD == origin/main == ba43fad. Working tree limpo (após commit do handoff S27 na abertura).
 
 Pendente: este handoff.
 
-Primeira ação da Sessão 28 (REGRA S27a — handoff primeiro)
+Primeira ação da Sessão 29 (REGRA S27a — handoff primeiro)
 
 powershell
 
 cd D:\Rumo
 git status --short
+
 Se aparecer M docs/HANDOFF.md, commitar:
 
 git add docs/HANDOFF.md
-git commit -m "docs: handoff da Sessao 27"
+git commit -m "docs: handoff da Sessao 28"
 git push
 git --no-pager log --oneline -4
 git status --short
 
-Esperado: HEAD == origin/main com docs: handoff da Sessao 27 no topo, working tree limpo.
+Esperado: HEAD == origin/main com docs: handoff da Sessao 28 no topo, working tree limpo.
 
 SEÇÃO 6 — SCRIPTS ÚTEIS (PowerShell)
 
-[Sessão 28 — primeira ação] Abrir PowerShell via Win+R → powershell
+[Sessão 29 — primeira ação] Abrir PowerShell via Win+R → powershell
 
 NÃO abrir de dentro do VS Code / Windows Terminal.
 
@@ -418,15 +501,16 @@ powershell
 
 cd D:\Rumo
 git status --short
+
 Se aparecer M docs/HANDOFF.md:
 
 git add docs/HANDOFF.md
-git commit -m "docs: handoff da Sessao 27"
+git commit -m "docs: handoff da Sessao 28"
 git push
 git --no-pager log --oneline -8
 git status --short
 
-[Sessão 28 — primeira ação] Sanidade de build
+[Sessão 29 — primeira ação] Sanidade de build
 
 powershell
 
@@ -436,7 +520,7 @@ npm run lint
 cd ..\mobile
 & "C:\Users\nasci\flutter\bin\flutter.bat" analyze
 
-[Sessão 28 — primeira ação] Docker + pytest local
+[Sessão 29 — primeira ação] Docker + pytest local
 
 powershell
 
@@ -446,6 +530,7 @@ cd D:\Rumo\backend
 docker compose -f docker-compose.test.yml up -d
 docker ps -a --filter "name=rumo_postgres_test"
 docker exec rumo_postgres_test pg_isready -h 127.0.0.1 -p 5432
+
 Se o prompt já mostra (venv), PULE a linha abaixo.
 
 .\venv\Scripts\Activate.ps1
@@ -454,22 +539,33 @@ ruff check .
 
 Esperado: 166 passed, ruff limpo, container Up (healthy).
 
-[Sessão 28 — primeira ação] Detecção de versão em produção (front — Vercel)
+[Sessão 29 — primeira ação] Detecção de versão em produção (front — Vercel)
 
 ⚠️ Sempre -UseBasicParsing. ⚠️ Depois de git push, se o hash antigo ainda aparecer, aguardar 90 s e rodar de novo (REGRA S24).
 
 powershell
 
-html=Invoke−WebRequest−Uri"https://rumo−wheat.vercel.app"−UseBasicParsinghtml=Invoke−WebRequest−Uri"https://rumo−wheat.vercel.app"−UseBasicParsingm = [regex]::Match(html.Content,′src="(/assets/index−["]+j˙s)"′)html.Content,′src="(/assets/index−["]+j˙​s)"′)idxUrl = "https://rumo-wheat.vercel.app" + m.Groups[1].ValueWrite−Host"indexservido:m.Groups[1].ValueWrite−Host"indexservido:(m.Groups[1].Value)"m.Groups[1].Value)"idx = Invoke-WebRequest -Uri idxUrl−UseBasicParsingidxUrl−UseBasicParsingidx.Content | Select-String -Pattern 'assets/(ActivityDetailPage|RouteMap|ProfilePage)-[A-Za-z0-9_-]+.js'
-Esperado no estado atual (S25, Vercel intocada desde então):
-index-DV3loxrJ.js com ActivityDetailPage-J23GpMg5.js, ProfilePage-Bfp0kvA2.js, SearchPage-CvOmHzdZ.js.
+$html = Invoke-WebRequest -Uri "https://rumo-wheat.vercel.app" -UseBasicParsing
+$m = [regex]::Match($html.Content, 'src="(/assets/index-[^"]+\.js)"')
+$idxUrl = "https://rumo-wheat.vercel.app" + $m.Groups[1].Value
+Write-Host "index servido: $($m.Groups[1].Value)"
+
+$idx = Invoke-WebRequest -Uri $idxUrl -UseBasicParsing
+$idx.Content | Select-String -Pattern 'assets/(ActivityDetailPage|ProfilePage|SearchPage)-[A-Za-z0-9_-]+\.js'
+
+Esperado no estado atual (S28):
+index-Dz7xtpJW.js com ProfilePage-DuN1Ag-6.js, ActivityDetailPage-BOuCLIUn.js, SearchPage-DVVs61sJ.js.
 RouteMap-BWdETDdy.js NÃO aparece no __vite__mapDeps do index — lazy.
 
 Login (produção) — ATENÇÃO: identidade é /auth/me, NÃO /users/me
 
 powershell
 
-body = "username=prod@rumo.com&password=senha12345" login = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/login" -Method Post -ContentType "application/x-www-form-urlencoded" -Body bodybodytoken = login.accesstokenlogin.accesst​okenme = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/me" -Headers @{ Authorization = "Bearer token" } meId = $me.id
+$body = "username=prod@rumo.com&password=senha12345"
+$login = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/login" -Method Post -ContentType "application/x-www-form-urlencoded" -Body $body
+$token = $login.access_token
+$me = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/me" -Headers @{ Authorization = "Bearer $token" }
+$meId = $me.id
 
 Detecção de versão em produção (backend S26 — GPX com <time> por ponto)
 
@@ -477,47 +573,60 @@ Detecção de versão em produção (backend S26 — GPX com <time> por ponto)
 
 powershell
 
-body = "username=prod@rumo.com&password=senha12345" login = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/login" -Method Post -ContentType "application/x-www-form-urlencoded" -Body bodybodyh = @{ Authorization = "Bearer ((login.access_token)" }
+$body = "username=prod@rumo.com&password=senha12345"
+$login = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/login" -Method Post -ContentType "application/x-www-form-urlencoded" -Body $body
+$h = @{ Authorization = "Bearer $($login.access_token)" }
 
-aid="01a1b36a−0951−71e8−9044−c55c71558441"aid="01a1b36a−0951−71e8−9044−c55c71558441"resp = Invoke-WebRequest -Uri "https://rumo-api-5s0b.onrender.com/activities/$aid/export?format=gpx" -Headers $h -UseBasicParsing
+$aid = "01a1b36a-0951-71e8-9044-c55c71558441"
+$resp = Invoke-WebRequest -Uri "https://rumo-api-5s0b.onrender.com/activities/$aid/export?format=gpx" -Headers $h -UseBasicParsing
 
-times=[regex]::Matches(times=[regex]::Matches(resp.Content, '<time>([^<]+)</time>') | ForEach-Object { _.Groups[1].Value } n = times.Counttimes.Countdistinct = (times∣Sort−Object−Unique).CountWrite−Host"pontoscom<time>:times∣Sort−Object−Unique).CountWrite−Host"pontoscom<time>:n"
-Write-Host "<time> distintos: distinct"if(distinct"if(n -gt 0) { Write-Host "primeiro: ((times[0])"; Write-Host "ultimo: ((times[-1])" }
-if (distinct−le1−anddistinct−le1−andn -gt 1) {
-Write-Host "S25 AINDA NO AR (todos iguais)."
-} elseif (distinct−gedistinct−gen - 1) {
-Write-Host "S26 NO AR (timestamps distintos por ponto)."
+$times = [regex]::Matches($resp.Content, '<time>([^<]+)</time>') | ForEach-Object { $_.Groups[1].Value }
+$n = $times.Count
+$distinct = ($times | Sort-Object -Unique).Count
+Write-Host "pontos com <time>: $n"
+Write-Host "<time> distintos: $distinct"
+if ($n -gt 0) { Write-Host "primeiro: $($times[0])"; Write-Host "ultimo: $($times[-1])" }
+if ($distinct -le 1 -and $n -gt 1) {
+    Write-Host "S25 AINDA NO AR (todos iguais)."
+} elseif ($distinct -ge $n - 1) {
+    Write-Host "S26 NO AR (timestamps distintos por ponto)."
 } else {
-Write-Host "ATENCAO: apenas distinct/distinct/n distintos."
+    Write-Host "ATENCAO: apenas $distinct/$n distintos."
 }
-Esperado agora (S26 no ar): 60 pontos, 60 distintos,
-primeiro 2026-11-06T21:30:33Z, ultimo 2026-11-06T21:40:23Z.
+
+Esperado agora (S26 no ar): 60 pontos, 60 distintos, primeiro 2026-11-06T21:30:33Z, ultimo 2026-11-06T21:40:23Z.
 
 Detecção de versão em produção (backend S22 — export em lote)
 
 powershell
 
-openapi=Invoke−RestMethod−Uri"https://rumo−api−5s0b.onrender.com/openapi.json"openapi=Invoke−RestMethod−Uri"https://rumo−api−5s0b.onrender.com/openapi.json"hasBulkExport = openapi.paths.PSObject.Properties.Name−contains"/activities/export"Write−Host"rota/activities/exportnoar:openapi.paths.PSObject.Properties.Name−contains"/activities/export"Write−Host"rota/activities/exportnoar:hasBulkExport"
+$openapi = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/openapi.json"
+$hasBulkExport = $openapi.paths.PSObject.Properties.Name -contains "/activities/export"
+Write-Host "rota /activities/export no ar: $hasBulkExport"
 if (-not $hasBulkExport) {
-Write-Host "RENDER AINDA NAO REDEPLOYOU. Aguardar 1-3 min ou Manual Deploy no dashboard."
+    Write-Host "RENDER AINDA NAO REDEPLOYOU. Aguardar 1-3 min ou Manual Deploy no dashboard."
 }
+
 Teste real do ZIP (auth) — bytes crus via RawContentStream (REGRA S26a)
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-r = Invoke-WebRequest -Uri "https://rumo-api-5s0b.onrender.com/activities/export?format=csv" -Headers @{Authorization="Bearer token"} -UseBasicParsing Write-Host "CSV default: (r.StatusCode)r.StatusCode)(r.Headers[′Content−Type′])"r.Headers[′Content−Type′])"fs = [System.IO.File]::OpenWrite(tmp)tmp)r.RawContentStream.Position = 0
-r.RawContentStream.CopyTo(r.RawContentStream.CopyTo(fs)
-fs.Close()fs.Close()zip = [System.IO.Compression.ZipFile]::OpenRead(tmp)Write−Host"entries:tmp)Write−Host"entries:(zip.Entries.Count)"zip.Entries.Count)"zip.Dispose()
-} catch {
-resp=resp=_.Exception.Response
-reader=New−ObjectSystem.IO.StreamReader(reader=New−ObjectSystem.IO.StreamReader(resp.GetResponseStream())
-Write-Host "CSV FALHOU: ((resp.StatusCode.value__) - ((reader.ReadToEnd())"
-}
+$r = Invoke-WebRequest -Uri "https://rumo-api-5s0b.onrender.com/activities/export?format=csv" -Headers @{Authorization="Bearer $token"} -UseBasicParsing
+Write-Host "CSV default: $($r.StatusCode) ($($r.Headers['Content-Type']))"
+$tmp = [System.IO.Path]::GetTempFileName()
+$fs = [System.IO.File]::OpenWrite($tmp)
+$r.RawContentStream.Position = 0
+$r.RawContentStream.CopyTo($fs)
+$fs.Close()
+$zip = [System.IO.Compression.ZipFile]::OpenRead($tmp)
+Write-Host "entries: $($zip.Entries.Count)"
+$zip.Dispose()
 
 Stats de terceiros (S19/S20)
 
 powershell
 
-Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$meId/stats/summary" -Headers @{ Authorization = "Bearer token" } | ConvertTo-Json -Depth 3 Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/meId/stats/by-type?period=90d&compare=yoy" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 4
+Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$meId/stats/summary" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 3
+Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/users/$meId/stats/by-type?period=90d&compare=yoy" -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 4
 
 Ruff (backend)
 
@@ -552,17 +661,27 @@ Se vazio: Render não redeployou. Aguardar (S26c: >3 min) ou Manual Deploy.
 Se rota no ar mas retorna 422, ver o BODY do erro:
 
 try {
-Invoke-WebRequest -Uri "<url>" -Headers h -UseBasicParsing | Out-Null } catch { resp = .Exception.Response.​Exception.Responsereader = New-Object System.IO.StreamReader(resp.GetResponseStream())Write−Host"STATUSresp.GetResponseStream())Write−Host"STATUS(
-($reader.ReadToEnd())"
+  Invoke-WebRequest -Uri "<url>" -Headers $h -UseBasicParsing | Out-Null
+} catch {
+  $resp = $_.Exception.Response
+  $reader = New-Object System.IO.StreamReader($resp.GetResponseStream())
+  Write-Host "STATUS $($resp.StatusCode.value__) - $($reader.ReadToEnd())"
 }
 
 Diagnóstico: bundle novo não aparece na Vercel (lição S23+S24)
 
 powershell
 
-html=Invoke−WebRequest−Uri"https://rumo−wheat.vercel.app"−UseBasicParsinghtml=Invoke−WebRequest−Uri"https://rumo−wheat.vercel.app"−UseBasicParsingm = [regex]::Match(html.Content,′src="(/assets/index−["]+j˙s)"′)html.Content,′src="(/assets/index−["]+j˙​s)"′)idxUrl = "https://rumo-wheat.vercel.app" + m.Groups[1].ValueWrite−Host"indexservido:m.Groups[1].ValueWrite−Host"indexservido:(m.Groups[1].Value)"m.Groups[1].Value)"idx = Invoke-WebRequest -Uri idxUrl−UseBasicParsingidxUrl−UseBasicParsingidx.Content | Select-String -Pattern 'assets/(ActivityDetailPage|RouteMap|ProfilePage)-[A-Za-z0-9_-]+.js'
+$html = Invoke-WebRequest -Uri "https://rumo-wheat.vercel.app" -UseBasicParsing
+$m = [regex]::Match($html.Content, 'src="(/assets/index-[^"]+\.js)"')
+$idxUrl = "https://rumo-wheat.vercel.app" + $m.Groups[1].Value
+Write-Host "index servido: $($m.Groups[1].Value)"
+$idx = Invoke-WebRequest -Uri $idxUrl -UseBasicParsing
+$idx.Content | Select-String -Pattern 'assets/(ActivityDetailPage|RouteMap|ProfilePage)-[A-Za-z0-9_-]+\.js'
 hash novo → bundle novo no ar
 hash antigo → Vercel não redeployou: aguardar 90s
+
+⚠️ REGRA S28b: se ProfilePage novo mas ActivityDetailPage/SearchPage com hash novo e TAMANHO idêntico, é renomeação de referência cruzada. Não investigar.
 
 Diagnóstico de save de arquivo (lição S25 — mantido)
 
@@ -581,6 +700,7 @@ Write-Host "=== [5] hash do disco ==="
 git hash-object <arquivo>
 Write-Host "=== [6] hash do HEAD ==="
 git rev-parse HEAD:<arquivo>
+
 Se [5] == [6] e [4] vazio → o disco é igual ao commitado. O save NÃO pegou.
 Se [5] != [6] e [4] mostra ' M' → save pegou, pode commitar.
 
@@ -594,11 +714,11 @@ CERTO (texto UTF-8):
 [System.IO.File]::WriteAllBytes(path,[System.Text.Encoding]::UTF8.GetBytes(path,[System.Text.Encoding]::UTF8.GetBytes(resp.Content))
 CERTO (bytes crus — ZIP, imagem):
 
-fs=[System.IO.File]::OpenWrite(fs=[System.IO.File]::OpenWrite(path)
-resp.RawContentStream.Position=0resp.RawContentStream.Position=0resp.RawContentStream.CopyTo(fs)fs)fs.Close()
+$fs=[System.IO.File]::OpenWrite(fs=[System.IO.File]::OpenWrite(path)
+$resp.RawContentStream.Position=0resp.RawContentStream.Position=0resp.RawContentStream.CopyTo(fs)fs)fs.Close()
 MELHOR para inspecionar GPX — sem arquivo, regex no Content:
 
-times=[regex]::Matches(times=[regex]::Matches(resp.Content, '<time>([^<]+)</time>') | ForEach-Object { $_.Groups[1].Value }
+$times=[regex]::Matches(times=[regex]::Matches(resp.Content, '<time>([^<]+)</time>') | ForEach-Object { $_.Groups[1].Value }
 
 SEÇÃO 7 — DÍVIDAS TÉCNICAS
 
@@ -608,7 +728,9 @@ SEÇÃO 7 — DÍVIDAS TÉCNICAS
 
 (FECHADA na S25) ~~RouteMap.tsx é reutilizável; se aparecer segundo uso, considerar React.lazy()~~ — RouteMap agora é lazy no ActivityDetailPage.
 
-(FECHADA na S26) ~~to_gpx não emite <time> por <trkpt> — a geometria em route é só LineString, sem stream temporal (dívida da S21)~~ — agora emite quando raw_track_points está disponível e alinhado.
+(FECHADA na S26) ~~to_gpx não emite <time> por <trkpt>~~ — agora emite quando raw_track_points está disponível e alinhado.
+
+(FECHADA na S28) ~~PreviousDelta mostrava só 3 das 5 métricas (Ativ./Dist./Elev.), apesar de StatsByTypePreviousItem já ter total_duration_s e total_calories~~ — PreviousDelta agora renderiza as 5 (Ativ./Dist./Elev./Tempo/Cal.).
 
 (CONHECIDA — Sessão 14) Enums nativos do Postgres ordenam pela ORDEM DE DECLARAÇÃO. get_by_type desempata em Python.
 
@@ -616,9 +738,9 @@ SEÇÃO 7 — DÍVIDAS TÉCNICAS
 
 (CONHECIDA — Sessão 18) WHERE mata a janela anterior antes do CASE WHEN.
 
-(CONHECIDA — Sessão 17–27) StatsCards mostra summary "todos os tempos", não filtrado por period nem por previous. Intencional.
+(CONHECIDA — Sessão 17–28) StatsCards mostra summary "todos os tempos", não filtrado por period nem por previous. Intencional.
 
-(CONHECIDA — Sessão 17–27) Conta prod@rumo.com não tem atividade >90d. period=all, 90d e 1y retornam iguais em produção para prod; previous vem null. NÃO é bug.
+(CONHECIDA — Sessão 17–28) Conta prod@rumo.com não tem atividade >90d. period=all, 90d e 1y retornam iguais em produção para prod; previous vem null. NÃO é bug.
 
 (CONHECIDA — Sessão 20) period="1y" faz compare=yoy ≡ compare=prev por definição matemática.
 
@@ -640,31 +762,33 @@ SEÇÃO 7 — DÍVIDAS TÉCNICAS
 
 (CONHECIDA — Sessão 26) <time> no GPX inclui microssegundos (2026-11-07T00:20:32.931332Z) porque o gpxpy serializa datetime.isoformat(). Strava/Garmin aceitam ISO 8601 com fração. Se algum consumidor reclamar, truncar para segundos é 1 linha em _trkpt_time (return dt.replace(microsecond=0)). Não fazer agora (YAGNI).
 
-(CONHECIDA — Sessão 26) raw_track_points e coordinates normalmente têm o mesmo comprimento, mas o código NÃO assume isso — fallback por ponto se divergir. Já coberto por teste. Motivo de poder divergir: atividade criada por POST /activities (JSON) com track_points montado à mão pelo caller, ou ponto filtrado em parse_gpx.
+(CONHECIDA — Sessão 26) raw_track_points e coordinates normalmente têm o mesmo comprimento, mas o código NÃO assume isso — fallback por ponto se divergir. Já coberto por teste.
 
-(Oportunidade — S21–S27) RouteMap agora é lazy — se um segundo consumidor aparecer, considerar Suspense compartilhado.
+(CONHECIDA — Sessão 28) Delta de Pace no PreviousDelta está fora de escopo deliberadamente: pace é ratio (duration/distance), delta percentual dele é ambíguo e o DeltaLine colore "+" como verde (que inverteria o significado em pace — pace menor é melhor). Se um dia entrar, precisa de DeltaLine variant ou label invertido.
 
-(Oportunidade — S18–S27) Delta "vs. anterior / vs. ano anterior" cobre 3 métricas (distance, activities, pace). Extensão trivial: total_duration_s e total_calories. → Próxima candidata para Sessão 28 (OPÇÃO 2 do handoff S26).
+(CONHECIDA — Sessão 28) ActivityDetailPage/SearchPage mudam de hash no bundle quando ProfilePage muda de tamanho. É renomeação de referência cruzada no __vite__mapDeps, não regressão (REGRA S28b).
 
-(Oportunidade — S18–S27) Semântica do delta é NEUTRA. Sem "melhor/pior".
+(Oportunidade — S21–S28) RouteMap agora é lazy — se um segundo consumidor aparecer, considerar Suspense compartilhado.
 
-(Oportunidade — S19–S27) Stats públicas só quando viewer segue o alvo.
+(Oportunidade — S18–S28) Semântica do delta é NEUTRA. Sem "melhor/pior". Pace fica de fora por isso.
 
-(Oportunidade — S22–S27) Export em lote no mobile.
+(Oportunidade — S19–S28) Stats públicas só quando viewer segue o alvo.
 
-(Oportunidade — S22–S27) Export em lote concatenado (1 CSV + 1 GPX).
+(Oportunidade — S22–S28) Export em lote no mobile.
 
-(Oportunidade — S24–S27) Detectar ZIP vazio no client via DecompressionStream ou lib.
+(Oportunidade — S22–S28) Export em lote concatenado (1 CSV + 1 GPX).
 
-SEÇÃO 8 — PRÓXIMOS PASSOS RECOMENDADOS (Sessão 28 e além)
+(Oportunidade — S24–S28) Detectar ZIP vazio no client via DecompressionStream ou lib.
 
-Sessão 27 fechada. Feature de export 100% completa e estável: backend S21+S22+S26, front S21+S23+S24. S26 fechou a última lacuna de contrato do GPX (timestamps por ponto). S27 foi só Fase 0 — sem novidades, só confirmação de que o estado está verde. Nenhuma pendência de código.
+SEÇÃO 8 — PRÓXIMOS PASSOS RECOMENDADOS (Sessão 29 e além)
 
-Primeira ação obrigatória da Sessão 28 (REGRA S27a)
+Sessão 28 fechada. Feature de export 100% completa (backend S21+S22+S26, front S21+S23+S24). Drill-down por tipo (S14, S15, S17, S18, S20) agora mostra todas as 5 métricas no delta. Nenhuma pendência de código.
+
+Primeira ação obrigatória da Sessão 29 (REGRA S27a)
 
 Abrir PowerShell via Win+R → powershell.
 
-Rodar o bloco "[Sessão 28 — primeira ação]": git status --short → se M docs/HANDOFF.md, commitar como docs: handoff da Sessao 27, push, confirmar HEAD == origin/main.
+Rodar o bloco "[Sessão 29 — primeira ação]": git status --short → se M docs/HANDOFF.md, commitar como docs: handoff da Sessao 28, push, confirmar HEAD == origin/main.
 
 Sanidade de build (npm run build/npm run lint + flutter analyze).
 
@@ -672,35 +796,33 @@ Docker + pytest (docker ps -a, pg_isready, pytest -q → 166, ruff check).
 
 Detecção de versão em produção (front Vercel + back Render S26 — GPX com <time> por ponto).
 
-Escolha para a Sessão 28
+Escolha para a Sessão 29
 
-OPÇÃO 1 — Delta em tempo/calorias nos stats (RECOMENDADA — antiga OPÇÃO 2 do handoff S26, primeira da fila agora).
+OPÇÃO 1 — Detectar ZIP vazio no client (RECOMENDADA).
 
-Extensão da S18. StatsByTypeResponse ganha delta de total_duration_s e total_calories (3 métricas já cobertas: distância, atividades, pace — faltam tempo e calorias).
+Hoje: o botão "Exportar tudo" mostra "Download iniciado." sempre que downloadActivityExportBulk(...) resolve, mesmo quando o ZIP veio vazio (0 atividades no período). O usuário não tem como saber se baixou algo útil sem abrir o ZIP. Solução: ler o ZIP no client (DecompressionStream nativo ou lib pequena) e mostrar "Nenhuma atividade no período — ZIP vazio." ou "Download iniciado (N atividades)."
 
-Só backend + front recharts. Sem mudança de contrato (campos novos, aditivos).
+Só frontend (ProfilePage.tsx + talvez client.ts). Sem mudança de contrato HTTP. Baixo risco. Valor: feedback preciso ao usuário.
 
-Sessão pequena, baixo risco, valor percebido no front.
+Fase 1 da S29: pedir web/src/pages/ProfilePage.tsx (já conheço o handler handleExportAll) + web/src/api/client.ts (para ver como apiFetchBlob devolve o blob) + web/src/api/activities.ts (downloadActivityExportBulk). Contrato travado antes de codar.
 
-Fase 1 da S28: pedir app/routers/activities.py (rotas stats), app/schemas/stats.py, app/services/stats_service.py (ou equivalente), tests/test_stats.py, web/src/pages/ProfilePage.tsx e o componente de gráfico que consome by-type. Contrato travado antes de codar.
+OPÇÃO 2 — Export no app mobile (paridade com web).
 
-OPÇÃO 2 — Detectar ZIP vazio no client.
+Mobile parado desde S11. Sessão grande (backend já está pronto, mas mobile precisa de download + share sheet + tratamento de ZIP). Só se houver demanda real.
 
-DecompressionStream em client.ts (ou dep pequena), downloadActivityExportBulk retorna {entries: N}. UI mostra mensagem pós-download real. ~1h. Só se houver demanda.
+OPÇÃO 3 — Delta de Pace com semântica correta.
 
-OPÇÃO 3 — Export no app mobile (paridade com web).
-
-Mobile parado desde S11. Sessão grande. Só se houver demanda real.
+Adicionar Pace ao PreviousDelta exigiria DeltaLine variant (pace menor = verde) ou label invertido. Só para tipos que usam pace (run/walk/hike). Trabalho pequeno mas não trivial. Valor discutível.
 
 OPÇÃO 4 — Fechar ciclo de novo, sem feature.
 
 Se o usuário preferir pausar. Só faz sentido se houver outra prioridade.
 
-Recomendação final para a Sessão 28
+Recomendação final para a Sessão 29
 
-Rodar Fase 0 completa (com handoff S27 commitado primeiro). Se tudo verde, abrir OPÇÃO 1 — delta de tempo/calorias nos stats. É a candidata natural: pequena, aditiva, sem mudança de contrato, valor imediato no front.
+Rodar Fase 0 completa (com handoff S28 commitado primeiro). Se tudo verde, abrir OPÇÃO 1 — detecção de ZIP vazio no client. É pequena, só frontend, resolve um problema real de UX, e não toca contrato.
 
-Em qualquer rota, handoff preventivo em ~70–80% do contexto — antes do fim, parar e entregar o HANDOFF completo da Sessão 28 neste mesmo formato (seções 0 a 9).
+Em qualquer rota, handoff preventivo em ~70–80% do contexto — antes do fim, parar e entregar o HANDOFF completo da Sessão 29 neste mesmo formato (seções 0 a 9).
 
 SEÇÃO 9 — PEDIDO EXPLÍCITO DO USUÁRIO PARA O PRÓXIMO CHAT
 
@@ -716,13 +838,15 @@ Na S25 (abertura): reforçou os mesmos acordos. E ao longo da sessão, tolerou c
 
 Na S26 (abertura): reforçou os mesmos acordos. E ao longo da sessão, tolerou os 2 tropeços (bloco PowerShell com WriteAllBytes de string, Render demorando >3 min) — sem reclamar, apenas reportando o output. Registrei cada um como regra (S26a–S26c).
 
-Na S27 (abertura): rodou Fase 0 com o handoff S26 ainda não commitado — motivou a REGRA S27a (commitar handoff pendente primeiro). Perguntou "o que você recomenda?" e seguimos a recomendação (OPÇÃO 1, encerrar com handoff). Pediu "cadê handoff" — encerramento executado. Nenhum tropeço nesta sessão; nenhuma regra nova decorrente de erro. As duas regras novas (S27a e S27b) nasceram de observação do fluxo, não de falha.
+Na S27 (abertura): rodou Fase 0 com o handoff S26 ainda não commitado — motivou a REGRA S27a. Perguntou "o que você recomenda?" e seguimos a recomendação (encerrar com handoff).
 
-Pedido para o assistente da S28 (e além): manter o processo da S21–S27. Concretamente:
+Na S28 (abertura): handoff S27 já estava commitado (motivo desconhecido — provavelmente commit entre sessões). Fase 0 rodou limpa. Ao chegar na Fase 1, a descoberta revelou que o escopo do handoff S27 estava desatualizado (schema e service já faziam o que o handoff dizia faltar). Ajustei escopo em tempo real, entreguei 1 arquivo, validei em produção. Perguntou "sempre o que você recomendar" ao fim e eu recomendei entregar o handoff agora — ele concordou.
+
+Pedido para o assistente da S29 (e além): manter o processo da S21–S28. Concretamente:
 
 Fase 0 obrigatória na ordem da REGRA S27b: handoff pendente → log/status → build/lint/analyze → docker/pytest/ruff → prod backend → prod frontend. Cada bloco só depois do anterior verde. Se algum falhar, parar e mostrar.
 
-Fase 1 — descoberta: pedir os arquivos relevantes (Get-Content -Encoding UTF8) com motivo. Não adivinhar estrutura, nomes de símbolos, campos de model/enum/schema.
+Fase 1 — descoberta: pedir os arquivos relevantes (Get-Content -Encoding UTF8) com motivo. Não adivinhar estrutura, nomes de símbolos, campos de model/enum/schema. REGRA S28a: pedir TODOS os arquivos que o contrato toca, mesmo os "óbvios", antes de aceitar o escopo do handoff anterior como verdade.
 
 Fase 2 — contrato travado: escrever endpoint/auth/404/422/headers/formato antes de codar. Apresentar ao usuário.
 
@@ -730,10 +854,10 @@ Fase 3 — entrega incremental: 1 arquivo por resposta, código completo (nunca 
 
 Fase 3.5 — verificar save + commit: git hash-object ≠ git rev-parse HEAD:<arquivo> + git status --short mostra M. Só então pedir commit.
 
-Fase 4 — validação em produção: local verde é pré-requisito; prod via HTTP/browser é o que fecha. Depois de git push, checar openapi.json (backend) e baixar index-*.js e procurar o chunk (front) antes de acusar bug. Se hash/comportamento antigo aparecer, aguardar 90 s (Vercel) ou >3 min (Render) antes de acusar bug.
+Fase 4 — validação em produção: local verde é pré-requisito; prod via HTTP/browser é o que fecha. Depois de git push, checar openapi.json (backend) e baixar index-*.js e procurar o chunk (front) antes de acusar bug. Se hash/comportamento antigo aparecer, aguardar 90 s (Vercel) ou >3 min (Render) antes de acusar bug. REGRA S28b: chunk com hash novo mas tamanho idêntico é renomeação de referência cruzada.
 
 Fase 5 — handoff preventivo em ~70–80% do contexto, no formato completo (seções 0 a 9), sem resumir.
 
-Regras novas da S27 (Seção 0, itens 22–23): commitar handoff pendente ANTES de qualquer outra coisa na abertura; ordem fixa dos blocos da Fase 0.
+Regras novas da S28 (Seção 0, itens 24–25): confirmar escopo real via Fase 1 antes de aceitar o handoff anterior como verdade; chunk renomeado por referência cruzada não é regressão.
 
-O que funcionou nas S21–S27 (manter): ordem clara de fases, validação entre cada arquivo, contrato escrito antes, commits pequenos e temáticos, honestidade sobre os próprios erros e correção com base no output real do terminal, não na previsão.
+O que funcionou nas S21–S28 (manter): ordem clara de fases, validação entre cada arquivo, contrato escrito antes, commits pequenos e temáticos, honestidade sobre os próprios erros e correção com base no output real do terminal, não na previsão. E, na S28, a disposição de REDUZIR escopo quando a descoberta mostrou que o handoff S27 estava desatualizado — em vez de implementar trabalho redundante.
