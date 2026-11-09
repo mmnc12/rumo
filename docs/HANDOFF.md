@@ -1,4 +1,4 @@
-HANDOFF — Rumo (backend + frontend + mobile) — Sessão 25
+HANDOFF — Rumo (backend + frontend + mobile) — Sessão 26
 SEÇÃO 0 — LEIA PRIMEIRO (contexto operacional)
 Regra de ouro para o assistente novo (leia antes de qualquer coisa)
 
@@ -8,42 +8,70 @@ VOCÊ NÃO TEM ACESSO AO DISCO DO USUÁRIO. Não existe "listar pasta", "abrir a
 (b) o usuário cola a saída de um comando de terminal
 
 NUNCA invente caminho de arquivo. NUNCA diga "vou olhar o arquivo X". NUNCA reescreva um arquivo que você não recebeu nesta sessão. Se precisar de um arquivo, PEÇA e espere. Se a estrutura de pastas for necessária, PEÇA a saída de Get-ChildItem.
+
 ⚠️ REGRA S21 — nunca placeholder no código entregue
 
 Não entregar bloco com # ... (resto inalterado ...). Se não tem o arquivo, peça.
+
 ⚠️ REGRA S21 — não adivinhar nomes de símbolos do projeto
 
 Pedir o model/enum/schema antes de referenciar.
+
 ⚠️ REGRA S21 — git status antes de qualquer git restore/git checkout
 
 git status --short <arquivo> + git --no-pager log --oneline -3 -- <arquivo>.
+
 ⚠️ REGRA S22 — Invoke-WebRequest com -UseBasicParsing
 
 Elimina o prompt de segurança do PS 5.1.
+
 ⚠️ REGRA S22 — validar deploy do Render antes de acusar bug no código
 
 Depois de push, checar openapi.json para a rota nova antes de acusar 422/404.
+
 ⚠️ REGRA S23 — para validar bundle novo na Vercel, baixar o index-*.js e procurar o chunk dentro dele
 
 Nunca procurar "ProfilePage-" direto no HTML.
+
 ⚠️ REGRA S24 — Vercel às vezes demora >90 s para o primeiro deploy após push
 
 Se o hash antigo aparecer após 90 s, rodar o teste de novo. Não presumir bug.
+
 ⚠️ REGRA S25a — Select-String -SimpleMatch NÃO aceita | como alternância
 
-Com -SimpleMatch, "a|b" busca a string literal a|b, não "a ou b". Para alternância, usar Select-String -Pattern "a|b" (sem -SimpleMatch), ou rodar separado por termo. Eu errei isso no diagnóstico do README e quase fechei falso positivo.
+Com -SimpleMatch, "a|b" busca a string literal a|b, não "a ou b". Para alternância, usar Select-String -Pattern "a|b" (sem -SimpleMatch), ou rodar separado por termo.
+
 ⚠️ REGRA S25b — quando $lines[-1] for suspeito, confirmar com Get-Content | Select-Object -Last N + Select-String -Pattern "<termo único>" antes de concluir
 
 Não dar "OK" nem "corrompido" sem evidência.
+
 ⚠️ REGRA S25c — antes de pedir git add/git commit de um arquivo que o usuário acabou de salvar, EXIGIR o output do bloco de validação e ESPERAR
 
-Foi o que faltou na S25: pedi commit sem esperar a confirmação do save.
 ⚠️ REGRA S25d — o teste definitivo de "o save pegou" é git hash-object <arquivo> ≠ git rev-parse HEAD:<arquivo> + git status --short mostrar M <arquivo>
 
 Se git status --short vier vazio depois de salvar, o disco é igual ao commitado. O save não pegou.
-⚠️ REGRA S25e — ao entregar o conteúdo de um arquivo para colar no editor, entregar SEM cerca ```markdown ... ``` envolvendo
 
-Entregar o arquivo inteiro como o único texto da resposta, sem instruções antes/depois. Isso elimina a ambiguidade "copiei a resposta inteira e colei, o texto de instrução veio junto". Foi o que aconteceu duas vezes na S25 até eu entregar o conteúdo sem cerca.
+⚠️ REGRA S25e — ao entregar o conteúdo de um arquivo para colar no editor, entregar SEM cerca markdown envolvendo
+
+Entregar o arquivo inteiro como o único texto da resposta, sem instruções antes/depois.
+
+⚠️ REGRA S26a (NOVA) — no PowerShell 5.1, Invoke-WebRequest -UseBasicParsing devolve $resp.Content como STRING, não como byte[]
+
+[System.IO.File]::WriteAllBytes($path, $resp.Content) falha com "Não é possível converter o valor ... para o tipo System.Byte[]". Para escrever bytes, usar:
+
+    [System.IO.File]::WriteAllBytes($path, [System.Text.Encoding]::UTF8.GetBytes($resp.Content)) — OK para GPX/CSV/XML (texto UTF-8), ou
+
+    $resp.RawContentStream.CopyTo($fileStream) — preserva bytes crus, ideal para binários (ZIP, imagem).
+
+Para inspecionar GPX/XML, evitar escrever arquivo: usar [regex]::Matches($resp.Content, '<time>([^<]+)</time>') direto no Content.
+
+⚠️ REGRA S26b (NOVA) — validar GPX em produção por regex é mais barato que por gpxpy+arquivo temporário
+
+Contar <time> distintos com regex no Content responde a pergunta "o S26 está no ar?" em 3 linhas de PowerShell, sem $env:TEMP nem WriteAllBytes. Usar gpxpy só quando precisar validar estrutura interna (eixos, hierarquia <trkseg>).
+
+⚠️ REGRA S26c (NOVA) — Render free tier pode demorar >3 min para redeployar após push
+
+Não é bug. Se a primeira validação em prod mostrar o comportamento antigo (S25: todos os <time> iguais), esperar 2 min e rodar de novo. Se após ~5 min continuar antigo, então sim: ir ao dashboard do Render → Manual Deploy. Não presumir bug no código antes de ~5 min.
 O que é LOCAL vs. o que é PRODUÇÃO
 
 LOCAL (máquina do usuário): D:\Rumo (repo git), D:\Rumo\backend (FastAPI + Postgres/PostGIS + Alembic + pytest), D:\Rumo\web (React 19 + Vite 8 + TypeScript + Tailwind + react-leaflet + recharts), D:\Rumo\mobile (Flutter). O assistente NÃO tem acesso a esses arquivos.
@@ -52,7 +80,7 @@ PRODUÇÃO (nuvem, acessível por HTTP): backend no Render (https://rumo-api-5s0
 
 IMPORTANTE — usuário não tem ambiente local rodando. Fluxo: editar em D:\Rumo, rodar pytest localmente (Docker de teste na 5433), commitar, push, Render + Vercel redeployam, validar via HTTP em produção.
 
-DOCKER: instalado e funcional no Windows local. pytest -q local verde (164 passed ao fim da S22, mantido na S23, S24, S25). Container de teste rumo_postgres_test na porta 5433.
+DOCKER: instalado e funcional no Windows local. pytest -q local verde (166 passed ao fim da S26). Container de teste rumo_postgres_test na porta 5433.
 
 ⚠️ docker ps sozinho esconde container parado — usar sempre docker ps -a --filter "name=rumo_postgres_test" (com -a).
 Estrutura do repo (referência — conferir, não assumir)
@@ -76,19 +104,19 @@ D:\Rumo
 ├── docs/HANDOFF.md
 ├── mobile/lib/     (models/  pages/  services/  widgets/)
 ├── web/src/        (api/  assets/  components/  contexts/  hooks/  lib/  pages/  types/)
-└── README.md       ← NOVO na S25
+└── README.md
 
 Como rodar comandos Flutter
 
 Flutter em C:\Users\nasci\flutter (bin em ...\flutter\bin). Versões: Flutter 3.47.9 / Dart 3.13.7. Problema conhecido: mesmo com o bin no PATH, o PowerShell às vezes não reconhece flutter. Solução: & "C:\Users\nasci\flutter\bin\flutter.bat" <comando>.
 Contas de teste
 
-    prod@rumo.com / senha12345 — id 01a12c83-be2a-71fa-b966-1c93ca64f341, 6 atividades, 26.443 m.
+    prod@rumo.com / senha12345 — id 01a12c83-be2a-71fa-b966-1c93ca64f341, 6 atividades, 26.443 m. Tem atividade "Teste mapa - rota sintetica" (01a1b36a-0951-71e8-9044-c55c71558441, tipo walk, 60 pontos, ~10 min de duração) usada para validar o S26.
 
     Prod2 — id 01a141e7-5ea4-7600-8959-19145475ad0a, 2 atividades, 14.643 m, pace 496,89 s/km, 0 kcal. prod segue Prod2.
 
 ⚠️ "Quem sou eu" é GET /auth/me, NÃO /users/me (esse devolve 422).
-Acordos de trabalho (válidos em todas as sessões — reforçados na S21/S22/S23/S24/S25)
+Acordos de trabalho (válidos em todas as sessões — reforçados na S21/S22/S23/S24/S25/S26)
 
     SEMPRE seguir a recomendação do assistente. Quando houver decisão pendente, executar a recomendada salvo instrução explícita em contrário.
 
@@ -124,11 +152,17 @@ Acordos de trabalho (válidos em todas as sessões — reforçados na S21/S22/S2
 
     Teste definitivo do save: git hash-object ≠ git rev-parse HEAD:<arquivo> + git status --short mostra M (S25d).
 
-    Entregar conteúdo de arquivo para colar sem cerca ```markdown ``` — arquivo inteiro como único texto (S25e).
+    Entregar conteúdo de arquivo para colar sem cerca markdown — arquivo inteiro como único texto (S25e).
 
-Processo que o usuário elogiou na S21–S24 (para manter)
+    PS 5.1: $resp.Content de Invoke-WebRequest -UseBasicParsing é string, não byte[] (S26a).
 
-    Fase 0 (validar estado) → Fase 1 (descoberta, pedir arquivos) → Fase 2 (contrato travado) → Fase 3 (entrega incremental, 1 arquivo por vez) → Fase 4 (validação em produção) → Fase 5 (handoff).
+    Validar GPX em prod por regex no Content, não por gpxpy+temp file (S26b).
+
+    Render free tier pode demorar >3 min para redeployar após push (S26c).
+
+Processo que o usuário elogiou na S21–S26 (para manter)
+
+    Fase 0 (validar estado) → Fase 1 (descoberta, pedir arquivos) → Fase 2 (contrato travado) → Fase 3 (entrega incremental, 1 arquivo por vez) → Fase 3.5 (verificar save + commit) → Fase 4 (validação em produção) → Fase 5 (handoff).
 
     Descoberta antes de codar: pedir arquivos com motivo declarado.
 
@@ -144,7 +178,7 @@ Processo que o usuário elogiou na S21–S24 (para manter)
 
 SEÇÃO 1 — TL;DR para quem chega agora
 
-Backend: 164 testes passando LOCALMENTE, 0 warnings. Activity.route é PostGIS LINESTRING. GET /activities/{id}/track devolve TrackResponse com coordinates em ordem GeoJSON [lon, lat], bbox [minLon, minLat, maxLon, maxLat], n_points, simplified. 404 quando route é NULL.
+Backend: 166 testes passando LOCALMENTE (era 164; +2 na S26), 0 warnings. Activity.route é PostGIS LINESTRING. GET /activities/{id}/track devolve TrackResponse com coordinates em ordem GeoJSON [lon, lat], bbox [minLon, minLat, maxLon, maxLat], n_points, simplified. 404 quando route é NULL.
 
 ActivityResponse (feed/lista/detalhe/busca) inclui bbox: list[float] | None, calculado via ST_XMin/YMin/XMax/YMax no mesmo SELECT (sem N+1).
 
@@ -164,25 +198,33 @@ Export unitário (S21): GET /activities/{activity_id}/export?format=csv|gpx — 
 
 Export em lote (S22): GET /activities/export?format=csv|gpx[&from=YYYY-MM-DD][&to=YYYY-MM-DD] — auth self-only. Saída: ZIP (application/zip, Content-Disposition: attachment; filename="rumo_export_<YYYYMMDD-HHMMSS>.zip"). format=csv: inclui todas; format=gpx: só com rota. Filtro from/to inclusivo (UTC). 0 atividades → 200 + ZIP vazio. from > to → 422. format inválido → 422.
 
-Frontend Web: React 19 + Vite 8 + TypeScript + Tailwind; react-leaflet (RouteMap no detalhe) + recharts (gráficos no perfil). S21: botões "Baixar CSV" (sempre) e "Baixar GPX" (condicional a track) no cabeçalho do ActivityDetailPage. S23: card "Exportar tudo" no ProfilePage (só isSelf). S24: aviso "Se nenhuma atividade casar com o período, o ZIP virá vazio." + feedback "Download iniciado." por ~4s.
+S26 (esta sessão — GPX com <time> por ponto):
 
-S25 (esta sessão):
+    to_gpx(activity, coordinates, raw_track_points=None) ganhou o 3º parâmetro opcional. Quando raw_track_points existe e tem o MESMO comprimento de coordinates, cada <trkpt> recebe <time> com o timestamp real do ponto (unix epoch → ISO 8601 UTC). Caso contrário, fallback para started_at em todos os pontos (comportamento S25).
 
-    ActivityDetailPage.tsx agora importa RouteMap via React.lazy + Suspense (fallback de 24rem). RouteMap é named export, resolvido com .then(m => ({ default: m.RouteMap })). Validado local (npm run build gera RouteMap-BWdETDdy.js 2.41 kB) e em prod (index-DV3loxrJ.js com chunks novos).
+    export_activity e export_activities_bulk passam activity.raw_track_points — a coluna JSONB activities.raw_track_points já existia desde a criação (populada por parse_gpx/parse_fit como [[lat, lon, ele, unix_ts], ...]); só não era lida no export.
 
-    README.md na raiz (novo) com cheat sheet: estrutura, rodar local, endpoints, contas de teste, produção, stack com versões exatas, convenções rápidas.
+    Contrato HTTP inalterado — só o corpo do GPX ganhou <time> reais.
 
-    Tropeços da S25 (registrados): (1) Select-String -SimpleMatch com | literal → falso positivo de "README OK"; (2) pedi commit sem esperar validação do save → git commit "nothing to commit"; (3) entreguei README com cerca ```markdown ``` → usuário colou a resposta inteira → "Passo 1/2/3" vazou pro arquivo. Regras S25a–S25e nasceram desses erros.
+    Validado em produção: atividade 01a1b36a-0951-71e8-9044-c55c71558441 retornou 60 <trkpt> com 60 <time> distintos (antes da S26: 60 iguais). Primeiro 2026-11-06T21:30:33Z, último 2026-11-06T21:40:23Z (delta ~10 min).
+
+    CSV, ZIP, auth, headers, filename: intactos.
+
+Frontend Web: React 19 + Vite 8 + TypeScript + Tailwind; react-leaflet (RouteMap no detalhe, lazy desde S25) + recharts (gráficos no perfil). S21: botões "Baixar CSV" (sempre) e "Baixar GPX" (condicional a track) no ActivityDetailPage. S23: card "Exportar tudo" no ProfilePage (só isSelf). S24: aviso "Se nenhuma atividade casar com o período, o ZIP virá vazio." + feedback "Download iniciado." por ~4s. Intocado na S26 — o .gpx baixado é opaco para o browser; nada muda em web/.
 
 Mobile: mapa de rota no detalhe (flutter_map, OSM/Esri satélite), alternância Mapa/Satélite, miniatura no feed via CameraFit.bounds. Intocado desde a S11. Sem drill-down de stats, sem export.
 
-Estado final da S25:
+Estado final da S26:
 
-    git log: 4146c3a docs: corrige README (remove instrucoes de sessao por engano) no topo, eb9ae35 docs: README com cheat sheet de endpoints e comandos, 1fbcf0e feat(web): RouteMap com React.lazy no detalhe (Sessao 25), a485eab feat(web): feedback de sucesso no exportar tudo (Sessao 24).
+    git log: 15ccccb feat(activities): GPX export com <time> por ponto (Sessao 26) no topo, 7bf5bc2 docs: handoff da Sessao 25, 4146c3a docs: corrige README (remove instrucoes de sessao por engano).
 
-    Vercel: index-DV3loxrJ.js com chunks ActivityDetailPage-J23GpMg5.js, ProfilePage-Bfp0kvA2.js, SearchPage-CvOmHzdZ.js dentro (todos novos ≠ S24).
+    Render: backend redeployado com S26 (validado via HTTP — ver acima). Demorou >3 min após o push; primeira validação mostrou S25, segunda mostrou S26 (REGRA S26c).
 
-    2a validado local + prod. 2b (README) commitado em eb9ae35 + corrigido em 4146c3a. Nada pendente.
+    Vercel: bundle inalterado desde S25 (index-DV3loxrJ.js). Não foi tocado.
+
+    2 arquivos de teste novos em tests/test_export.py (linhas 334 e 380).
+
+    Nada pendente.
 
 SEÇÃO 2 — PRODUÇÃO E AMBIENTE
 
@@ -206,14 +248,16 @@ SEÇÃO 2 — PRODUÇÃO E AMBIENTE
 
     Python: 3.13.7 (venv em D:\Rumo\backend\venv) — NÃO usar 3.14
 
-    Venv backend: D:\Rumo\backend\venv (ativa com .\venv\Scripts\Activate.ps1)
+    Venv backend: D:\Rumo\backend\venv (ativa com .\venv\Scripts\Activate.ps1 — UM ponto, não dois)
 
-    Deps novas em S25: nenhuma.
+    Deps novas em S26: nenhuma.
 
-Git (estado ao fim da Sessão 25)
+Git (estado ao fim da Sessão 26)
 text
 
-4146c3a (HEAD -> main, origin/main) docs: corrige README (remove instrucoes de sessao por engano)
+15ccccb (HEAD -> main, origin/main) feat(activities): GPX export com <time> por ponto (Sessao 26)
+7bf5bc2 docs: handoff da Sessao 25
+4146c3a docs: corrige README (remove instrucoes de sessao por engano)
 eb9ae35 docs: README com cheat sheet de endpoints e comandos
 1fbcf0e feat(web): RouteMap com React.lazy no detalhe (Sessao 25)
 a485eab feat(web): feedback de sucesso no exportar tudo (Sessao 24)
@@ -225,67 +269,62 @@ ad7b99a docs: handoff da Sessao 21
 ee3215b feat(web): botoes baixar CSV/GPX no detalhe (Sessao 21)
 8936415 feat(activities): export CSV/GPX (Sessao 21)
 
-Pendente: docs/HANDOFF.md da S25 (este arquivo) — usuário salva e commita como docs: handoff da Sessao 25.
-SEÇÃO 3 — O QUE FOI FEITO NA SESSÃO 25
+Pendente: docs/HANDOFF.md da S26 (este arquivo) — usuário salva e commita como docs: handoff da Sessao 26.
+SEÇÃO 3 — O QUE FOI FEITO NA SESSÃO 26
 3.1 Fase 0 — validação de estado inicial
 
-Tudo verde (git, build, lint, analyze, docker -a, pg_isready, pytest 164, ruff, detecção de prod com index-DzwYSsIb.js + ProfilePage-MTSjQTtf.js da S24). Nenhum falso positivo.
-3.2 Fase 2 — contrato travado (OPÇÃO 2a + 2b)
+Tudo verde: git push up-to-date, HEAD == origin/main == 7bf5bc2, working tree limpo. Build web 824 modules (mesmos chunks S25), lint limpo, flutter analyze No issues, Docker engine/compose OK, rumo_postgres_test Up (healthy), pg_isready OK, pytest -q 164 passed, ruff check . All checks passed. Produção Vercel: index-DV3loxrJ.js com chunks S25 confirmados (ActivityDetailPage-J23GpMg5.js, ProfilePage-Bfp0kvA2.js, SearchPage-CvOmHzdZ.js; RouteMap-BWdETDdy.js fora do índice — lazy esperado).
 
-2a — RouteMap com React.lazy(). RouteMap é named export; único consumidor é ActivityDetailPage. lazy fica no consumidor, RouteMap não muda. Fallback <Suspense> de 24rem.
+Nota: o handoff S25 já estava commitado em 7bf5bc2 (não foi preciso commitá-lo na abertura da S26).
+3.2 Fase 1 — descoberta
 
-2b — README.md na raiz com cheat sheet. Aditivo, zero mudança de código.
-3.3 Fase 1 — descoberta
+Pedidos (com motivo declarado, REGRA S21): services/export.py (não existia — descobri via Get-ChildItem -Recurse), models/activity.py (cole), services/gpx_service.py (cole), services/activity_service.py (cole), tests/test_export.py (cole). Também tentei inspecionar raw_track_points via psql, mas o db do container não é rumo — abandonei e descobri a estrutura no activity_service.py (parse_gpx define [[lat, lon, ele, unix_ts], ...]; Activity.raw_track_points é JSONB nullable).
+3.3 Fase 2 — contrato travado
 
-Pedidos: RouteMap.tsx, ActivityDetailPage.tsx, Select-String -Pattern "RouteMap" -List (confirmou único consumidor), web/package.json, mobile/pubspec.yaml (versões exatas).
+Feature: GPX export com <time> por <trkpt> quando raw_track_points está disponível e alinhado.
+
+Assinatura nova: to_gpx(activity, coordinates, raw_track_points=None).
+Regra: para índice i, se raw_track_points is not None, len(raw_track_points) == len(coordinates), len(raw_track_points[i]) >= 4 e raw_track_points[i][3] > 0 → <time> = datetime.fromtimestamp(ts, tz=utc); senão fallback started_at.
+Contrato HTTP: inalterado (rota, auth, 404, headers, filename). Só o corpo do GPX muda.
+Bulk S22: herda de graça — só a chamada a to_gpx ganha o 3º argumento.
+CSV: intocado.
 3.4 Fase 3 — entrega incremental
 
-Arquivo 1/1 — web/src/pages/ActivityDetailPage.tsx entregue completo. Mudanças: import { lazy, Suspense, useState } from "react", const RouteMap = lazy(() => import("../components/RouteMap").then((m) => ({ default: m.RouteMap }))), <Suspense fallback={...}> com <div> de 24rem + "Carregando mapa…". Validação: Select-String confirmou 5 matches; npm run build → 824 modules, RouteMap-BWdETDdy.js 2.41 kB novo, ActivityDetailPage-CjI4Jf2W.js caiu de 13.00 → 11.38 kB; npm run lint limpo.
+Arquivo 1/3 — app/services/gpx_service.py (completo). Adicionado _trkpt_time(index, raw_track_points, n_coordinates, started_at) e parâmetro raw_track_points em to_gpx. Docstring atualizada. Validação: ruff check . All checks passed; pytest -q tests/test_export.py 10 passed (eu tinha previsto 9 — erro de contagem meu; são 10).
 
-Nota importante: o index-*.js continuou com 435.82 kB (mesmo tamanho) porque o leaflet já era um chunk separado (leaflet-Bw7RoR_1.js 163.60 kB) desde antes. O lazy não tira o leaflet do index (ele nunca esteve lá) — tira o código do RouteMap do chunk do detalhe (2.41 kB) e faz o leaflet só baixar quando o mapa renderiza. Ganho real, mas menor do que eu prometi na Fase 2. Corrigi a expectativa no próprio resumo da S25.
-3.5 Fase 3.5 — commit + push (2a)
+Arquivo 2/3 — app/services/activity_service.py (completo). Duas chamadas a to_gpx passam activity.raw_track_points: em export_activity e em export_activities_bulk. Docstrings atualizadas com nota [Sessão 26]. Validação: ruff check . limpo; pytest -q 164 passed (nenhum regrediu — testes existentes não inspecionam <time>).
 
-git status --short: M web/src/pages/ActivityDetailPage.tsx. git add + git commit → 1fbcf0e feat(web): RouteMap com React.lazy no detalhe (Sessao 25) (1 file, +22/−5). git push OK.
-3.6 Fase 3.6 — README (2b) entregue e commitado (COM TROPEÇO)
+Arquivo 3/3 — tests/test_export.py (completo). 2 testes novos:
 
-Entreguei o README.md completo dentro de uma cerca ```markdown ... ```, seguido de instruções ("Validação", "Passo 1/2/3", "Próximo passo"). O usuário colou a resposta inteira, incluindo as instruções. O README.md salvo virou uma mistura de conteúdo + "Passo 1/2/3" no final, com a formatação Markdown quebrada (fences virando text, pipes virando tabulação).
+    test_to_gpx_emits_time_per_point_when_raw_track_points_available — 3 pontos sintéticos T, T+60, T+120; valida <time> distintos, crescentes, primeiro == started_at, passo 60s.
 
-O commit eb9ae35 docs: README com cheat sheet de endpoints e comandos foi feito com esse conteúdo errado. O git status estava vazio (o usuário rodou git add + git commit sem o save ter pego, ou antes do save — o hash-object e HEAD:README.md eram idênticos: 96d56c32...).
-3.7 Fase 3.7 — diagnóstico do README (várias idas e voltas)
+    test_to_gpx_falls_back_to_started_at_when_raw_track_points_is_none — passa None; valida todos os <time> == started_at (S25).
+    Validação: Select-String -Pattern "test_to_gpx_emits_time_per_point|test_to_gpx_falls_back" → 2 matches (linhas 334 e 380); ruff check . limpo; pytest -q 166 passed.
 
-    Tentativa 1 (minha): vi $lines[-1] = "Passo 3..." → disse "corrompido". Certo na observação.
+3.5 Fase 3.5 — verificar save + commit + push
 
-    Tentativa 2 (minha, errada): Select-String -SimpleMatch "Passo 1|Passo 2|Passo 3|..." → vazio → disse "não, está OK". Errado: -SimpleMatch com | é literal.
+git status --short mostrou M nos 3 arquivos; git hash-object ≠ git rev-parse HEAD:<arquivo> nos 3 (DIFF). Commit 15ccccb feat(activities): GPX export com <time> por ponto (Sessao 26) — 3 files changed, +165/−11. Push OK. HEAD == origin/main == 15ccccb, working tree limpo.
+3.6 Fase 4 — validação em produção (COM TROPEÇO)
 
-    Tentativa 3 (minha, correta): Select-String -Pattern "Passo" (sem -SimpleMatch) → 3 matches. Confirmado corrompido.
+Tropeço 1 (meu): primeiro bloco de download de GPX usou [System.IO.File]::WriteAllBytes($tmp, $resp.Content). No PS 5.1, $resp.Content com -UseBasicParsing é string, não byte[] → exceção de conversão, arquivo não escrito, Python falhou com FileNotFoundError. Não era bug no código Python. Corrigido com regex direto no Content (REGRA S26a e S26b nasceram aqui).
 
-    Tentativa 4 (minha, correta): entreguei README sem cerca (arquivo inteiro como único texto). O usuário colou só o conteúdo (desta vez funcionou).
+Tropeço 2 (Render): o primeiro download mostrou 58 <time> todos iguais a 2026-11-07T00:20:32.931332Z → Render ainda na S25. Aguardei e rodei de novo (~3 min depois), o segundo download mostrou 60 <time> distintos:
 
-    Validação final: última linha = bullet git restore ✅; Select-String "Passo" vazio ✅; total 116 linhas ✅; git status mostrou M README.md ✅; git commit → 4146c3a docs: corrige README... (1 file, +14/−51); git push OK; HEAD == origin/main == 4146c3a; working tree limpo.
+    Primeiro: 2026-11-06T21:30:33Z
 
-3.8 Fase 4 — validação em produção (Vercel S25)
+    Último: 2026-11-06T21:40:23Z
 
-git push (S25, antes do fix do README). Start-Sleep 90. index-DV3loxrJ.js (novo ≠ S24). Chunks novos dentro: ActivityDetailPage-J23GpMg5.js, ProfilePage-Bfp0kvA2.js, SearchPage-CvOmHzdZ.js. Bundle da S25 no ar, confirmado. O RouteMap-BWdETDdy.js não aparece no __vite__mapDeps do index porque é carregado por dentro do ActivityDetailPage via import() dinâmico — comportamento esperado do lazy.
-3.9 Tropeços e correções (S25)
+    Delta: ~10 min.
 
-    Select-String -SimpleMatch com | literalizou a busca → falso positivo de "README OK". Corrigido com Select-String -Pattern "Passo" (sem -SimpleMatch). REGRA S25a.
+S26 confirmada em produção. openapi.json também mostra /activities/{activity_id}/export e /activities/export no ar. Vercel intocada desde S25 (bundle idêntico).
+3.7 Resultado da suíte (S26)
 
-    Pedi commit sem esperar validação do save → git commit "nothing to commit", git status vazio, hash-object == HEAD:README. Corrigido exigindo hash-object ≠ HEAD:README + git status mostrando M antes de commitar. REGRA S25c + S25d.
+pytest -q → 166 passed (164 + 2). ruff → All checks passed. npm run build/npm run lint/flutter analyze inalterados (intocados). Sem teste novo de front (nada mudou em web/).
+3.8 Commits pushados (S26)
 
-    Entreguei README com cerca ```markdown ``` e instruções na mesma resposta → usuário colou a resposta inteira, "Passo 1/2/3" vazou pro arquivo. Corrigido entregando o arquivo sem cerca, como único texto da resposta. REGRA S25e.
+    15ccccb feat(activities): GPX export com <time> por ponto (Sessao 26) — 3 files, +165/−11.
 
-3.10 Resultado da suíte (S25)
-
-pytest -q → 164 passed (mantido). ruff → All checks passed. npm run build → 824 modules verde (RouteMap-BWdETDdy.js 2.41 kB). npm run lint limpo. flutter analyze No issues. Sem teste novo (feature é de UI/config, sem lógica de backend nova).
-3.11 Commits pushados (S25)
-
-    1fbcf0e feat(web): RouteMap com React.lazy no detalhe (Sessao 25) — 1 file, +22/−5.
-
-    eb9ae35 docs: README com cheat sheet de endpoints e comandos — 1 file, +153 (com lixo).
-
-    4146c3a docs: corrige README (remove instrucoes de sessao por engano) — 1 file, +14/−51.
-
-Pendente: docs: handoff da Sessao 25 (este arquivo).
+Pendente: docs: handoff da Sessao 26 (este arquivo).
 SEÇÃO 4 — CONTRATOS DO BACKEND RELEVANTES
 
 GET /activities/{id}/track (auth: Bearer JWT)
@@ -302,26 +341,23 @@ GET /activities/{id}/export?format=csv|gpx (auth: Bearer JWT) — S21
 
     format=csv (default): 200, text/csv; charset=utf-8, Content-Disposition: attachment; filename="rumo_<id>_<type>.csv". 1 header + 1 linha. Funciona com/sem rota (bbox_* vazios se sem rota).
 
-    format=gpx: 200, application/gpx+xml; charset=utf-8, Content-Disposition: attachment; filename="rumo_<id>_<type>.gpx". <trk><name>{title}</name><trkseg><trkpt lat="…" lon="…">. Exige rota → 404 "Atividade não possui rota" se route IS NULL.
+    format=gpx: 200, application/gpx+xml; charset=utf-8, Content-Disposition: attachment; filename="rumo_<id>_<type>.gpx". <trk><name>{title}</name><trkseg><trkpt lat="…" lon="…"><time>…</time></trkpt>.... S26: <time> por <trkpt> usa timestamp real do raw_track_points quando alinhado; senão started_at (S25). Formato ISO 8601 UTC (YYYY-MM-DDTHH:MM:SSZ, com microssegundos quando o gpxpy serializa datetime.isoformat()). Exige rota → 404 "Atividade não possui rota" se route IS NULL.
 
-    format inválido → 422 (Literal do Pydantic).
+    format inválido → 422.
 
 GET /activities/export?format=csv|gpx[&from=YYYY-MM-DD][&to=YYYY-MM-DD] (auth: Bearer JWT) — S22
 
     Auth: self-only.
 
-    Saída: ZIP (application/zip, Content-Disposition: attachment; filename="rumo_export_<YYYYMMDD-HHMMSS>.zip"). N arquivos internos, cada um no formato unitário.
+    Saída: ZIP (application/zip, Content-Disposition: attachment; filename="rumo_export_<YYYYMMDD-HHMMSS>.zip"). N arquivos internos, cada um no formato unitário. S26: arquivos .gpx internos herdam <time> real por ponto.
 
     format=csv (default): ZIP com N .csv (todas do filtro, com/sem rota). format=gpx: ZIP com N .gpx (só com rota).
 
     Filtro from/to (YYYY-MM-DD, UTC, inclusivo). 0 atividades → 200 ZIP vazio; from > to → 422 "from deve ser <= to"; format inválido → 422.
 
 GET /activities/stats/summary?activity_type=<opcional> → StatsSummary.
-
 GET /activities/stats/weekly?weeks=N&activity_type=<opcional> → StatsWeeklyResponse.
-
 GET /activities/stats/monthly?months=N&activity_type=<opcional> → StatsMonthlyResponse.
-
 GET /activities/stats/by-type?period=<all|90d|1y>&compare=<prev|yoy> → StatsByTypeResponse. period/compare inválidos → 422. previous null para period="all" ou tipo ausente na janela.
 
 Janelas (S17/S18/S20):
@@ -337,10 +373,10 @@ GET /users/{user_id}/stats/{summary,weekly,monthly,by-type} — mesmos shapes. _
 GET /auth/me — identidade do usuário logado (NÃO é /users/me).
 SEÇÃO 5 — COMMITS PENDENTES / ESTADO DO REPO
 
-Sessões 9–25 commitadas e pushadas. HEAD == origin/main == 4146c3a. Working tree limpo.
+Sessões 9–26 commitadas e pushadas. HEAD == origin/main == 15ccccb. Working tree limpo.
 
 Pendente: este handoff.
-Primeira ação da S25 (se ainda não feita)
+Primeira ação da Sessão 27 (se ainda não feita)
 powershell
 
 cd D:\Rumo
@@ -352,14 +388,14 @@ Se aparecer M docs/HANDOFF.md, commitar:
 powershell
 
 git add docs/HANDOFF.md
-git commit -m "docs: handoff da Sessao 25"
+git commit -m "docs: handoff da Sessao 26"
 git push
 git --no-pager log --oneline -4
 git status --short
 
-Esperado depois: HEAD == origin/main com docs: handoff da Sessao 25 no topo.
+Esperado depois: HEAD == origin/main com docs: handoff da Sessao 26 no topo.
 SEÇÃO 6 — SCRIPTS ÚTEIS (PowerShell)
-[Sessão 26 — primeira ação] Abrir PowerShell via Win+R → powershell
+[Sessão 27 — primeira ação] Abrir PowerShell via Win+R → powershell
 
 NÃO abrir de dentro do VS Code / Windows Terminal.
 powershell
@@ -369,19 +405,19 @@ git push
 git --no-pager log --oneline -8
 git status --short
 
-[Sessão 26 — primeira ação] Commitar handoff S25 (se ainda não foi)
+[Sessão 27 — primeira ação] Commitar handoff S26 (se ainda não foi)
 powershell
 
 cd D:\Rumo
 git status --short
 # Esperado: M docs/HANDOFF.md
 git add docs/HANDOFF.md
-git commit -m "docs: handoff da Sessao 25"
+git commit -m "docs: handoff da Sessao 26"
 git push
 git --no-pager log --oneline -4
 git status --short
 
-[Sessão 26 — primeira ação] Sanidade de build
+[Sessão 27 — primeira ação] Sanidade de build
 powershell
 
 cd D:\Rumo\web
@@ -390,7 +426,7 @@ npm run lint
 cd ..\mobile
 & "C:\Users\nasci\flutter\bin\flutter.bat" analyze
 
-[Sessão 26 — primeira ação] Docker + pytest local
+[Sessão 27 — primeira ação] Docker + pytest local
 powershell
 
 docker version
@@ -401,10 +437,10 @@ docker ps -a --filter "name=rumo_postgres_test"      # ATENÇÃO: -a, não só p
 docker exec rumo_postgres_test pg_isready -h 127.0.0.1 -p 5432
 # Se o prompt já mostra (venv), PULE a linha abaixo.
 .\venv\Scripts\Activate.ps1      # UM ponto, NÃO dois
-python -m pytest -q              # esperado: 164 passed
+python -m pytest -q              # esperado: 166 passed
 ruff check .
 
-[Sessão 26 — primeira ação] Detecção de versão em produção (S25)
+[Sessão 27 — primeira ação] Detecção de versão em produção (front — Vercel)
 
 ⚠️ Sempre -UseBasicParsing. ⚠️ Depois de git push, se o hash antigo ainda aparecer, aguardar 90 s e rodar de novo (REGRA S24).
 powershell
@@ -416,8 +452,8 @@ Write-Host "index servido: $($m.Groups[1].Value)"
 $idx = Invoke-WebRequest -Uri $idxUrl -UseBasicParsing
 $idx.Content | Select-String -Pattern 'assets/(ActivityDetailPage|RouteMap|ProfilePage)-[A-Za-z0-9_-]+\.js'
 
-# Esperado na S25 (registro histórico): index-DV3loxrJ.js com chunks
-# ActivityDetailPage-J23GpMg5.js, ProfilePage-Bfp0kvA2.js, SearchPage-CvOmHzdZ.js.
+# Esperado no estado atual (S25, Vercel intocada na S26):
+# index-DV3loxrJ.js com ActivityDetailPage-J23GpMg5.js, ProfilePage-Bfp0kvA2.js, SearchPage-CvOmHzdZ.js.
 # O RouteMap-BWdETDdy.js NÃO aparece no __vite__mapDeps do index — é carregado
 # por dentro do ActivityDetailPage via import() dinâmico. Comportamento esperado.
 
@@ -430,6 +466,36 @@ $token = $login.access_token
 $me = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/me" -Headers @{ Authorization = "Bearer $token" }
 $meId = $me.id
 
+Detecção de versão em produção (backend S26 — GPX com <time> por ponto)
+
+⚠️ REGRA S26a/S26b: NÃO usar WriteAllBytes($path, $resp.Content). Usar regex direto no Content.
+powershell
+
+$body = "username=prod@rumo.com&password=senha12345"
+$login = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/login" -Method Post -ContentType "application/x-www-form-urlencoded" -Body $body
+$h = @{ Authorization = "Bearer $($login.access_token)" }
+
+# Atividade conhecida com rota (S26 validou nela):
+$aid = "01a1b36a-0951-71e8-9044-c55c71558441"
+$resp = Invoke-WebRequest -Uri "https://rumo-api-5s0b.onrender.com/activities/$aid/export?format=gpx" -Headers $h -UseBasicParsing
+
+$times = [regex]::Matches($resp.Content, '<time>([^<]+)</time>') | ForEach-Object { $_.Groups[1].Value }
+$n = $times.Count
+$distinct = ($times | Sort-Object -Unique).Count
+Write-Host "pontos com <time>: $n"
+Write-Host "<time> distintos: $distinct"
+if ($n -gt 0) { Write-Host "primeiro: $($times[0])"; Write-Host "ultimo:   $($times[-1])" }
+if ($distinct -le 1 -and $n -gt 1) {
+  Write-Host "S25 AINDA NO AR (todos iguais). Aguardar Render redeployar (REGRA S26c: >3 min)."
+} elseif ($distinct -ge $n - 1) {
+  Write-Host "S26 NO AR (timestamps distintos por ponto)."
+} else {
+  Write-Host "ATENCAO: apenas $distinct/$n distintos — investigar."
+}
+
+# Esperado agora (S26 no ar): 60 pontos, 60 distintos,
+# primeiro 2026-11-06T21:30:33Z, ultimo 2026-11-06T21:40:23Z.
+
 Detecção de versão em produção (backend S22 — export em lote)
 powershell
 
@@ -440,13 +506,17 @@ if (-not $hasBulkExport) {
   Write-Host "RENDER AINDA NAO REDEPLOYOU. Aguardar 1-3 min ou Manual Deploy no dashboard."
 }
 
-# Teste real do ZIP (auth)
+# Teste real do ZIP (auth) — bytes crus via RawContentStream (REGRA S26a)
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $tmp = [System.IO.Path]::GetTempFileName()
 try {
   $r = Invoke-WebRequest -Uri "https://rumo-api-5s0b.onrender.com/activities/export?format=csv" -Headers @{Authorization="Bearer $token"} -UseBasicParsing
   Write-Host "CSV default: $($r.StatusCode) $($r.Headers['Content-Type'])"
-  [System.IO.File]::WriteAllBytes($tmp, $r.Content)
+  # Grava bytes crus, não string (REGRA S26a)
+  $fs = [System.IO.File]::OpenWrite($tmp)
+  $r.RawContentStream.Position = 0
+  $r.RawContentStream.CopyTo($fs)
+  $fs.Close()
   $zip = [System.IO.Compression.ZipFile]::OpenRead($tmp)
   Write-Host "  entries: $($zip.Entries.Count)"
   $zip.Dispose()
@@ -481,12 +551,12 @@ git restore <arquivo>
 # Se a versão quebrada JÁ foi commitada:
 git show <commit-anterior>:<arquivo> > <arquivo>
 
-Diagnóstico: rota nova não responde após git push (lição S22)
+Diagnóstico: rota nova não responde após git push (lição S22 + S26c)
 powershell
 
 # 1) openapi.json — a rota está no ar?
 Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/openapi.json" | ConvertTo-Json -Depth 6 | Select-String -Pattern "activities/export"
-# Se vazio: Render não redeployou. Aguardar ou Manual Deploy.
+# Se vazio: Render não redeployou. Aguardar (S26c: >3 min) ou Manual Deploy.
 # 2) se a rota está no ar mas retorna 422, ver o BODY do erro:
 try {
   Invoke-WebRequest -Uri "<url>" -Headers $h -UseBasicParsing | Out-Null
@@ -506,9 +576,9 @@ Write-Host "index servido: $($m.Groups[1].Value)"
 $idx = Invoke-WebRequest -Uri $idxUrl -UseBasicParsing
 $idx.Content | Select-String -Pattern 'assets/(ActivityDetailPage|RouteMap|ProfilePage)-[A-Za-z0-9_-]+\.js'
 # hash novo → bundle novo no ar
-# hash do S24 (DzwYSsIb/MTSjQTtf/CHf94jpD/Czd3J0lL) → Vercel não redeployou: aguardar 90s
+# hash antigo → Vercel não redeployou: aguardar 90s
 
-Diagnóstico de save de arquivo (lição S25 — NOVA)
+Diagnóstico de save de arquivo (lição S25 — mantido)
 powershell
 
 # Depois de salvar, ANTES de commitar:
@@ -527,6 +597,24 @@ git rev-parse HEAD:<arquivo>
 # Se [5] == [6] e [4] vazio → o disco é igual ao commitado. O save NÃO pegou (ou você commitou antes).
 # Se [5] != [6] e [4] mostra ' M' → save pegou, pode commitar.
 
+Baixar bytes de GPX/XML no PS 5.1 SEM quebrar (lição S26a)
+powershell
+
+# ERRADO — Content é string, não byte[]:
+# [System.IO.File]::WriteAllBytes($path, $resp.Content)   # exceção de conversão
+
+# CERTO (texto UTF-8) — se o objetivo é gravar o arquivo:
+[System.IO.File]::WriteAllBytes($path, [System.Text.Encoding]::UTF8.GetBytes($resp.Content))
+
+# CERTO (bytes crus) — se o objetivo é preservar binário (ZIP, imagem):
+$fs = [System.IO.File]::OpenWrite($path)
+$resp.RawContentStream.Position = 0
+$resp.RawContentStream.CopyTo($fs)
+$fs.Close()
+
+# MELHOR para inspecionar GPX — sem arquivo, regex no Content:
+$times = [regex]::Matches($resp.Content, '<time>([^<]+)</time>') | ForEach-Object { $_.Groups[1].Value }
+
 SEÇÃO 7 — DÍVIDAS TÉCNICAS
 
     (FECHADA na S20) ~~Duas pastas de venv~~ — .venv removida. Única venv é backend\venv.
@@ -535,21 +623,21 @@ SEÇÃO 7 — DÍVIDAS TÉCNICAS
 
     (FECHADA na S25) ~~RouteMap.tsx é reutilizável; se aparecer segundo uso, considerar React.lazy()~~ — RouteMap agora é lazy no ActivityDetailPage.
 
+    (FECHADA na S26) ~~to_gpx não emite <time> por <trkpt> — a geometria em route é só LineString, sem stream temporal (dívida da S21)~~ — agora emite quando raw_track_points está disponível e alinhado.
+
     (CONHECIDA — Sessão 14) Enums nativos do Postgres ordenam pela ORDEM DE DECLARAÇÃO. get_by_type desempata em Python.
 
     (CONHECIDA — Sessão 17) Filtro period usa now() do Postgres. Testes DEVEM usar datetime.now(timezone.utc) - timedelta(days=N) com margem ≥10 dias.
 
     (CONHECIDA — Sessão 18) WHERE mata a janela anterior antes do CASE WHEN.
 
-    (CONHECIDA — Sessão 17–25) StatsCards mostra summary "todos os tempos", não filtrado por period nem por previous. Intencional.
+    (CONHECIDA — Sessão 17–26) StatsCards mostra summary "todos os tempos", não filtrado por period nem por previous. Intencional.
 
-    (CONHECIDA — Sessão 17–25) Conta prod@rumo.com não tem atividade >90d. period=all, 90d e 1y retornam iguais em produção para prod; previous vem null. NÃO é bug.
+    (CONHECIDA — Sessão 17–26) Conta prod@rumo.com não tem atividade >90d. period=all, 90d e 1y retornam iguais em produção para prod; previous vem null. NÃO é bug.
 
     (CONHECIDA — Sessão 20) period="1y" faz compare=yoy ≡ compare=prev por definição matemática.
 
     (CONHECIDA — Sessão 21) sample_run.gpx em backend/samples/ não é "run" — <type> traduz para "walk". Testes usam activity.activity_type.value dinâmico.
-
-    (CONHECIDA — Sessão 21) to_gpx não emite <time> por <trkpt> (a geometria em route é só LineString, sem stream temporal). Strava/Garmin aceitam.
 
     (CONHECIDA — Sessão 21) apiFetchBlob não tem skipAuth. YAGNI por enquanto.
 
@@ -565,50 +653,56 @@ SEÇÃO 7 — DÍVIDAS TÉCNICAS
 
     (CONHECIDA — Sessão 25) React.lazy() no RouteMap não tira o leaflet do index — o leaflet já era chunk separado (leaflet-Bw7RoR_1.js 163.60 kB) desde antes. Tira o código do RouteMap (2.41 kB) do chunk do ActivityDetailPage e faz o leaflet baixar só quando o mapa renderiza. Ganho modesto e legítimo.
 
-    (Oportunidade — S21–S25) RouteMap agora é lazy — se um segundo consumidor aparecer, considerar Suspense compartilhado.
+    (CONHECIDA — Sessão 26) <time> no GPX inclui microssegundos (2026-11-07T00:20:32.931332Z) porque o gpxpy serializa datetime.isoformat(). Strava/Garmin aceitam ISO 8601 com fração. Se algum consumidor reclamar, truncar para segundos é 1 linha em _trkpt_time (return dt.replace(microsecond=0)). Não fazer agora (YAGNI).
 
-    (Oportunidade — S18–S25) Delta "vs. anterior / vs. ano anterior" cobre 3 métricas. Extensão trivial.
+    (CONHECIDA — Sessão 26) raw_track_points e coordinates normalmente têm o mesmo comprimento, mas o código NÃO assume isso — fallback por ponto se divergir. Já coberto por teste. Motivo de poder divergir: atividade criada por POST /activities (JSON) com track_points montado à mão pelo caller, ou ponto filtrado em parse_gpx.
 
-    (Oportunidade — S18–S25) Semântica do delta é NEUTRA. Sem "melhor/pior".
+    (Oportunidade — S21–S26) RouteMap agora é lazy — se um segundo consumidor aparecer, considerar Suspense compartilhado.
 
-    (Oportunidade — S19–S25) Stats públicas só quando viewer segue o alvo.
+    (Oportunidade — S18–S26) Delta "vs. anterior / vs. ano anterior" cobre 3 métricas. Extensão trivial.
 
-    (Oportunidade — S21–S25) Export com timestamps por ponto.
+    (Oportunidade — S18–S26) Semântica do delta é NEUTRA. Sem "melhor/pior".
 
-    (Oportunidade — S22–S25) Export em lote no mobile.
+    (Oportunidade — S19–S26) Stats públicas só quando viewer segue o alvo.
 
-    (Oportunidade — S22–S25) Export em lote concatenado (1 CSV + 1 GPX).
+    (Oportunidade — S22–S26) Export em lote no mobile.
 
-    (Oportunidade — S24/S25) Detectar ZIP vazio no client via DecompressionStream ou lib.
+    (Oportunidade — S22–S26) Export em lote concatenado (1 CSV + 1 GPX).
 
-SEÇÃO 8 — PRÓXIMOS PASSOS RECOMENDADOS (Sessão 26 e além)
+    (Oportunidade — S24–S26) Detectar ZIP vazio no client via DecompressionStream ou lib.
 
-Sessão 25 fechada. Feature de export 100% completa (backend S21+S22, front S21+S23+S24). Resíduos de baixo risco (2a+2b) entregues. Nenhuma pendência de código.
-Primeira ação obrigatória da Sessão 26
+SEÇÃO 8 — PRÓXIMOS PASSOS RECOMENDADOS (Sessão 27 e além)
+
+Sessão 26 fechada. Feature de export 100% completa: backend S21+S22+S26, front S21+S23+S24. S26 fechou a última lacuna de contrato do GPX (timestamps por ponto). Nenhuma pendência de código.
+Primeira ação obrigatória da Sessão 27
 
     Abrir PowerShell via Win+R → powershell.
 
-    Rodar o bloco "[Sessão 26 — primeira ação]": git push, log, status; commitar handoff S25 se pendente.
+    Rodar o bloco "[Sessão 27 — primeira ação]": git push, log, status; commitar handoff S26 se pendente.
 
     Sanidade de build (npm run build/npm run lint + flutter analyze).
 
-    Docker + pytest (docker ps -a, pg_isready, pytest -q → 164, ruff check).
+    Docker + pytest (docker ps -a, pg_isready, pytest -q → 166, ruff check).
 
-    Detecção de versão em produção (front S25): baixar index-DV3loxrJ.js e confirmar chunks novos.
+    Detecção de versão em produção (front Vercel + back Render S26 — GPX com <time> por ponto).
 
-Escolha para a Sessão 26 (opções)
+Escolha para a Sessão 27 (opções)
 
 OPÇÃO 1 — Fechar ciclo e começar a próxima feature com calma (RECOMENDADA).
 
     Commitar este handoff.
 
-    Escolher a próxima feature a partir da Seção 7.
+    Escolher a próxima feature a partir da Seção 7 (Oportunidades).
 
-    Estado: repo limpo, prod verde, 164 testes. Caminho de menor risco.
+    Estado: repo limpo, prod verde, 166 testes. Caminho de menor risco.
 
-OPÇÃO 2 — Export com timestamps por ponto (S21–S25 oportunidade).
+OPÇÃO 2 — Delta em tempo/calorias nos stats (antiga OPÇÃO 5, agora primeira candidata real).
 
-    to_gpx lê raw_track_points em vez de route. Muda contrato do GPX (adiciona <time> por <trkpt>). Sessão média, backend + teste + front (regenerar GPX).
+    Extensão da S18. StatsByTypeResponse ganha delta de total_duration_s e total_calories (3 métricas já cobertas: distância, atividades, pace — faltam tempo e calorias).
+
+    Só backend + front recharts. Sem mudança de contrato (campos novos, aditivos).
+
+    Sessão pequena, baixo risco, valor percebido no front.
 
 OPÇÃO 3 — Detectar ZIP vazio no client.
 
@@ -618,17 +712,13 @@ OPÇÃO 4 — Export no app mobile (paridade com web).
 
     Mobile parado desde S11. Sessão grande. Só se houver demanda real.
 
-OPÇÃO 5 — Melhorias incrementais de stats (delta em tempo/calorias, semântica melhor/pior).
-
-    Extensão trivial da S18. Sessão pequena.
-
-Recomendação final para a Sessão 26
+Recomendação final para a Sessão 27
 
 Antes de escolher, validar estado (Seção 8 — primeira ação). Se tudo verde, escolher.
 
-Rota recomendada: OPÇÃO 1 — fechar ciclo e começar a próxima feature com calma. Motivos: feature de export 100% fechada há 2 sessões, resíduos de baixo risco entregues na S25, contexto da S25 já foi usado. Começar S26 com repo limpo é o melhor caminho para escolher a próxima feature a partir da lista de oportunidades da Seção 7.
+Rota recomendada: OPÇÃO 1 — fechar ciclo e começar a próxima feature com calma. Motivos: S26 fechou a última lacuna de contrato do export; contexto da S26 já foi bem usado (uma feature + tropeços registrados); começar S27 com repo limpo é o melhor caminho para escolher a próxima feature. Se a escolha for a OPÇÃO 2, ela é a candidata natural — pequena, aditiva, sem mudança de contrato.
 
-Em qualquer rota, handoff preventivo em ~70–80% do contexto — antes do fim, parar e entregar o HANDOFF completo da Sessão 26 neste mesmo formato (seções 0 a 9).
+Em qualquer rota, handoff preventivo em ~70–80% do contexto — antes do fim, parar e entregar o HANDOFF completo da Sessão 27 neste mesmo formato (seções 0 a 9).
 SEÇÃO 9 — PEDIDO EXPLÍCITO DO USUÁRIO PARA O PRÓXIMO CHAT
 
 O usuário disse textualmente ao fim da S21: "gostei da sua forma de trabalho código e teste. ficou bem fluido o trabalho. faça um handoff bem detalhado para o proximo chat e se tiver como pedir para que sempre trabalhe desta forma."
@@ -641,7 +731,9 @@ Na S24: confirmou "tudo como esperado" duas vezes.
 
 Na S25 (abertura): reforçou os mesmos acordos. E ao longo da sessão, tolerou com paciência os 3 tropeços (Select-String mal desenhado, commit sem validação, README com cerca vazando instruções) — sem reclamar, apenas reportando o output. Registrei cada um como regra (S25a–S25e).
 
-Pedido para o assistente da S26 (e além): manter o processo da S21–S25. Concretamente:
+Na S26 (abertura): reforçou os mesmos acordos. E ao longo da sessão, tolerou os 2 tropeços (bloco PowerShell com WriteAllBytes de string, Render demorando >3 min) — sem reclamar, apenas reportando o output. Registrei cada um como regra (S26a–S26c). Ao fim, quando perguntei "confirmar handoff ou emendar Opção 5?", respondeu "sempre vamos fazer o que você recomendar" — confirmando que a recomendação (fechar com handoff) deve ser seguida sem nova deliberação.
+
+Pedido para o assistente da S27 (e além): manter o processo da S21–S26. Concretamente:
 
     Fase 0 obrigatória: validar estado (git, build, lint, analyze, docker -a, pytest, detecção de versão em prod) antes de tocar em código.
 
@@ -651,10 +743,12 @@ Pedido para o assistente da S26 (e além): manter o processo da S21–S25. Concr
 
     Fase 3 — entrega incremental: 1 arquivo por resposta, código completo (nunca placeholder — regra S21), com Select-String (save) + ruff/pytest (backend) ou npm run build/npm run lint (front) entre cada entrega.
 
-    Fase 4 — validação em produção: local verde é pré-requisito; prod via HTTP/browser é o que fecha. Depois de git push, checar openapi.json (backend) e baixar index-*.js e procurar o chunk (front) antes de acusar bug. Se hash antigo aparecer, aguardar 90 s (REGRA S24).
+    Fase 3.5 — verificar save + commit: git hash-object ≠ git rev-parse HEAD:<arquivo> + git status --short mostra M. Só então pedir commit.
+
+    Fase 4 — validação em produção: local verde é pré-requisito; prod via HTTP/browser é o que fecha. Depois de git push, checar openapi.json (backend) e baixar index-*.js e procurar o chunk (front) antes de acusar bug. Se hash/comportamento antigo aparecer, aguardar 90 s (Vercel) ou >3 min (Render) antes de acusar bug.
 
     Fase 5 — handoff preventivo em ~70–80% do contexto, no formato completo (seções 0 a 9), sem resumir.
 
-Regras novas da S25 (Seção 0, itens 14–18): Select-String -SimpleMatch não aceita |; confirmar $lines[-1] suspeito com Get-Content | Select-Object -Last N; exigir output de validação antes de pedir commit; teste definitivo do save é git hash-object ≠ git rev-parse HEAD:<arquivo> + git status --short mostra M; entregar conteúdo de arquivo para colar sem cerca ```markdown ``` — arquivo inteiro como único texto.
+Regras novas da S26 (Seção 0, itens 19–21): PS 5.1 $resp.Content é string, não byte[]; validar GPX em prod por regex no Content; Render free tier pode demorar >3 min para redeployar.
 
-O que funcionou nas S21–S25 (manter): ordem clara de fases, validação entre cada arquivo, contrato escrito antes, commits pequenos e temáticos, honestidade sobre os próprios erros e correção com base no output real do terminal, não na previsão.
+O que funcionou nas S21–S26 (manter): ordem clara de fases, validação entre cada arquivo, contrato escrito antes, commits pequenos e temáticos, honestidade sobre os próprios erros e correção com base no output real do terminal, não na previsão.
