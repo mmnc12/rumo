@@ -43,11 +43,13 @@ import {
 // [Sessão 15 — B1] Reaproveita formatadores de lib/format.ts em vez de
 // duplicar inline. Mesma decisão de "deixar o repo melhor do que estava".
 // [Sessão 15 — B1b] +formatElevation pra coluna de elevação.
+// [Sessão 28] +formatCalories pro delta de calorias.
 import {
   formatDistance,
   formatDuration,
   formatElevation,
   formatPace,
+  formatCalories,
 } from "../lib/format";
 import type {
   ActivityType,
@@ -510,6 +512,9 @@ export default function ProfilePage() {
                 Período anterior / Mesmo período do ano anterior). Só
                 renderiza quando period != "all". O header da coluna do
                 delta vira "vs. ano anterior" quando compare="yoy". */}
+            {/* [Sessão 28] Delta agora cobre as 5 métricas do
+                StatsByTypeItem: atividades, distância, elevação, tempo
+                e calorias. */}
             <div className="mt-6 rounded-lg bg-white p-4 shadow-sm">
               <div className="mb-3 flex flex-col gap-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -822,10 +827,15 @@ function computePace(item: {
 }
 
 // [Sessão 18] Bloco de delta vs. janela imediatamente anterior.
-// Mostra 3 métricas (atividades, distância, elevação) em linhas curtas.
+// Mostra 5 métricas (atividades, distância, elevação, tempo, calorias)
+// em linhas curtas.
 // `previous === null` → "—" (tipo não existia na janela anterior).
 // [Sessão 20] Sem mudança: `previous` é o mesmo shape (backend calcula
 // conforme `compare`), então o componente é agnóstico ao modo.
+// [Sessão 28] Estendido com Tempo e Calorias — fecha as 5 métricas do
+// StatsByTypeItem no delta. `formatDuration` e `formatCalories` já têm
+// assinatura (n: number | null | undefined) => string, compatível com
+// o `formatter` de DeltaLine sem wrapper.
 function PreviousDelta({ item }: { item: StatsByTypeItem }) {
   if (!item.previous) {
     return <span className="text-xs text-gray-400">—</span>;
@@ -848,6 +858,19 @@ function PreviousDelta({ item }: { item: StatsByTypeItem }) {
         current={item.total_elevation_gain_m}
         previous={item.previous.total_elevation_gain_m}
         formatter={formatElevation}
+      />
+      {/* [Sessão 28] Tempo e Calorias — fecha as 5 métricas do delta. */}
+      <DeltaLine
+        label="Tempo"
+        current={item.total_duration_s}
+        previous={item.previous.total_duration_s}
+        formatter={formatDuration}
+      />
+      <DeltaLine
+        label="Cal."
+        current={item.total_calories}
+        previous={item.previous.total_calories}
+        formatter={formatCalories}
       />
     </div>
   );
