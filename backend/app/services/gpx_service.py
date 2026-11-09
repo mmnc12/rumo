@@ -173,10 +173,50 @@ def map_gpx_type(gpx_type: str | None) -> str:
 
 
 # ===== Geração de GPX (export) — [Sessão 21] =====
+# [Sessão 26] to_gpx passa a emitir <time> por <trkpt> quando
+# raw_track_points tem timestamps reais. Fallback preserva o
+# comportamento da S25 (started_at em todos os pontos) quando os
+# dados brutos não estão disponíveis ou não batem com a geometria.
+
+
+def _trkpt_time(
+    index: int,
+    raw_track_points: list[list[float]] | None,
+    n_coordinates: int,
+    started_at: datetime | None,
+) -> datetime | None:
+    """Resolve o <time> de um <trkpt> (S26).
+
+    Regra:
+    1. Se `raw_track_points` existe, tem o MESMO comprimento de
+       `coordinates`, o item `index` tem >= 4 posições e o timestamp
+       (posição 3, unix epoch) é > 0 → usa o timestamp real do ponto.
+    2. Caso contrário → fallback: `started_at` da atividade (comportamento
+       da S25, inalterado). Isso cobre atividades antigas (JSON sem
+       raw_track_points) e qualquer divergência de comprimento.
+
+    Timestamps `0.0` são tratados como "sem tempo" (o parse_gpx grava 0.0
+    quando o GPX não trouxe `<time>` por ponto). Para não emitir `<time>`
+    errado, o fallback usa `started_at` — a mesma âncora que o GPX
+    exportado usava antes da S26.
+    """
+    if (
+        raw_track_points is not None
+        and len(raw_track_points) == n_coordinates
+        and 0 <= index < len(raw_track_points)
+    ):
+        point = raw_track_points[index]
+        if len(point) >= 4:
+            ts = point[3]
+            if isinstance(ts, (int, float)) and ts > 0:
+                return datetime.fromtimestamp(float(ts), tz=timezone.utc)
+    return started_at
+
 
 def to_gpx(
     activity: "Activity",
     coordinates: list[list[float]],
+    raw_track_points: list[list[float]] | None = None,
 ) -> str:
     """Serializa uma atividade como GPX 1.1 (string XML).
 
@@ -185,11 +225,16 @@ def to_gpx(
     contrário do `parse_gpx`, que lê `[lat, lon]` do GPX e devolve
     `[lat, lon]`. Manter essa inversão documentada evita bugs de eixo.
 
-    Timestamps por ponto não vão no GPX exportado (a geometria guardada
-    em `route` é só LineString, sem stream temporal — decisão da S10 pra
-    não pesar o SELECT do mapa). O `<time>` do `<trk>` usa `started_at`
-    da atividade como aproximação; o consumidor (Strava, Garmin) aceita
-    GPX sem `<time>` por ponto.
+    [Sessão 26] Timestamps por ponto: quando `raw_track_points` está
+    disponível e alinhado com `coordinates`, cada `<trkpt>` recebe o
+    `<time>` real do ponto (unix epoch → ISO 8601 UTC). Caso contrário,
+    cai no fallback da S25: `<time>` com `started_at` em todos os pontos.
+    Strava/Garmin aceitam ambos; ter `<time>` distintos é o que permite
+    cálculo de velocidade/pace por segmento do lado do consumidor.
+
+    `raw_track_points` é opcional (default None) para não quebrar callers
+    antigos — mas os 2 call sites em activity_service.py passam
+    `activity.raw_track_points` explicitamente.
     """
     gpx = gpxpy.gpx.GPX()
     gpx.creator = "Rumo"
@@ -208,12 +253,14 @@ def to_gpx(
     track.segments.append(segment)
 
     started_at = _as_utc(activity.started_at)
-    for point in coordinates:
+    n_coordinates = len(coordinates)
+    for index, point in enumerate(coordinates):
         # point é [lon, lat] (GeoJSON) — inverter aqui.
         lon, lat = point[0], point[1]
         trkpt = gpxpy.gpx.GPXTrackPoint(latitude=lat, longitude=lon)
-        if started_at is not None:
-            trkpt.time = started_at
+        trkpt.time = _trkpt_time(
+            index, raw_track_points, n_coordinates, started_at
+        )
         segment.points.append(trkpt)
 
     return gpx.to_xml()

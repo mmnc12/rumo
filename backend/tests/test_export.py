@@ -9,6 +9,9 @@ Cobertura:
   [[lat, lon, ele, ts], ...]; o export lê de route PostGIS via GeoJSON
   e devolve lat/lon; os eixos precisam bater).
 - Validação: format inválido → 422; format omitido → csv (default).
+- [Sessão 26] GPX com <time> por <trkpt>: usa raw_track_points quando
+  disponível (timestamps reais, distintos e crescentes); cai no fallback
+  S25 (started_at) quando raw_track_points é None.
 
 Estratégia de auth: helper `_client_as(user, test_engine)` constrói um
 AsyncClient espelhando o `client` do conftest (sobrescreve get_db com
@@ -25,7 +28,7 @@ passando sem manutenção.
 """
 
 import io
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import gpxpy
 import pytest
@@ -41,6 +44,7 @@ from app.models.follow import Follow
 from app.models.user import User
 from app.schemas.activity import ActivityCreate
 from app.services import activity_service
+from app.services.gpx_service import to_gpx
 
 
 # ===== Helpers =====
@@ -311,6 +315,94 @@ async def test_export_gpx_not_follower_404(
             f"/activities/{activity_with_route.id}/export?format=gpx"
         )
     assert res.status_code == 404
+
+
+# ===== GPX com <time> por <trkpt> — [Sessão 26] =====
+#
+# A S26 passou a emitir <time> por ponto quando raw_track_points está
+# disponível e alinhado com coordinates. Os 2 testes abaixo cobrem:
+# 1. Caminho feliz: raw_track_points com 3 timestamps distintos e
+#    crescentes → 3 <trkpt> com <time> distintos e crescentes, primeiro
+#    igual a started_at. Exercita to_gpx DIRETAMENTE (sem HTTP) porque o
+#    que queremos validar é a regra da função, não o contrato da rota
+#    (que os testes acima já cobrem).
+# 2. Fallback: raw_track_points=None (atividade antiga/JSON) → GPX
+#    continua válido; cada <trkpt> recebe <time> == started_at
+#    (comportamento S25 preservado).
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_to_gpx_emits_time_per_point_when_raw_track_points_available(
+    activity_with_route: Activity,
+):
+    """to_gpx emite <time> real por ponto quando raw_track_points existe.
+
+    Atividade tem raw_track_points populado pelo upload GPX. Vamos
+    substituí-lo por 3 pontos sintéticos com ts distintos (T, T+60,
+    T+120) para checar a regra sem depender do sample_run.gpx (que
+    tem N pontos — legível, mas dificulta asserts pontuais).
+    """
+    # Base: primeiro ponto real (para lat/lon válidos). Timestamps
+    # sintéticos, distintos e crescentes.
+    base_lat = activity_with_route.raw_track_points[0][0]
+    base_lon = activity_with_route.raw_track_points[0][1]
+    t0 = 1_700_000_000.0  # 2023-11-14T22:13:20Z (UTC)
+    synthetic_raw = [
+        [base_lat, base_lon, 0.0, t0],
+        [base_lat + 0.001, base_lon + 0.001, 0.0, t0 + 60.0],
+        [base_lat + 0.002, base_lon + 0.002, 0.0, t0 + 120.0],
+    ]
+    # coordinates em GeoJSON [lon, lat] — derivadas dos mesmos pontos.
+    synthetic_coordinates = [
+        [p[1], p[0]] for p in synthetic_raw
+    ]
+
+    xml = to_gpx(activity_with_route, synthetic_coordinates, synthetic_raw)
+    gpx = gpxpy.parse(io.BytesIO(xml.encode("utf-8")))
+    points = gpx.tracks[0].segments[0].points
+    assert len(points) == 3
+
+    times = [p.time for p in points]
+    assert all(t is not None for t in times)
+
+    # Distintos e crescentes — o ponto principal da S26.
+    assert times[0] < times[1] < times[2]
+
+    # Primeiro igual a started_at da atividade (âncora temporal).
+    expected_t0 = datetime.fromtimestamp(t0, tz=timezone.utc)
+    assert times[0] == expected_t0
+
+    # Passo de 60s entre pontos consecutivos (raw foi construído assim).
+    for i in range(1, 3):
+        assert times[i] - times[i - 1] == timedelta(seconds=60)
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_to_gpx_falls_back_to_started_at_when_raw_track_points_is_none(
+    activity_with_route: Activity,
+):
+    """Sem raw_track_points, to_gpx usa started_at em todos os <trkpt>.
+
+    Preserva o comportamento da S25 (fallback). Atividades antigas (criadas
+    por POST /activities sem track_points) e qualquer divergência de
+    comprimento caem aqui — o GPX continua válido e parseável.
+    """
+    raw = activity_with_route.raw_track_points
+    coordinates = [[p[1], p[0]] for p in raw]
+
+    # Passa None explicitamente para simular atividade sem track_points.
+    xml = to_gpx(activity_with_route, coordinates, None)
+    gpx = gpxpy.parse(io.BytesIO(xml.encode("utf-8")))
+    points = gpx.tracks[0].segments[0].points
+    assert len(points) == len(coordinates)
+
+    started_at_utc = activity_with_route.started_at
+    if started_at_utc.tzinfo is None:
+        started_at_utc = started_at_utc.replace(tzinfo=timezone.utc)
+
+    # Todos os <time> iguais a started_at (S25).
+    for p in points:
+        assert p.time is not None
+        assert p.time == started_at_utc
 
 
 # ===== Validação =====

@@ -776,13 +776,22 @@ async def export_activity(
 
     Auth: mesma de get_activity / get_activity_track (dono ou seguidor;
     caso contrário, 404).
+
+    [Sessão 26] Passa `activity.raw_track_points` para `to_gpx` — quando
+    disponível e alinhado com `coordinates`, o GPX exportado emite
+    `<time>` por `<trkpt>` com o timestamp real do ponto (melhora
+    interoperabilidade com Strava/Garmin). Sem raw_track_points (JSON
+    sem track_points, atividades antigas), cai no fallback da S25
+    (`started_at` em todos os pontos).
     """
     if fmt == "gpx":
         track = await get_activity_track(db, viewer_id, activity_id)
         activity = await get_activity(
             db, viewer_id, activity_id, allow_following=True
         )
-        gpx_str = to_gpx(activity, track.coordinates)
+        gpx_str = to_gpx(
+            activity, track.coordinates, activity.raw_track_points
+        )
         return (
             gpx_str.encode("utf-8"),
             "application/gpx+xml; charset=utf-8",
@@ -894,6 +903,10 @@ async def export_activities_bulk(
 
     Auth: self-only (viewer_id == dono). Diferente do unitário.
     Levanta ValueError se from > to (router traduz para 422).
+
+    [Sessão 26] Passa `activity.raw_track_points` para `to_gpx` em cada
+    atividade do ZIP — mesmo comportamento do export unitário. Atividades
+    sem rota continuam omitidas do ZIP no formato gpx (S22 inalterado).
     """
     activity_ids = await _get_user_activity_ids_in_range(
         db, viewer_id, date_from, date_to
@@ -928,7 +941,9 @@ async def export_activities_bulk(
                     # Atividade sem rota: GPX não é gerável. Omitir é o
                     # comportamento documentado (espelha o unitário).
                     continue
-                gpx_str = to_gpx(activity, track.coordinates)
+                gpx_str = to_gpx(
+                    activity, track.coordinates, activity.raw_track_points
+                )
                 zf.writestr(
                     _export_filename(activity, "gpx"),
                     gpx_str.encode("utf-8"),
