@@ -152,6 +152,77 @@ export interface DownloadActivityExportBulkParams {
   to?: string;
 }
 
+// [Sessão 29] Resultado do export em lote. `entryCount` é o número de
+// arquivos dentro do ZIP — o caller (ProfilePage) usa pra decidir a
+// mensagem de feedback ("Download iniciado (N atividades)." vs.
+// "Nenhuma atividade no período — ZIP vazio.").
+// `-1` significa "não foi possível ler o ZIP" (fail-open: o download
+// já aconteceu, o feedback cai no texto genérico de sucesso).
+export interface DownloadActivityExportBulkResult {
+  entryCount: number;
+}
+
+/**
+ * [Sessão 29] Conta entradas de um ZIP lendo o End Of Central Directory.
+ *
+ * Por que EOCD e não descer no central directory:
+ * - O ZIP do backend (FastAPI `zipfile.ZipFile`) sempre tem EOCD.
+ * - O campo `totalEntries` (offset 10, uint16 LE) já é o número de
+ *   arquivos — pro `format=csv` são todas as atividades; pro
+ *   `format=gpx` o backend já filtra as sem rota, então o número
+ *   também casa com "atividades com rota".
+ * - Não exige ZIP64 (arquivos pequenos: ZIP do Rumo fica na casa dos
+ *   KBs mesmo com 100+ atividades).
+ * - Sem dependência externa (nada de `jszip`).
+ *
+ * Retorna `-1` em qualquer falha (ZIP malformado, ZIP64, buffer
+ * truncado) — o chamador decide o que fazer. NÃO lança.
+ */
+function _countZipEntries(arrayBuffer: ArrayBuffer): number {
+  // ZIP64 tem EOCD64 antes do EOCD normal; nesse caso o uint16 do
+  // EOCD pode estar com 0xFFFF como sentinela. Tratamos como
+  // "não consegui contar" (fail-open) — não vale o custo pra ZIP
+  // de export de atividades (sempre < 4 GB / < 65535 arquivos).
+  if (arrayBuffer.byteLength < 22) return -1;
+
+  const view = new DataView(arrayBuffer);
+  const len = arrayBuffer.byteLength;
+
+  // EOCD pode ter comentário variável (até 65535 bytes). O padrão
+  // é varrer do fim pra trás nessa janela procurando a assinatura.
+  const EOCD_SIG = 0x06054b50;
+  const maxComment = 0xffff;
+  const searchStart = Math.max(0, len - 22 - maxComment);
+
+  let eocdOffset = -1;
+  // Varre de trás pra frente: o EOCD real é o primeiro (mais próximo
+  // do fim) que tem a assinatura e cujo comprimento bate com o resto.
+  for (let i = len - 22; i >= searchStart; i--) {
+    if (view.getUint32(i, true) === EOCD_SIG) {
+      eocdOffset = i;
+      break;
+    }
+  }
+
+  if (eocdOffset === -1) return -1;
+
+  // Layout do EOCD (little-endian):
+  //   offset  0  uint32  signature 0x06054b50
+  //   offset  4  uint16  número do disco
+  //   offset  6  uint16  disco do central directory
+  //   offset  8  uint16  entradas neste disco
+  //   offset 10  uint16  total de entradas
+  //   offset 12  uint32  tamanho do central directory
+  //   offset 16  uint32  offset do central directory
+  //   offset 20  uint16  tamanho do comentário
+  const totalEntries = view.getUint16(eocdOffset + 10, true);
+
+  // 0xFFFF como sentinela indica ZIP64 — não suportamos (fail-open).
+  if (totalEntries === 0xffff) return -1;
+
+  return totalEntries;
+}
+
 /**
  * GET /activities/export?format=&from=&to= — baixa TODAS as suas
  * atividades (do filtro) como um ZIP, com 1 arquivo por atividade.
@@ -164,10 +235,16 @@ export interface DownloadActivityExportBulkParams {
  *
  * O nome do arquivo (`rumo_export_<YYYYMMDD-HHMMSS>.zip`) vem do header
  * `Content-Disposition`; se faltar, cai em `rumo_export.zip`.
+ *
+ * [Sessão 29] Passa a devolver `{ entryCount }` — o número de arquivos
+ * dentro do ZIP, contado localmente via EOCD. `-1` quando o ZIP não
+ * pôde ser lido (fail-open: o download já aconteceu, o caller decide
+ * como usar). O download em si continua acontecendo dentro desta
+ * função (via `_triggerDownload`), igual antes.
  */
 export async function downloadActivityExportBulk(
   params: DownloadActivityExportBulkParams
-): Promise<void> {
+): Promise<DownloadActivityExportBulkResult> {
   const qs = new URLSearchParams();
   qs.set("format", params.format);
   if (params.from) qs.set("from", params.from);
@@ -176,5 +253,20 @@ export async function downloadActivityExportBulk(
   const { blob, filename } = await apiFetchBlob(
     `/activities/export?${qs.toString()}`
   );
+
+  // [Sessão 29] Lê o ZIP ANTES de disparar o download, pra podermos
+  // devolver a contagem. `blob.arrayBuffer()` é barato (ZIP pequeno)
+  // e não consome o blob — `_triggerDownload` continua funcionando.
+  let entryCount: number;
+  try {
+    entryCount = _countZipEntries(await blob.arrayBuffer());
+  } catch {
+    // Fail-open: qualquer erro na leitura do ZIP não pode derrubar o
+    // export — o usuário ainda tem o arquivo na mão.
+    entryCount = -1;
+  }
+
   _triggerDownload(blob, filename ?? "rumo_export.zip");
+
+  return { entryCount };
 }

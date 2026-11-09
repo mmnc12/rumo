@@ -36,9 +36,11 @@ import type { StatsPeriod, StatsCompare } from "../api/stats";
 import { useFollowUser } from "../hooks/useSocial";
 import { ApiError } from "../api/client";
 // [Sessão 23] Export em lote (paridade de UI com o endpoint /activities/export).
+// [Sessão 29] +tipo do resultado (entryCount) pra tipar o handler.
 import {
   downloadActivityExportBulk,
   type ActivityExportFormat,
+  type DownloadActivityExportBulkResult,
 } from "../api/activities";
 // [Sessão 15 — B1] Reaproveita formatadores de lib/format.ts em vez de
 // duplicar inline. Mesma decisão de "deixar o repo melhor do que estava".
@@ -102,6 +104,11 @@ const EXPORT_FORMATS: { label: string; value: ActivityExportFormat }[] = [
   { label: "GPX", value: "gpx" },
 ];
 
+// [Sessão 29] Feedback do export em lote agora carrega um "kind" pra
+// distinguir sucesso pleno (verde) de ZIP vazio (âmbar, aviso). O
+// `exportError` continua só pra erro de rede/HTTP (vermelho).
+type ExportInfo = { text: string; kind: "success" | "empty" };
+
 export default function ProfilePage() {
   const { id } = useParams<{ id: string }>();
   const [tab, setTab] = useState<"followers" | "following">("followers");
@@ -126,7 +133,9 @@ export default function ProfilePage() {
   const [exportError, setExportError] = useState<string | null>(null);
   // [Sessão 24] Feedback de sucesso transitório (some em ~4s) para dar
   // confirmação visual — antes o usuário só via o download do SO.
-  const [exportInfo, setExportInfo] = useState<string | null>(null);
+  // [Sessão 29] Passa a carregar `{ text, kind }` pra diferenciar
+  // "sucesso" (verde) de "ZIP vazio" (âmbar).
+  const [exportInfo, setExportInfo] = useState<ExportInfo | null>(null);
 
   // [Sessão 24] Limpa o feedback de sucesso depois de alguns segundos.
   useEffect(() => {
@@ -223,6 +232,10 @@ export default function ProfilePage() {
   // - Bloqueia client-side se from > to (o backend devolve 422; evitar ida perdida).
   // - Erros de rede/HTTP viram mensagem inline; 401 já limpa token no client.
   // [Sessão 24] Em sucesso, exibe confirmação transitória ("Download iniciado.").
+  // [Sessão 29] O `downloadActivityExportBulk` agora devolve `{ entryCount }`
+  // (número de arquivos no ZIP, lido via EOCD no client). Usamos pra
+  // diferenciar feedback: 0 → "ZIP vazio" (âmbar), N → "Download iniciado
+  // (N atividades)." (verde), -1 → fallback genérico (fail-open).
   async function handleExportAll(): Promise<void> {
     if (exportFrom && exportTo && exportFrom > exportTo) {
       setExportError("A data inicial não pode ser maior que a final.");
@@ -232,12 +245,34 @@ export default function ProfilePage() {
     setExportInfo(null);
     setExportLoading(true);
     try {
-      await downloadActivityExportBulk({
-        format: exportFormat,
-        from: exportFrom || undefined,
-        to: exportTo || undefined,
-      });
-      setExportInfo("Download iniciado.");
+      const { entryCount }: DownloadActivityExportBulkResult =
+        await downloadActivityExportBulk({
+          format: exportFormat,
+          from: exportFrom || undefined,
+          to: exportTo || undefined,
+        });
+      // [Sessão 29] Decide a mensagem conforme a contagem de entradas.
+      // `-1` = fail-open (ZIP ilegível): cai no texto genérico, sem
+      // "N atividades" — não faz sentido expor detalhe técnico.
+      if (entryCount === 0) {
+        setExportInfo({
+          text: "Nenhuma atividade no período — ZIP vazio.",
+          kind: "empty",
+        });
+      } else if (entryCount === 1) {
+        setExportInfo({
+          text: "Download iniciado (1 atividade).",
+          kind: "success",
+        });
+      } else if (entryCount >= 2) {
+        setExportInfo({
+          text: `Download iniciado (${entryCount} atividades).`,
+          kind: "success",
+        });
+      } else {
+        // entryCount === -1 (fallback) ou qualquer valor inesperado.
+        setExportInfo({ text: "Download iniciado.", kind: "success" });
+      }
     } catch (err) {
       const message =
         err instanceof ApiError
@@ -395,11 +430,21 @@ export default function ProfilePage() {
                   {/* [Sessão 24] Erro (vermelho) e sucesso (verde) são
                       mutuamente exclusivos porque handleExportAll limpa
                       o outro antes de setar. */}
+                  {/* [Sessão 29] Feedback de sucesso agora distingue
+                      "empty" (âmbar, aviso) de "success" (verde). */}
                   {exportError && (
                     <p className="mt-2 text-xs text-red-600">{exportError}</p>
                   )}
                   {exportInfo && !exportError && (
-                    <p className="mt-2 text-xs text-green-600">{exportInfo}</p>
+                    <p
+                      className={`mt-2 text-xs ${
+                        exportInfo.kind === "empty"
+                          ? "text-amber-600"
+                          : "text-green-600"
+                      }`}
+                    >
+                      {exportInfo.text}
+                    </p>
                   )}
                 </div>
               )}
