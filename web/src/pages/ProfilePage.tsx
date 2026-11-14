@@ -82,6 +82,8 @@ const TYPE_LABELS: Record<ActivityType, string> = {
 // [Sessão 15 — B1] Pace só faz sentido para atividades humanas de
 // deslocamento a pé. Ciclismo/natação usam velocidade, não pace; "outro"
 // é caixa-preta. Fora desses, a tabela mostra "—".
+// [Sessão 30] Reusado também pra decidir se o delta de pace aparece
+// no bloco "vs. anterior" — consistência com a coluna "Pace médio".
 const PACE_TYPES: ReadonlySet<ActivityType> = new Set(["run", "walk", "hike"]);
 
 // [Sessão 17] Rótulos pt-BR para o filtro de janela temporal do drill-down.
@@ -560,6 +562,8 @@ export default function ProfilePage() {
             {/* [Sessão 28] Delta agora cobre as 5 métricas do
                 StatsByTypeItem: atividades, distância, elevação, tempo
                 e calorias. */}
+            {/* [Sessão 30] Delta ganha Pace nos PACE_TYPES (run/walk/hike),
+                com semântica invertida (menor = melhor). */}
             <div className="mt-6 rounded-lg bg-white p-4 shadow-sm">
               <div className="mb-3 flex flex-col gap-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -881,10 +885,15 @@ function computePace(item: {
 // StatsByTypeItem no delta. `formatDuration` e `formatCalories` já têm
 // assinatura (n: number | null | undefined) => string, compatível com
 // o `formatter` de DeltaLine sem wrapper.
+// [Sessão 30] +Pace nos PACE_TYPES (run/walk/hike), com lowerIsBetter
+// (pace menor = melhor; sinal e cor invertidos em relação às demais
+// métricas). Nas demais, pace não entra — consistência com a coluna
+// "Pace médio" da tabela (cycle/swim/other mostram "—").
 function PreviousDelta({ item }: { item: StatsByTypeItem }) {
   if (!item.previous) {
     return <span className="text-xs text-gray-400">—</span>;
   }
+  const showPace = PACE_TYPES.has(item.activity_type);
   return (
     <div className="space-y-0.5 text-xs leading-tight">
       <DeltaLine
@@ -917,6 +926,20 @@ function PreviousDelta({ item }: { item: StatsByTypeItem }) {
         previous={item.previous.total_calories}
         formatter={formatCalories}
       />
+      {/* [Sessão 30] Pace só nos PACE_TYPES. `computePace` devolve `null`
+          quando distância=0 (evita div/0); coalesce pra 0 pra caber no
+          `DeltaLine` (que só aceita number). Nesse caso, delta=0 →
+          cinza "Pace 0:00 /km" — visualmente neutro, mas semanticamente
+          coerente (pace indeterminado dos dois lados). */}
+      {showPace && (
+        <DeltaLine
+          label="Pace"
+          current={computePace(item) ?? 0}
+          previous={computePace(item.previous) ?? 0}
+          formatter={formatPace}
+          lowerIsBetter
+        />
+      )}
     </div>
   );
 }
@@ -924,28 +947,41 @@ function PreviousDelta({ item }: { item: StatsByTypeItem }) {
 // [Sessão 18] Uma linha de delta: "label ±abs (±pct%)" colorido.
 // Verde = subiu, vermelho = desceu, cinza = igual. Percentual só quando
 // `previous > 0` (percentual em relação a 0 é indefinido).
+// [Sessão 30] +`lowerIsBetter?: boolean` (default false). Quando true,
+// inverte a semântica de cor/sinal: delta < 0 (métrica diminuiu) = bom
+// (verde, sinal "−"); delta > 0 (métrica subiu) = ruim (vermelho, sinal
+// "+"). Usado para pace — pace menor significa mais rápido/bom.
+// O percentual segue o sinal matemático do delta (`delta / previous`),
+// então "Pace −0:15 /km (−4%)" em verde é o cenário de melhora típico.
 function DeltaLine({
   label,
   current,
   previous,
   formatter,
+  lowerIsBetter = false,
 }: {
   label: string;
   current: number;
   previous: number;
   formatter?: (n: number) => string;
+  lowerIsBetter?: boolean;
 }) {
   const delta = current - previous;
   const fmt = formatter ?? ((n: number) => `${Math.round(n)}`);
   const sign = delta > 0 ? "+" : delta < 0 ? "−" : "";
   const abs = Math.abs(delta);
   const pct = previous > 0 ? Math.round((delta / previous) * 100) : null;
-  const color =
-    delta > 0
-      ? "text-green-600"
-      : delta < 0
-        ? "text-red-600"
-        : "text-gray-400";
+  // [Sessão 30] Define a cor a partir do "bom/ruim" efetivo:
+  // - Métricas normais: delta > 0 (subiu) = bom (verde).
+  // - lowerIsBetter: delta < 0 (diminuiu) = bom (verde).
+  // Cinza quando delta === 0.
+  const isGood = lowerIsBetter ? delta < 0 : delta > 0;
+  const isBad = lowerIsBetter ? delta > 0 : delta < 0;
+  const color = isGood
+    ? "text-green-600"
+    : isBad
+      ? "text-red-600"
+      : "text-gray-400";
   const pctText = pct !== null ? ` (${sign}${Math.abs(pct)}%)` : "";
 
   return (
