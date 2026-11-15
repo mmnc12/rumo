@@ -3,6 +3,14 @@
 // [Sessão 32] _ActivityCard extraído para widgets/activity_card.dart
 //             (reuso no ProfilePage). Fix do setState() after dispose em
 //             _load(). Logout movido para o ProfilePage (bottom nav).
+// [Sessão 35] +IconButton(Icons.search) no AppBar → /search.
+//             +onAuthorTap no ActivityCard: o avatar+username do card
+//             abre o perfil do autor (antes herdava o onTap do card e
+//             abria o detalhe). Fecha o ciclo "toca no autor → perfil"
+//             que a S34 deixou pendente (o card já tinha a prop desde S34;
+//             agora o FeedPage passa). Se activity.user for null (não
+//             deveria — /feed embute user — mas é defensivo), onAuthorTap
+//             fica null e o header herda o onTap do card (abre detalhe).
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -105,9 +113,14 @@ class _FeedPageState extends State<FeedPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Feed'),
-        // [Sessão 32] Logout movido para o ProfilePage (bottom nav).
-        // Nada mais no AppBar por enquanto; mantém o título centralizado
-        // quando o bottom nav entrar (arquivo 6/6, main.dart).
+        // [Sessão 35] Busca de usuários (abre /search, fora do shell).
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: 'Buscar',
+            onPressed: () => context.push('/search'),
+          ),
+        ],
       ),
       // [Sessão 31] FAB de upload.
       floatingActionButton: FloatingActionButton(
@@ -146,6 +159,12 @@ class _FeedPageState extends State<FeedPage> {
                             auth: widget.auth,
                             onTap: () => _openDetail(a),
                             onChanged: _replaceActivity,
+                            // [Sessão 35] Avatar+username abrem o perfil
+                            // do autor. Sem user (defensivo), header
+                            // herda onTap do card (abre detalhe).
+                            onAuthorTap: a.user != null
+                                ? () => context.push('/user/${a.user!.id}')
+                                : null,
                           );
                         },
                       ),
