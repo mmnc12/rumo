@@ -72,6 +72,38 @@ class ApiClient {
     return _decode(response);
   }
 
+  // ---------- Atividades (Sessão 32) ----------
+
+  /// Lista atividades, opcionalmente filtradas por usuário.
+  ///
+  /// `GET /activities?user_id=&limit=&offset=`
+  /// - `userId` null → todas (o backend filtra por visibilidade do viewer)
+  /// - `userId` == currentUserId → "minhas atividades"
+  /// - `userId` de terceiro → requer seguir (backend aplica; 403 se não seguir)
+  ///
+  /// Retorna `List<Activity>` puro — o backend NÃO devolve envelope de
+  /// paginação (sem `total`/`has_more`). O cliente usa a regra
+  /// "se voltou < limit, acabou".
+  Future<List<Activity>> listActivities({
+    String? userId,
+    int limit = 20,
+    int offset = 0,
+    String? token,
+  }) async {
+    final qs = <String>[
+      'limit=$limit',
+      'offset=$offset',
+      if (userId != null) 'user_id=$userId',
+    ].join('&');
+    final data = await get('/activities?$qs', token: token);
+    if (data is! List) {
+      throw ApiException(500, 'Resposta inesperada ao listar atividades');
+    }
+    return data
+        .map((e) => Activity.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   // ---------- Upload (Sessão 31) ----------
 
   /// Envia um arquivo GPX ou FIT para `POST /activities/upload`.
