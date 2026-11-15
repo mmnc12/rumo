@@ -1,0 +1,678 @@
+// [Sessão 34] Perfil público de terceiro + follow.
+//
+// Rota: /user/:id (fora do shell, sem bottom nav — igual /activity/:id).
+//
+// Diferenças em relação ao ProfilePage (self):
+// - Cabeçalho vem de GET /users/{id} (UserPublic: id, username,
+//   full_name, is_active). SEM email, SEM avatar_url.
+// - Tem botão Follow/Unfollow (self não tem).
+// - Stats e atividades podem dar 403 (backend: _ensure_can_view_stats
+//   e /activities?user_id= exigem seguir). Quando 403, mostramos
+//   "Siga pra ver..." em vez de erro genérico.
+//
+// Inferência de isFollowing: o backend NÃO tem GET /users/{id}/is-following
+// (mesma limitação do web, que infere via /users/{meId}/following em
+// useProfile.ts → useIsFollowing). Custa 1 request extra por perfil
+// aberto. Se um dia o backend ganhar o endpoint, é só trocar a chamada
+// de auth.api.isFollowing por um GET direto.
+//
+// Self: a rota /profile continua sendo do ProfilePage. O UserProfilePage
+// é só pra terceiros. Se alguém abrir /user/{meId}, o botão Follow some
+// (isSelf) e a página se comporta como leitura — decisão de UX: o
+// perfil editável é o /profile, não /user/:meId.
+//
+// Fora de escopo (S35+):
+// - onAuthorTap no ActivityCard do feed (link do autor).
+// - Lista de seguidores/seguindo (o web tem abas; o mobile fica pra S35).
+// - Editar perfil (requer PUT /users/me, não existe).
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import '../models/activity.dart';
+import '../models/stats.dart';
+import '../models/user.dart';
+import '../services/api.dart';
+import '../services/auth_service.dart';
+import '../widgets/activity_card.dart';
+import '../widgets/by_type_list.dart';
+import '../widgets/stats_cards.dart';
+
+class UserProfilePage extends StatefulWidget {
+  final String userId;
+  final AuthService auth;
+  const UserProfilePage({
+    super.key,
+    required this.userId,
+    required this.auth,
+  });
+
+  @override
+  State<UserProfilePage> createState() => _UserProfilePageState();
+}
+
+class _UserProfilePageState extends State<UserProfilePage> {
+  static const int _pageSize = 20;
+
+  // ===== Perfil + follow =====
+  User? _user;
+  bool? _isFollowing; // null até o primeiro load resolver
+  bool _followLoading = false;
+  bool _loading = true;
+  String? _error;
+
+  // ===== Atividades =====
+  List<Activity> _activities = [];
+  bool _activitiesForbidden = false;
+  int _offset = 0;
+  bool _hasMore = true;
+  bool _loadingMore = false;
+
+  // ===== Stats =====
+  StatsSummary? _summary;
+  StatsByTypeResponse? _byType;
+  bool _statsLoading = true;
+  String? _statsError;
+  bool _statsForbidden = false;
+
+  bool get _isSelf =>
+      widget.auth.currentUserId != null &&
+      widget.auth.currentUserId == widget.userId;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    _loadStats();
+  }
+
+  Future<void> _load() async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+      _activitiesForbidden = false;
+    });
+
+    final meId = widget.auth.currentUserId;
+    if (meId == null) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Sessão sem id de usuário. Faça login novamente.';
+        _loading = false;
+      });
+      return;
+    }
+
+    try {
+      // getUser + isFollowing em paralelo com listActivities.
+      // listActivities pode dar 403 (não segue) — tratamos separado.
+      final userFuture = widget.auth.api.getUser(
+        widget.userId,
+        token: widget.auth.token,
+      );
+      final isFollowingFuture = widget.auth.api.isFollowing(
+        meId: meId,
+        targetUserId: widget.userId,
+        token: widget.auth.token,
+      );
+      final activitiesFuture =
+          widget.auth.api.listActivities(
+        userId: widget.userId,
+        limit: _pageSize,
+        offset: 0,
+        token: widget.auth.token,
+      ).catchError((Object e) {
+        // 403 aqui = não segue. Marcamos e devolvemos lista vazia
+        // (o Future.wait não pode rejeitar inteiro por causa disso).
+        if (e is ApiException && e.statusCode == 403) {
+          return <Activity>[];
+        }
+        throw e;
+      });
+
+      final results = await Future.wait<Object?>([
+        userFuture,
+        isFollowingFuture,
+        activitiesFuture,
+      ]);
+      if (!mounted) return;
+
+      final user = results[0] as User;
+      final isFollowing = results[1] as bool;
+      final page = results[2] as List<Activity>;
+
+      setState(() {
+        _user = user;
+        _isFollowing = isFollowing;
+        _activities = page;
+        _offset = page.length;
+        _hasMore = page.length == _pageSize;
+        _activitiesForbidden = page.isEmpty &&
+            !isFollowing &&
+            !_isSelf; // lista vazia + não segue + não é self = 403 engolido
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.message);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = 'Erro: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadStats() async {
+    if (!mounted) return;
+    setState(() {
+      _statsLoading = true;
+      _statsError = null;
+      _statsForbidden = false;
+    });
+
+    try {
+      final results = await Future.wait([
+        widget.auth.api.getStatsSummary(
+          widget.userId,
+          token: widget.auth.token,
+        ),
+        widget.auth.api.getStatsByType(
+          widget.userId,
+          period: '90d',
+          compare: 'prev',
+          token: widget.auth.token,
+        ),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _summary = results[0] as StatsSummary;
+        _byType = results[1] as StatsByTypeResponse;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.statusCode == 403) {
+        setState(() => _statsForbidden = true);
+      } else {
+        setState(() => _statsError = e.message);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _statsError = 'Erro: $e');
+    } finally {
+      if (mounted) setState(() => _statsLoading = false);
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore || _activitiesForbidden) return;
+    setState(() => _loadingMore = true);
+    try {
+      final page = await widget.auth.api.listActivities(
+        userId: widget.userId,
+        limit: _pageSize,
+        offset: _offset,
+        token: widget.auth.token,
+      );
+      if (!mounted) return;
+      setState(() {
+        _activities = [..._activities, ...page];
+        _offset += page.length;
+        _hasMore = page.length == _pageSize;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  Future<void> _toggleFollow() async {
+    final current = _isFollowing;
+    if (current == null || _followLoading || _isSelf) return;
+
+    setState(() => _followLoading = true);
+    try {
+      if (current) {
+        await widget.auth.api.unfollowUser(
+          widget.userId,
+          token: widget.auth.token,
+        );
+      } else {
+        await widget.auth.api.followUser(
+          widget.userId,
+          token: widget.auth.token,
+        );
+      }
+      if (!mounted) return;
+      setState(() => _isFollowing = !current);
+
+      // Follow mudou permissão → recarrega stats e lista.
+      // Mantemos o _user (não muda com follow).
+      _loadStats();
+      // Recarrega só a lista, sem refazer getUser/isFollowing.
+      await _reloadActivities();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _followLoading = false);
+    }
+  }
+
+  Future<void> _reloadActivities() async {
+    try {
+      final page = await widget.auth.api.listActivities(
+        userId: widget.userId,
+        limit: _pageSize,
+        offset: 0,
+        token: widget.auth.token,
+      );
+      if (!mounted) return;
+      setState(() {
+        _activities = page;
+        _offset = page.length;
+        _hasMore = page.length == _pageSize;
+        _activitiesForbidden = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.statusCode == 403) {
+        setState(() {
+          _activities = [];
+          _offset = 0;
+          _hasMore = false;
+          _activitiesForbidden = true;
+        });
+      }
+      // outros erros: mantém estado atual, sem barulho (o follow já
+      // mostrou o erro dele; não empilha dois SnackBars).
+    } catch (_) {
+      // silencioso
+    }
+  }
+
+  Future<void> _openDetail(Activity activity) async {
+    await context.push('/activity/${activity.id}');
+    if (!mounted) return;
+    // Recarrega só esse item (mesmo padrão do ProfilePage S33).
+    try {
+      final data = await widget.auth.api.get(
+        '/activities/${activity.id}',
+        token: widget.auth.token,
+      );
+      if (!mounted) return;
+      final updated = Activity.fromJson(data as Map<String, dynamic>);
+      setState(() {
+        _activities = _activities
+            .map((a) => a.id == updated.id ? updated : a)
+            .toList();
+      });
+    } catch (_) {
+      // silencioso
+    }
+  }
+
+  void _replaceActivity(Activity updated) {
+    setState(() {
+      _activities = _activities
+          .map((a) => a.id == updated.id ? updated : a)
+          .toList();
+    });
+  }
+
+  Future<void> _refreshAll() async {
+    await Future.wait([_load(), _loadStats()]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Perfil')),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_error!, textAlign: TextAlign.center),
+                        const SizedBox(height: 16),
+                        FilledButton(
+                          onPressed: _load,
+                          child: const Text('Tentar novamente'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _refreshAll,
+                  child: ListView(
+                    padding: const EdgeInsets.all(12),
+                    children: [
+                      if (_user != null)
+                        _UserHeader(
+                          user: _user!,
+                          isSelf: _isSelf,
+                          isFollowing: _isFollowing,
+                          followLoading: _followLoading,
+                          onToggleFollow: _toggleFollow,
+                        ),
+                      const SizedBox(height: 16),
+
+                      // ===== Stats =====
+                      _StatsSection(
+                        summary: _summary,
+                        byType: _byType,
+                        isLoading: _statsLoading,
+                        error: _statsError,
+                        forbidden: _statsForbidden,
+                        onRetry: _loadStats,
+                      ),
+                      const SizedBox(height: 16),
+
+                      // ===== Atividades =====
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          'Atividades',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+
+                      if (_activitiesForbidden)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          child: Center(
+                            child: Text(
+                              'Siga @${_user?.username ?? "este usuário"} '
+                              'pra ver as atividades.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color:
+                                    Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        )
+                      else if (_activities.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 32),
+                          child: Center(
+                            child: Text('Nenhuma atividade registrada ainda.'),
+                          ),
+                        )
+                      else
+                        ..._activities.map(
+                          (a) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: ActivityCard(
+                              activity: a,
+                              auth: widget.auth,
+                              onTap: () => _openDetail(a),
+                              onChanged: _replaceActivity,
+                              // [Sessão 34] GET /activities não embute
+                              // `user`; sem o override o card cairia em
+                              // "Usuário"/"?".
+                              authorUsernameOverride: _user?.username,
+                            ),
+                          ),
+                        ),
+                      if (_activities.isNotEmpty && !_activitiesForbidden) ...[
+                        const SizedBox(height: 4),
+                        if (_hasMore)
+                          Center(
+                            child: _loadingMore
+                                ? const Padding(
+                                    padding: EdgeInsets.all(16),
+                                    child: SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                  )
+                                : FilledButton.tonal(
+                                    onPressed: _loadMore,
+                                    child: const Text('Carregar mais'),
+                                  ),
+                          )
+                        else
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Center(
+                              child: Text(
+                                'Fim.',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+    );
+  }
+}
+
+// ===== Header do perfil de terceiro =====
+class _UserHeader extends StatelessWidget {
+  final User user;
+  final bool isSelf;
+  final bool? isFollowing; // null até o load resolver
+  final bool followLoading;
+  final VoidCallback onToggleFollow;
+
+  const _UserHeader({
+    required this.user,
+    required this.isSelf,
+    required this.isFollowing,
+    required this.followLoading,
+    required this.onToggleFollow,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 28,
+                  child: Text(
+                    user.initial,
+                    style: theme.textTheme.titleLarge,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.username,
+                        style: theme.textTheme.titleLarge,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (user.fullName != null && user.fullName!.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          user.fullName!,
+                          style: theme.textTheme.bodyMedium,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            // Sem email (UserPublic não tem) e sem "Sair" (não é self).
+            const SizedBox(height: 12),
+            if (isSelf)
+              Text(
+                'Este é você. Use a aba Perfil pra editar.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              )
+            else if (isFollowing == null)
+              const SizedBox(
+                height: 36,
+                child: Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            else
+              Align(
+                alignment: Alignment.centerRight,
+                child: isFollowing!
+                    ? OutlinedButton.icon(
+                        onPressed: followLoading ? null : onToggleFollow,
+                        icon: followLoading
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.person_remove, size: 18),
+                        label: const Text('Deixar de seguir'),
+                      )
+                    : FilledButton.icon(
+                        onPressed: followLoading ? null : onToggleFollow,
+                        icon: followLoading
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.person_add, size: 18),
+                        label: const Text('Seguir'),
+                      ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ===== Seção de stats (self ou terceiro) =====
+// Reusa StatsCards e ByTypeList do S33 (mesmos shapes de dados).
+// `forbidden` é o 403 do _ensure_can_view_stats: mostra mensagem neutra
+// sem botão de retry (só o Follow muda a permissão, não o retry).
+class _StatsSection extends StatelessWidget {
+  final StatsSummary? summary;
+  final StatsByTypeResponse? byType;
+  final bool isLoading;
+  final String? error;
+  final bool forbidden;
+  final VoidCallback onRetry;
+
+  const _StatsSection({
+    required this.summary,
+    required this.byType,
+    required this.isLoading,
+    required this.error,
+    required this.forbidden,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (forbidden) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Estatísticas', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Text(
+                'Siga pra ver as estatísticas.',
+                style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (error != null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Estatísticas', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Text(
+                'Erro ao carregar estatísticas: $error',
+                style: TextStyle(color: theme.colorScheme.error),
+              ),
+              const SizedBox(height: 8),
+              FilledButton.tonal(
+                onPressed: onRetry,
+                child: const Text('Tentar novamente'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Estatísticas', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 8),
+        StatsCards(
+          data: summary,
+          isLoading: isLoading,
+          isError: false,
+        ),
+        const SizedBox(height: 12),
+        Text('Por tipo de atividade', style: theme.textTheme.titleSmall),
+        const SizedBox(height: 8),
+        ByTypeList(
+          data: byType,
+          isLoading: isLoading,
+          isError: false,
+        ),
+      ],
+    );
+  }
+}
