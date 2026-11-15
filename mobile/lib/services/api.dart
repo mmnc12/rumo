@@ -232,6 +232,39 @@ class ApiClient {
     return following.any((u) => u.id == targetUserId);
   }
 
+  // ---------- Busca de usuários (Sessão 35) ----------
+
+  /// `GET /users/search?q=&limit=` — busca usuários por username/full_name.
+  ///
+  /// Auth: Bearer JWT. `q` mínimo 2 caracteres (o backend valida; o client
+  /// também corta antes de disparar — paridade com o `useUserSearch` do web,
+  /// que usa `enabled: trimmed.length >= 2`). `limit` default 20 (mesmo do
+  /// `useUserSearch` do web). Rate limit do backend: 20/min por IP.
+  ///
+  /// Retorna `List<User>` (mesmos 4 campos do `/users/{id}`). Vazio =
+  /// nenhum match (não é erro). 429 = rate limit (vira `ApiException` com
+  /// a mensagem do backend).
+  ///
+  /// [Sessão 35] `Uri.encodeQueryComponent` (não `Uri.encodeFull`) — paridade
+  /// semântica com o `encodeURIComponent` do web. Aceita espaços, acentos,
+  /// e o que mais o usuário digitar.
+  Future<List<User>> searchUsers({
+    required String query,
+    int limit = 20,
+    String? token,
+  }) async {
+    final q = query.trim();
+    if (q.length < 2) return const <User>[];
+    final encoded = Uri.encodeQueryComponent(q);
+    final data = await get('/users/search?q=$encoded&limit=$limit', token: token);
+    if (data is! List) {
+      throw ApiException(500, 'Resposta inesperada em /users/search');
+    }
+    return data
+        .map((e) => User.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   // ---------- Upload (Sessão 31) ----------
 
   /// Envia um arquivo GPX ou FIT para `POST /activities/upload`.
