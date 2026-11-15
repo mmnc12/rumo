@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/activity.dart'; // [Sessão 31] Activity.fromJson no retorno do upload
 import '../models/activity_track.dart';
 import '../models/comment.dart';
+import '../models/stats.dart'; // [Sessão 33] stats/summary + stats/by-type
 
 class ApiException implements Exception {
   final int statusCode;
@@ -102,6 +103,57 @@ class ApiClient {
     return data
         .map((e) => Activity.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  // ---------- Stats (Sessão 33) ----------
+
+  /// `GET /users/{userId}/stats/summary` — totais gerais.
+  ///
+  /// Auth: Bearer JWT. Visibilidade (backend): dono OU seguidor do dono
+  /// (`_ensure_can_view_stats`). Nesta sessão o caller só usa o próprio
+  /// userId (self-only) — o `_ensure_can_view_stats` deixa passar direto.
+  ///
+  /// Retorna `StatsSummary` (7 campos — total_activities, total_distance_m,
+  /// total_duration_s, total_elevation_gain_m, total_calories,
+  /// avg_pace_s_per_km?, avg_speed_mps?).
+  Future<StatsSummary> getStatsSummary(
+    String userId, {
+    String? token,
+  }) async {
+    final data = await get('/users/$userId/stats/summary', token: token);
+    if (data is! Map<String, dynamic>) {
+      throw ApiException(500, 'Resposta inesperada em stats/summary');
+    }
+    return StatsSummary.fromJson(data);
+  }
+
+  /// `GET /users/{userId}/stats/by-type?period=&compare=` — agregado por tipo.
+  ///
+  /// Auth: Bearer JWT. Mesma visibilidade do summary.
+  ///
+  /// `period`: "all" (todos os tempos; previous sempre null) |
+  ///           "90d" (últimos 90 dias; default desta sessão) |
+  ///           "1y" (últimos 365 dias).
+  /// `compare`: "prev" (janela imediatamente anterior; default) |
+  ///            "yoy" (mesmo período do ano anterior). Só tem efeito
+  ///            quando period != "all".
+  ///
+  /// Retorna `StatsByTypeResponse { items }`, já ordenado pelo backend
+  /// (total_activities DESC, tipo ASC no desempate).
+  Future<StatsByTypeResponse> getStatsByType(
+    String userId, {
+    String period = '90d',
+    String compare = 'prev',
+    String? token,
+  }) async {
+    final data = await get(
+      '/users/$userId/stats/by-type?period=$period&compare=$compare',
+      token: token,
+    );
+    if (data is! Map<String, dynamic>) {
+      throw ApiException(500, 'Resposta inesperada em stats/by-type');
+    }
+    return StatsByTypeResponse.fromJson(data);
   }
 
   // ---------- Upload (Sessão 31) ----------
