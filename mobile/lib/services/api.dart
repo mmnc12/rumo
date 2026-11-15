@@ -6,6 +6,7 @@ import '../models/activity.dart'; // [Sessão 31] Activity.fromJson no retorno d
 import '../models/activity_track.dart';
 import '../models/comment.dart';
 import '../models/stats.dart'; // [Sessão 33] stats/summary + stats/by-type
+import '../models/user.dart'; // [Sessão 34] User (UserPublic do backend)
 
 class ApiException implements Exception {
   final int statusCode;
@@ -154,6 +155,81 @@ class ApiClient {
       throw ApiException(500, 'Resposta inesperada em stats/by-type');
     }
     return StatsByTypeResponse.fromJson(data);
+  }
+
+  // ---------- Perfil público e follows (Sessão 34) ----------
+
+  /// `GET /users/{userId}` — perfil público de qualquer usuário.
+  ///
+  /// Auth: Bearer JWT. Retorna `User` (4 campos: id, username, full_name,
+  /// is_active). NÃO tem email (use /auth/me pro self) e NÃO tem avatar_url
+  /// (o backend não devolve). 404 quando o id não existe.
+  Future<User> getUser(String userId, {String? token}) async {
+    final data = await get('/users/$userId', token: token);
+    if (data is! Map<String, dynamic>) {
+      throw ApiException(500, 'Resposta inesperada em /users/{id}');
+    }
+    return User.fromJson(data);
+  }
+
+  /// `POST /users/{userId}/follow` — segue um usuário.
+  ///
+  /// 204 sem body. O backend valida que não é self (400 se tentar seguir
+  /// a si mesmo) e que o target existe (404). O caller não precisa se
+  /// preocupar com o corpo — `delete`/`post` já aceitam 204.
+  Future<void> followUser(String userId, {String? token}) async {
+    await post('/users/$userId/follow', token: token);
+  }
+
+  /// `DELETE /users/{userId}/follow` — deixa de seguir.
+  ///
+  /// 204 sem body. Idempotente no backend (não falha se já não seguia).
+  Future<void> unfollowUser(String userId, {String? token}) async {
+    await delete('/users/$userId/follow', token: token);
+  }
+
+  /// `GET /users/{userId}/following?limit=&offset=` — quem o usuário segue.
+  ///
+  /// Retorna `List<User>`. Paginação explícita (limit/offset). Default
+  /// limit=100 cobre o caso de uso do `isFollowing` (inferência por lista);
+  /// se um dia precisar paginar de verdade, aumentar ou iterar.
+  Future<List<User>> listFollowing({
+    required String userId,
+    int limit = 100,
+    int offset = 0,
+    String? token,
+  }) async {
+    final qs = 'limit=$limit&offset=$offset';
+    final data = await get('/users/$userId/following?$qs', token: token);
+    if (data is! List) {
+      throw ApiException(500, 'Resposta inesperada em /users/{id}/following');
+    }
+    return data
+        .map((e) => User.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// `isFollowing` — infere se `meId` segue `targetUserId`.
+  ///
+  /// O backend NÃO tem `GET /users/{id}/is-following` (mesma limitação
+  /// que o web contorna em `useProfile.ts` → `useIsFollowing`). A
+  /// inferência é: buscar `/users/{meId}/following` e checar se o alvo
+  /// está na lista. Custa 1 request extra por perfil aberto.
+  ///
+  /// Self → `false` (o backend não deixa seguir a si mesmo; a UI trata
+  /// `isSelf` separado via `meId == targetUserId`).
+  Future<bool> isFollowing({
+    required String meId,
+    required String targetUserId,
+    String? token,
+  }) async {
+    if (meId == targetUserId) return false;
+    final following = await listFollowing(
+      userId: meId,
+      limit: 100,
+      token: token,
+    );
+    return following.any((u) => u.id == targetUserId);
   }
 
   // ---------- Upload (Sessão 31) ----------
