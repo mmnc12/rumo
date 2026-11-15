@@ -10,6 +10,20 @@
 // (continua usando activity.user). Resolve a dívida da S32 sem tocar
 // backend. Quando o perfil de terceiro chegar (S34), o backend deve
 // passar a embutir `user` no /activities e o override pode sair.
+//
+// [Sessão 34] +prop onAuthorTap (VoidCallback?, default null).
+// Quando fornecida, o avatar+username do header viram uma zona de toque
+// separada (abre o perfil do autor) em vez de herdar o onTap do card.
+// Quando null, o header continua herdando o onTap (comportamento atual).
+// Quem passa:
+// - UserProfilePage (S34): passa onAuthorTap: null (já está no perfil do
+//   alvo) — na prática, o header do card no perfil do alvo só reabre o
+//   detalhe. O UserProfilePage NÃO passa, então o default null vale.
+// - FeedPage / ProfilePage (S34): não passam. Na S35, quando houver link
+//   do autor no card, o FeedPage passa onAuthorTap: () => context.push(
+//   '/user/<activity.user.id>'). Não fazemos isso na S34 porque o card
+//   inteiro já é InkWell(onTap) e uma zona separada no header no feed
+//   criaria ambiguidade de gesto (avatar toca A, resto toca B).
 import 'package:flutter/material.dart';
 
 import '../models/activity.dart';
@@ -28,6 +42,11 @@ class ActivityCard extends StatelessWidget {
   // O feed NÃO passa — lá o GET /feed já traz `user` embutido.
   final String? authorUsernameOverride;
 
+  // [Sessão 34] Quando fornecida, o avatar+username do header viram
+  // zona de toque separada (abre o perfil do autor). Quando null,
+  // herda o onTap do card (comportamento atual).
+  final VoidCallback? onAuthorTap;
+
   const ActivityCard({
     super.key,
     required this.activity,
@@ -35,6 +54,7 @@ class ActivityCard extends StatelessWidget {
     required this.onTap,
     required this.onChanged,
     this.authorUsernameOverride,
+    this.onAuthorTap,
   });
 
   @override
@@ -54,34 +74,41 @@ class ActivityCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Cabeçalho: avatar + username + tipo
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundImage: activity.user?.avatarUrl != null
-                        ? NetworkImage(activity.user!.avatarUrl!)
-                        : null,
-                    child: activity.user?.avatarUrl == null
-                        ? Text(
-                            displayUsername.substring(0, 1).toUpperCase(),
-                          )
-                        : null,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      displayUsername,
-                      style: theme.textTheme.titleSmall,
-                      overflow: TextOverflow.ellipsis,
+              // [Sessão 34] Header vira GestureDetector SE onAuthorTap
+              // for passado; caso contrário, comportamento atual (o
+              // InkWell externo captura o toque e abre o detalhe).
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onAuthorTap ?? onTap,
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundImage: activity.user?.avatarUrl != null
+                          ? NetworkImage(activity.user!.avatarUrl!)
+                          : null,
+                      child: activity.user?.avatarUrl == null
+                          ? Text(
+                              displayUsername.substring(0, 1).toUpperCase(),
+                            )
+                          : null,
                     ),
-                  ),
-                  Text(
-                    activity.typeLabel,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.primary,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        displayUsername,
+                        style: theme.textTheme.titleSmall,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                ],
+                    Text(
+                      activity.typeLabel,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 12),
 
