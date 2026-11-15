@@ -2,10 +2,15 @@
 //
 // - /feed e /profile são branches do shell; cada uma preserva estado
 //   (scroll do feed mantido ao trocar de aba, etc.).
-// - /login, /upload e /activity/:id ficam FORA do shell (são fluxos,
-//   não áreas) — não têm bottom nav.
+// - /login, /upload, /activity/:id e /user/:id ficam FORA do shell
+//   (são fluxos, não áreas) — não têm bottom nav.
 // - O FAB de upload continua no FeedPage (não no shell): upload é ação
 //   do feed, não uma área.
+//
+// [Sessão 34] +rota /user/:id (perfil público de terceiro + follow).
+// Fica fora do shell porque é fluxo (você chega nela a partir de um card
+// ou link, não é uma "área" da navegação principal). Mesma decisão de UX
+// do /activity/:id.
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -14,6 +19,7 @@ import 'pages/feed_page.dart';
 import 'pages/login_page.dart';
 import 'pages/profile_page.dart'; // [Sessão 32] rota /profile
 import 'pages/upload_page.dart'; // [Sessão 31] rota /upload
+import 'pages/user_profile_page.dart'; // [Sessão 34] rota /user/:id
 import 'services/auth_service.dart';
 
 void main() {
@@ -63,6 +69,15 @@ class _RumoAppState extends State<RumoApp> {
           path: '/activity/:id',
           builder: (_, state) => ActivityDetailPage(
             activityId: state.pathParameters['id']!,
+            auth: _auth,
+          ),
+        ),
+        // [Sessão 34] Perfil público de terceiro + follow.
+        // Fora do shell (sem bottom nav), igual /activity/:id.
+        GoRoute(
+          path: '/user/:id',
+          builder: (_, state) => UserProfilePage(
+            userId: state.pathParameters['id']!,
             auth: _auth,
           ),
         ),
