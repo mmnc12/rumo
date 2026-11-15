@@ -2,6 +2,14 @@
 // Reutilizado pelo FeedPage e pelo ProfilePage ("minhas atividades").
 // Comportamento idêntico ao _ActivityCard da Sessão 31 — só mudou de lugar
 // e de nome (_ActivityCard → ActivityCard, público).
+//
+// [Sessão 33] +prop authorUsernameOverride. O GET /activities (usado pelo
+// ProfilePage) NÃO embute `user`, só o GET /feed embute. Sem o override,
+// o card no perfil cairia em "Usuário"/"?" — o ProfilePage passa
+// _me.username e o card renderiza o username correto. O feed NÃO passa
+// (continua usando activity.user). Resolve a dívida da S32 sem tocar
+// backend. Quando o perfil de terceiro chegar (S34), o backend deve
+// passar a embutir `user` no /activities e o override pode sair.
 import 'package:flutter/material.dart';
 
 import '../models/activity.dart';
@@ -15,17 +23,27 @@ class ActivityCard extends StatelessWidget {
   final VoidCallback onTap;
   final ValueChanged<Activity> onChanged;
 
+  // [Sessão 33] Fallback de username quando `activity.user` é null.
+  // Usado pelo ProfilePage (GET /activities não embute `user`).
+  // O feed NÃO passa — lá o GET /feed já traz `user` embutido.
+  final String? authorUsernameOverride;
+
   const ActivityCard({
     super.key,
     required this.activity,
     required this.auth,
     required this.onTap,
     required this.onChanged,
+    this.authorUsernameOverride,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // [Sessão 33] Username: prioridade activity.user > override > "Usuário".
+    // Avatar: activity.user?.avatarUrl (override não tem avatar — cai na inicial).
+    final displayUsername =
+        activity.user?.username ?? authorUsernameOverride ?? 'Usuário';
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -45,16 +63,14 @@ class ActivityCard extends StatelessWidget {
                         : null,
                     child: activity.user?.avatarUrl == null
                         ? Text(
-                            (activity.user?.username ?? '?')
-                                .substring(0, 1)
-                                .toUpperCase(),
+                            displayUsername.substring(0, 1).toUpperCase(),
                           )
                         : null,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      activity.user?.username ?? 'Usuário',
+                      displayUsername,
                       style: theme.textTheme.titleSmall,
                       overflow: TextOverflow.ellipsis,
                     ),
