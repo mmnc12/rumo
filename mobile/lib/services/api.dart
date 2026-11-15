@@ -85,16 +85,27 @@ class ApiClient {
   /// Sucesso: 201 com `ActivityResponse` (parseado por `Activity.fromJson`).
   /// Erro: `ApiException` com o `.detail` do FastAPI (422/429/etc).
   ///
+  /// [Sessão 31 — fix] Aceita DOIS caminhos:
+  /// - `file` (File, Android/iOS/Desktop): usa `MultipartFile.fromPath`
+  /// - `bytes` + `filename` (Web): usa `MultipartFile.fromBytes`
+  /// Na web o `file_picker` NÃO expõe `path` (sempre null); só bytes.
+  ///
   /// NOTA: NÃO usa `_send` porque `_send` é JSON-only. Multipart tem
   /// contrato próprio (headers gerados pelo `MultipartRequest`, body
   /// binário). Os endpoints existentes ficam intocados.
   Future<Activity> uploadActivity({
-    required File file,
+    File? file,
+    List<int>? bytes,
+    String? filename,
     String? title,
     String? activityType,
     String? description,
     String? token,
   }) async {
+    if (file == null && bytes == null) {
+      throw ApiException(400, 'Nenhum arquivo para upload.');
+    }
+
     final uri = Uri.parse('$baseUrl/activities/upload');
     final request = http.MultipartRequest('POST', uri);
 
@@ -103,9 +114,19 @@ class ApiClient {
     }
     request.headers['Accept'] = 'application/json';
 
-    request.files.add(
-      await http.MultipartFile.fromPath('file', file.path),
-    );
+    if (file != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath('file', file.path),
+      );
+    } else {
+      // Web: bytes em memória + filename.
+      final name = (filename == null || filename.isEmpty)
+          ? 'upload.gpx'
+          : filename;
+      request.files.add(
+        http.MultipartFile.fromBytes('file', bytes!, filename: name),
+      );
+    }
 
     if (title != null && title.trim().isNotEmpty) {
       request.fields['title'] = title.trim();

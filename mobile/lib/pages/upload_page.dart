@@ -1,5 +1,6 @@
 // [Sessão 31] Tela de upload de GPX/FIT.
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -17,13 +18,14 @@ class UploadPage extends StatefulWidget {
 }
 
 class _UploadPageState extends State<UploadPage> {
-  static const int _maxBytes = 20 * 1024 * 1024; // 20 MB (mesmo do web)
+  static const int _maxBytes = 20 * 1024 * 1024;
   static const Set<String> _allowedExt = {'gpx', 'fit'};
 
   final TextEditingController _titleCtrl = TextEditingController();
   final TextEditingController _descCtrl = TextEditingController();
 
   File? _file;
+  Uint8List? _bytes;
   String? _fileName;
   int? _fileSize;
   bool _submitting = false;
@@ -38,24 +40,16 @@ class _UploadPageState extends State<UploadPage> {
   Future<void> _pickFile() async {
     if (_submitting) return;
 
-    // [Sessão 31 — fix] file_picker 13.x: pickFiles() é estático e retorna
-    // List<PlatformFile> direto (vazio = cancelou). FilePickerResult não existe mais.
     final picked = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: _allowedExt.toList(),
     );
 
-    if (picked.isEmpty) return; // cancelou
+    if (picked.isEmpty) return;
 
     final file = picked.first;
-    final path = file.path;
-    if (path == null) {
-      _showError('Não foi possível acessar o arquivo selecionado.');
-      return;
-    }
-
-    // Defesa extra: o picker já filtra por extensão, mas garantimos.
     final name = file.name;
+
     final dot = name.lastIndexOf('.');
     final ext = dot >= 0 ? name.substring(dot + 1).toLowerCase() : '';
     if (!_allowedExt.contains(ext)) {
@@ -63,35 +57,50 @@ class _UploadPageState extends State<UploadPage> {
       return;
     }
 
-    // [Sessão 31 — fix] PlatformFile.size virou length() (Future<int?>).
     final size = await file.length();
     if (size == null) {
       _showError('Não foi possível determinar o tamanho do arquivo.');
       return;
     }
     if (size > _maxBytes) {
-      _showError(
-        'Arquivo muito grande (${_formatBytes(size)}). Limite: 20 MB.',
-      );
+      _showError('Arquivo muito grande (${_formatBytes(size)}). Limite: 20 MB.');
       return;
     }
 
-    setState(() {
-      _file = File(path);
-      _fileName = name;
-      _fileSize = size;
-    });
+    final path = file.path;
+    if (path != null) {
+      setState(() {
+        _file = File(path);
+        _bytes = null;
+        _fileName = name;
+        _fileSize = size;
+      });
+      return;
+    }
+
+    try {
+      final data = await file.readAsBytes();
+      setState(() {
+        _file = null;
+        _bytes = data;
+        _fileName = name;
+        _fileSize = size;
+      });
+    } catch (e) {
+      _showError('Não foi possível ler o arquivo selecionado: $e');
+    }
   }
 
   Future<void> _submit() async {
-    final file = _file;
-    if (file == null || _submitting) return;
+    if ((_file == null && _bytes == null) || _submitting) return;
 
     setState(() => _submitting = true);
 
     try {
       final created = await widget.auth.api.uploadActivity(
-        file: file,
+        file: _file,
+        bytes: _bytes,
+        filename: _fileName,
         title: _titleCtrl.text,
         description: _descCtrl.text,
         token: widget.auth.token,
@@ -133,10 +142,20 @@ class _UploadPageState extends State<UploadPage> {
     return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
   }
 
+  void _clearFile() {
+    setState(() {
+      _file = null;
+      _bytes = null;
+      _fileName = null;
+      _fileSize = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final canSubmit = _file != null && !_submitting;
+    final hasFile = _file != null || _bytes != null;
+    final canSubmit = hasFile && !_submitting;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Enviar atividade')),
@@ -151,7 +170,7 @@ class _UploadPageState extends State<UploadPage> {
           OutlinedButton.icon(
             onPressed: _submitting ? null : _pickFile,
             icon: const Icon(Icons.attach_file),
-            label: Text(_file == null ? 'Selecionar arquivo' : 'Trocar arquivo'),
+            label: Text(hasFile ? 'Trocar arquivo' : 'Selecionar arquivo'),
           ),
           if (_fileName != null) ...[
             const SizedBox(height: 8),
@@ -169,13 +188,7 @@ class _UploadPageState extends State<UploadPage> {
                     : IconButton(
                         tooltip: 'Remover',
                         icon: const Icon(Icons.close),
-                        onPressed: () {
-                          setState(() {
-                            _file = null;
-                            _fileName = null;
-                            _fileSize = null;
-                          });
-                        },
+                        onPressed: _clearFile,
                       ),
               ),
             ),
