@@ -1,4 +1,5 @@
 // [Sessão 11] miniatura de mapa (bbox estático) no card do feed.
+// [Sessão 31] FAB de upload de GPX/FIT.
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -63,7 +64,7 @@ class _FeedPageState extends State<FeedPage> {
   }
 
   /// Abre o detalhe e, ao voltar, recarrega o item para refletir
-  /// contagens de comentários/crudes feitas lá.
+  /// contagens de comentários/crudos feitas lá.
   Future<void> _openDetail(Activity activity) async {
     await context.push('/activity/${activity.id}');
     if (!mounted) return;
@@ -77,6 +78,18 @@ class _FeedPageState extends State<FeedPage> {
       _replaceActivity(updated);
     } catch (_) {
       // silencioso: se falhar, mantém o estado atual do feed.
+    }
+  }
+
+  // [Sessão 31] Abre a tela de upload. Se voltar `true`, recarrega o feed
+  // inteiro (upload é evento raro — refresh completo é mais simples e
+  // correto que refresh de item único, já que a nova atividade pode não
+  // estar na página carregada).
+  Future<void> _openUpload() async {
+    final uploaded = await context.push<bool>('/upload');
+    if (!mounted) return;
+    if (uploaded == true) {
+      _load();
     }
   }
 
@@ -95,6 +108,12 @@ class _FeedPageState extends State<FeedPage> {
             },
           ),
         ],
+      ),
+      // [Sessão 31] FAB de upload.
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openUpload,
+        tooltip: 'Enviar atividade',
+        child: const Icon(Icons.upload_file),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io'; // [Sessão 31] File para upload multipart
 import 'package:http/http.dart' as http;
 
+import '../models/activity.dart'; // [Sessão 31] Activity.fromJson no retorno do upload
 import '../models/activity_track.dart';
 import '../models/comment.dart';
 
@@ -68,6 +70,77 @@ class ApiClient {
   Future<dynamic> delete(String path, {String? token}) async {
     final response = await _send('DELETE', path, token: token);
     return _decode(response);
+  }
+
+  // ---------- Upload (Sessão 31) ----------
+
+  /// Envia um arquivo GPX ou FIT para `POST /activities/upload`.
+  ///
+  /// O backend (FastAPI) espera `multipart/form-data` com:
+  /// - `file` (obrigatório): .gpx ou .fit
+  /// - `title` (opcional, maxLength 120)
+  /// - `activity_type` (opcional; o backend valida o enum)
+  /// - `description` (opcional)
+  ///
+  /// Sucesso: 201 com `ActivityResponse` (parseado por `Activity.fromJson`).
+  /// Erro: `ApiException` com o `.detail` do FastAPI (422/429/etc).
+  ///
+  /// NOTA: NÃO usa `_send` porque `_send` é JSON-only. Multipart tem
+  /// contrato próprio (headers gerados pelo `MultipartRequest`, body
+  /// binário). Os endpoints existentes ficam intocados.
+  Future<Activity> uploadActivity({
+    required File file,
+    String? title,
+    String? activityType,
+    String? description,
+    String? token,
+  }) async {
+    final uri = Uri.parse('$baseUrl/activities/upload');
+    final request = http.MultipartRequest('POST', uri);
+
+    if (token != null) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+    request.headers['Accept'] = 'application/json';
+
+    request.files.add(
+      await http.MultipartFile.fromPath('file', file.path),
+    );
+
+    if (title != null && title.trim().isNotEmpty) {
+      request.fields['title'] = title.trim();
+    }
+    if (activityType != null && activityType.trim().isNotEmpty) {
+      request.fields['activity_type'] = activityType.trim();
+    }
+    if (description != null && description.trim().isNotEmpty) {
+      request.fields['description'] = description.trim();
+    }
+
+    late final http.StreamedResponse streamed;
+    try {
+      streamed = await _client.send(request).timeout(
+            const Duration(seconds: 60),
+          );
+    } catch (e) {
+      // Timeout / rede / DNS — o upload é síncrono no backend (~1-3s).
+      throw ApiException(0, 'Falha de rede no upload: $e');
+    }
+
+    final response = await http.Response.fromStream(streamed);
+
+    if (response.statusCode != 201) {
+      throw ApiException(
+        response.statusCode,
+        _extractMessage(response.body) ?? 'Falha no upload',
+      );
+    }
+
+    final data = jsonDecode(utf8.decode(response.bodyBytes));
+    if (data is! Map<String, dynamic>) {
+      throw ApiException(500, 'Resposta inesperada do upload');
+    }
+    return Activity.fromJson(data);
   }
 
   // ---------- Comentários ----------

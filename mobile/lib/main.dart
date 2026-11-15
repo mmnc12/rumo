@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'pages/activity_detail_page.dart';
 import 'pages/feed_page.dart';
 import 'pages/login_page.dart';
+import 'pages/upload_page.dart'; // [Sessão 31] rota /upload
 import 'services/auth_service.dart';
 
 void main() {
@@ -47,6 +48,11 @@ class _RumoAppState extends State<RumoApp> {
         GoRoute(
           path: '/feed',
           builder: (_, _) => FeedPage(auth: _auth),
+        ),
+        // [Sessão 31] Tela de upload de GPX/FIT.
+        GoRoute(
+          path: '/upload',
+          builder: (_, _) => UploadPage(auth: _auth),
         ),
         GoRoute(
           path: '/activity/:id',
