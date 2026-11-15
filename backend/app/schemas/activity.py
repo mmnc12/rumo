@@ -93,9 +93,23 @@ class ActivityListResponse(BaseModel):
 
 
 class FeedItemResponse(ActivityResponse):
-    """Atividade no feed, com dados do autor."""
+    """Atividade no feed, com dados do autor.
+
+    [Sessão 36] Expõe o autor DUAS vezes, com chaves diferentes:
+    - `author`: campo legado, lido pelo web (FeedItem.tsx / useFeed.ts).
+    - `user`:   campo novo, lido pelo mobile (Activity.fromJson).
+    Ambos apontam para o mesmo `Activity.user` do ORM via
+    `validation_alias`. Redundância barata (UserPublic tem 4 campos)
+    e compatível com o web.
+
+    Motivação: o handoff S35a registrou que o /feed "não embute user"
+    e que o mobile cai em "Usuário" + onAuthorTap bloqueado. Na
+    verdade o /feed JÁ embutia o autor — só que com a chave `author`.
+    O mobile lê `user`. Este campo fecha o gap sem quebrar o web.
+    """
 
     author: UserPublic = Field(validation_alias="user")
+    user: UserPublic = Field(validation_alias="user")  # [Sessão 36]
 
 
 # ===== Track (geometria pro mapa) =====
