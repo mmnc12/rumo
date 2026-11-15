@@ -4,18 +4,38 @@
 // do UserPublic de /users/{id}, que é minimalista: id, username,
 // full_name, is_active). Lista vem de GET /activities?user_id=<me>&...
 //
-// Fora de escopo da S32 (por contrato):
-// - Stats agregados (/users/{id}/stats/summary) — S33.
+// [Sessão 33] +seção de stats agregadas (self-only):
+// - GET /users/{me.id}/stats/summary  → StatsCards (5 cards)
+// - GET /users/{me.id}/stats/by-type  → ByTypeList (cards por tipo + delta)
+//
+// Decisões da S33:
+// - _load() (perfil + lista) e _loadStats() (stats) são SEPARADOS, com
+//   try/catch próprios. Falha de stats não derruba a lista, e vice-versa.
+//   O RefreshIndicator chama os dois em paralelo (Future.wait) — se um
+//   falhar, o outro continua (cada _load* tem seu próprio catch).
+// - Stats usam period=90d&compare=prev (default do contrato S33). O web
+//   usa period=all (sem delta); o mobile prioriza mostrar o delta desde
+//   a primeira renderização. Filtros de period/compare ficam pra S34.
+// - ActivityCard recebe authorUsernameOverride: _me?.username — o
+//   GET /activities não embute `user`, e sem o override o card cairia
+//   em "Usuário"/"?" no perfil. O feed não muda (GET /feed embute `user`).
+//
+// Fora de escopo da S33 (por contrato):
+// - Filtros de period/compare na UI — S34.
+// - Weekly/monthly charts — S34.
 // - Perfil de terceiro + follow — S34.
-// - Editar perfil (peso, altura, etc.) — S33+.
+// - Editar perfil — S34+.
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../models/activity.dart';
+import '../models/stats.dart';
 import '../models/user_me.dart';
 import '../services/api.dart';
 import '../services/auth_service.dart';
 import '../widgets/activity_card.dart';
+import '../widgets/by_type_list.dart';
+import '../widgets/stats_cards.dart';
 
 class ProfilePage extends StatefulWidget {
   final AuthService auth;
@@ -28,6 +48,7 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   static const int _pageSize = 20;
 
+  // ===== Perfil + atividades (S32) =====
   UserMe? _me;
   List<Activity> _activities = [];
   bool _loading = true;
@@ -36,10 +57,19 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _hasMore = true;
   bool _loadingMore = false;
 
+  // ===== Stats agregadas (S33) =====
+  StatsSummary? _summary;
+  StatsByTypeResponse? _byType;
+  bool _statsLoading = true;
+  String? _statsError;
+
   @override
   void initState() {
     super.initState();
+    // Carrega em paralelo — cada _load* tem seu próprio try/catch,
+    // então uma falha não impede a outra de completar.
     _load();
+    _loadStats();
   }
 
   Future<void> _load() async {
@@ -89,6 +119,54 @@ class _ProfilePageState extends State<ProfilePage> {
       setState(() => _error = 'Erro: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  // [Sessão 33] Stats agregadas — separado de _load() de propósito.
+  // Roda em paralelo no initState; falha aqui NÃO derruba a lista de
+  // atividades (e vice-versa). period=90d&compare=prev é o default do
+  // contrato S33 (o web usa "all", mas "all" não tem delta — o delta é
+  // o valor da seção de by-type).
+  Future<void> _loadStats() async {
+    if (!mounted) return;
+    setState(() {
+      _statsLoading = true;
+      _statsError = null;
+    });
+
+    final userId = widget.auth.currentUserId;
+    if (userId == null) {
+      if (!mounted) return;
+      setState(() {
+        _statsError = 'Sessão sem id de usuário.';
+        _statsLoading = false;
+      });
+      return;
+    }
+
+    try {
+      final results = await Future.wait([
+        widget.auth.api.getStatsSummary(userId, token: widget.auth.token),
+        widget.auth.api.getStatsByType(
+          userId,
+          period: '90d',
+          compare: 'prev',
+          token: widget.auth.token,
+        ),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _summary = results[0] as StatsSummary;
+        _byType = results[1] as StatsByTypeResponse;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _statsError = e.message);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _statsError = 'Erro: $e');
+    } finally {
+      if (mounted) setState(() => _statsLoading = false);
     }
   }
 
@@ -161,6 +239,13 @@ class _ProfilePageState extends State<ProfilePage> {
     });
   }
 
+  // [Sessão 33] Pull-to-refresh recarrega tudo: perfil+lista e stats,
+  // em paralelo. Cada um tem seu try/catch — se um falhar, o outro
+  // completa (o RefreshIndicator só espera os dois terminarem).
+  Future<void> _refreshAll() async {
+    await Future.wait([_load(), _loadStats()]);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -185,12 +270,26 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 )
               : RefreshIndicator(
-                  onRefresh: _load,
+                  onRefresh: _refreshAll,
                   child: ListView(
                     padding: const EdgeInsets.all(12),
                     children: [
-                      if (_me != null) _ProfileHeader(me: _me!, onLogout: _logout),
+                      if (_me != null)
+                        _ProfileHeader(me: _me!, onLogout: _logout),
                       const SizedBox(height: 16),
+
+                      // ===== [Sessão 33] Stats agregadas =====
+                      // Seção própria: se falhar, mostra erro + "Tentar
+                      // novamente" SÓ nos stats, sem afetar a lista abaixo.
+                      _StatsSection(
+                        summary: _summary,
+                        byType: _byType,
+                        isLoading: _statsLoading,
+                        error: _statsError,
+                        onRetry: _loadStats,
+                      ),
+                      const SizedBox(height: 16),
+
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         child: Text(
@@ -215,6 +314,11 @@ class _ProfilePageState extends State<ProfilePage> {
                               auth: widget.auth,
                               onTap: () => _openDetail(a),
                               onChanged: _replaceActivity,
+                              // [Sessão 33] GET /activities não embute
+                              // `user`; sem o override o card cairia em
+                              // "Usuário"/"?". O feed não passa (GET /feed
+                              // já traz `user`).
+                              authorUsernameOverride: _me?.username,
                             ),
                           ),
                         ),
@@ -252,6 +356,87 @@ class _ProfilePageState extends State<ProfilePage> {
                     ],
                   ),
                 ),
+    );
+  }
+}
+
+// ===== [Sessão 33] Seção de stats agregadas =====
+// Extraída como widget separado pra manter o build() do ProfilePage
+// legível e deixar a lógica de loading/erro dos stats autocontida.
+class _StatsSection extends StatelessWidget {
+  final StatsSummary? summary;
+  final StatsByTypeResponse? byType;
+  final bool isLoading;
+  final String? error;
+  final VoidCallback onRetry;
+
+  const _StatsSection({
+    required this.summary,
+    required this.byType,
+    required this.isLoading,
+    required this.error,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    // Erro: mostra mensagem + botão "Tentar novamente" SÓ nos stats.
+    // A lista de atividades abaixo continua funcionando (a S33 separa
+    // os dois carregamentos de propósito).
+    if (error != null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Estatísticas',
+                style: theme.textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Erro ao carregar estatísticas: $error',
+                style: TextStyle(color: theme.colorScheme.error),
+              ),
+              const SizedBox(height: 8),
+              FilledButton.tonal(
+                onPressed: onRetry,
+                child: const Text('Tentar novamente'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Estatísticas',
+          style: theme.textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        StatsCards(
+          data: summary,
+          isLoading: isLoading,
+          isError: false, // erro já tratado acima (error != null)
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Por tipo de atividade',
+          style: theme.textTheme.titleSmall,
+        ),
+        const SizedBox(height: 8),
+        ByTypeList(
+          data: byType,
+          isLoading: isLoading,
+          isError: false, // erro já tratado acima
+        ),
+      ],
     );
   }
 }
