@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 
 import '../models/activity.dart';
@@ -5,6 +6,7 @@ import '../models/activity_track.dart';
 import '../models/comment.dart';
 import '../services/api.dart';
 import '../services/auth_service.dart';
+import '../utils/download.dart'; // [Sessão 37] saveAndShare
 import '../widgets/activity_map.dart';
 import '../widgets/like_button.dart';
 
@@ -22,6 +24,9 @@ class ActivityDetailPage extends StatefulWidget {
   State<ActivityDetailPage> createState() => _ActivityDetailPageState();
 }
 
+// [Sessão 37] Formatos de export suportados pelo backend (S21).
+enum _ExportFormat { csv, gpx }
+
 class _ActivityDetailPageState extends State<ActivityDetailPage> {
   Activity? _activity;
   bool _loading = true;
@@ -38,6 +43,9 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
   ActivityTrack? _track;
   bool _trackLoading = false;
   String? _trackError;
+
+  // [Sessão 37] Estado do menu de export (CSV/GPX).
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -119,6 +127,41 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
     }
   }
 
+  /// [Sessão 37] Export CSV/GPX da atividade atual.
+  ///
+  /// - `csv` funciona com/sem rota.
+  /// - `gpx` exige rota (404 "Atividade não possui rota" — o backend
+  ///   já devolve esse texto em `detail`, o SnackBar mostra cru).
+  ///
+  /// Fluxo: API devolve bytes + filename + contentType; `saveAndShare`
+  /// decide o caminho por plataforma (web: download no browser; nativo:
+  /// share sheet). Em erro, SnackBar com a mensagem do backend.
+  Future<void> _export(_ExportFormat format) async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final result = await widget.auth.api.downloadActivityExport(
+        activityId: widget.activityId,
+        format: format.name,
+        token: widget.auth.token,
+      );
+      await saveAndShare(
+        bytes: result.bytes,
+        filename: result.filename,
+        contentType: result.contentType,
+        shareText: format == _ExportFormat.csv
+            ? 'Exportação CSV da atividade — Rumo'
+            : 'Exportação GPX da atividade — Rumo',
+      );
+    } on ApiException catch (e) {
+      _showError(e.message);
+    } catch (e) {
+      _showError('Erro ao exportar: $e');
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   /// Atualiza o estado local quando a curtida muda (otimista ou rollback).
   void _onLikeChanged(Activity updated) {
     setState(() {
@@ -184,7 +227,48 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Detalhe')),
+      appBar: AppBar(
+        title: const Text('Detalhe'),
+        // [Sessão 37] Menu de export (CSV/GPX). O `_exporting` troca o
+        // ícone por spinner enquanto o download roda.
+        actions: [
+          if (_exporting)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else
+            PopupMenuButton<_ExportFormat>(
+              icon: const Icon(Icons.ios_share),
+              tooltip: 'Exportar',
+              onSelected: _export,
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: _ExportFormat.csv,
+                  child: ListTile(
+                    leading: Icon(Icons.table_chart_outlined),
+                    title: Text('Exportar CSV'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _ExportFormat.gpx,
+                  child: ListTile(
+                    leading: Icon(Icons.route),
+                    title: Text('Exportar GPX'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null

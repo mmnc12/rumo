@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io'; // [Sessão 31] File para upload multipart
+import 'dart:typed_data'; // [Sessão 37] Uint8List para download binário
+
 import 'package:http/http.dart' as http;
 
 import '../models/activity.dart'; // [Sessão 31] Activity.fromJson no retorno do upload
@@ -7,6 +9,7 @@ import '../models/activity_track.dart';
 import '../models/comment.dart';
 import '../models/stats.dart'; // [Sessão 33] stats/summary + stats/by-type
 import '../models/user.dart'; // [Sessão 34] User (UserPublic do backend)
+import '../utils/download.dart'; // [Sessão 37] countZipEntries (EOCD fail-open)
 
 class ApiException implements Exception {
   final int statusCode;
@@ -462,7 +465,181 @@ class ApiClient {
     }
   }
 
+  // ---------- Export (Sessão 37) ----------
+
+  /// `GET /activities/{id}/export?format=csv|gpx` — baixa bytes do export unitário.
+  ///
+  /// Auth: Bearer JWT. Permissão (backend): dono OU seguidor do dono
+  /// (404 caso contrário, mesma regra do detalhe). `format=csv` funciona
+  /// com/sem rota; `format=gpx` exige rota (404 "Atividade não possui rota").
+  ///
+  /// Retorna `({bytes, filename, contentType})`:
+  /// - `bytes`: corpo binário cru (Uint8List).
+  /// - `filename`: parseado do `Content-Disposition` (`rumo_<id>_<type>.<ext>`);
+  ///   se faltar, cai em `rumo_<id>.<format>`.
+  /// - `contentType`: `text/csv` ou `application/gpx+xml` (com `; charset=utf-8`).
+  ///
+  /// O caller (ActivityDetailPage) decide onde salvar/compartilhar via
+  /// `saveAndShare` (utils/download.dart).
+  Future<({Uint8List bytes, String filename, String contentType})>
+      downloadActivityExport({
+    required String activityId,
+    required String format,
+    String? token,
+  }) async {
+    assert(format == 'csv' || format == 'gpx', 'format inválido: $format');
+    return _fetchBlob(
+      '/activities/$activityId/export?format=$format',
+      fallbackFilename: 'rumo_$activityId.$format',
+      token: token,
+    );
+  }
+
+  /// `GET /activities/export?format=&from=&to=` — baixa bytes do export em lote (ZIP).
+  ///
+  /// Auth: Bearer JWT. **Self-only** (diferente do unitário — o backend
+  /// só exporta as atividades do viewer autenticado). Saída: ZIP com
+  /// 1 arquivo por atividade.
+  ///
+  /// - `format=csv` (default): todas as atividades do filtro (com/sem rota).
+  /// - `format=gpx`: só com rota (backend omite as sem).
+  /// - `from`/`to` (YYYY-MM-DD, UTC, inclusivo). Omitir = sem limite.
+  /// - 0 atividades → ZIP vazio (200, não é erro).
+  /// - `from > to` → 422. `format` inválido → 422.
+  ///
+  /// Retorna o mesmo shape do unitário + `entryCount`:
+  /// - `entryCount`: número de arquivos no ZIP, lido via `countZipEntries`
+  ///   (EOCD, fail-open). `-1` quando o ZIP não pôde ser lido (o caller
+  ///   decide como usar — o download já aconteceu).
+  Future<
+      ({
+        Uint8List bytes,
+        String filename,
+        String contentType,
+        int entryCount,
+      })> downloadActivityExportBulk({
+    required String format,
+    String? from,
+    String? to,
+    String? token,
+  }) async {
+    assert(format == 'csv' || format == 'gpx', 'format inválido: $format');
+    final qs = <String>[
+      'format=$format',
+      if (from != null && from.isNotEmpty) 'from=$from',
+      if (to != null && to.isNotEmpty) 'to=$to',
+    ].join('&');
+
+    final blob = await _fetchBlob(
+      '/activities/export?$qs',
+      fallbackFilename: 'rumo_export.zip',
+      token: token,
+    );
+
+    final entryCount = countZipEntries(blob.bytes);
+    return (
+      bytes: blob.bytes,
+      filename: blob.filename,
+      contentType: blob.contentType,
+      entryCount: entryCount,
+    );
+  }
+
+  // ---------- Followers (Sessão 37) ----------
+
+  /// `GET /users/{userId}/followers?limit=&offset=` — quem segue o usuário.
+  ///
+  /// Espelho de `listFollowing`. Auth: Bearer JWT. Retorna `List<User>`.
+  /// Paginação explícita (limit/offset). Default limit=100 cobre o caso
+  /// de uso da tela de perfil (abas Seguidores/Seguindo).
+  Future<List<User>> listFollowers({
+    required String userId,
+    int limit = 100,
+    int offset = 0,
+    String? token,
+  }) async {
+    final qs = 'limit=$limit&offset=$offset';
+    final data = await get('/users/$userId/followers?$qs', token: token);
+    if (data is! List) {
+      throw ApiException(500, 'Resposta inesperada em /users/{id}/followers');
+    }
+    return data
+        .map((e) => User.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   // ---------- internos ----------
+
+  /// GET binário autenticado (Sessão 37).
+  ///
+  /// Diferenças do `_send`:
+  /// - `Accept: */*` (não força `application/json`).
+  /// - Retorna `bodyBytes` cru (não `jsonDecode`).
+  /// - Lê `Content-Type` e `Content-Disposition` da resposta.
+  ///
+  /// O `_extractMessage` continua funcionando pra erros: o FastAPI devolve
+  /// JSON (`{"detail": "..."}`) mesmo no export (o erro é JSON, o sucesso
+  /// é o blob). Quando o corpo do erro não é JSON, cai no fallback
+  /// `Erro <status>`.
+  Future<({Uint8List bytes, String filename, String contentType})> _fetchBlob(
+    String path, {
+    required String fallbackFilename,
+    String? token,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final headers = <String, String>{
+      'Accept': '*/*',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+
+    late final http.Response response;
+    try {
+      response = await _client
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 60));
+    } catch (e) {
+      throw ApiException(0, 'Falha de rede no export: $e');
+    }
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        response.statusCode,
+        _extractMessage(response.body) ?? 'Erro ${response.statusCode}',
+      );
+    }
+
+    final contentType =
+        response.headers['content-type'] ?? 'application/octet-stream';
+    final filename = _parseContentDisposition(
+      response.headers['content-disposition'],
+      fallback: fallbackFilename,
+    );
+
+    return (
+      bytes: Uint8List.fromList(response.bodyBytes),
+      filename: filename,
+      contentType: contentType,
+    );
+  }
+
+  /// Extrai `filename="..."` do header `Content-Disposition`.
+  ///
+  /// Formato esperado (S21/S22 do backend):
+  /// `attachment; filename="rumo_<id>_<type>.csv"` ou
+  /// `attachment; filename="rumo_export_<YYYYMMDD-HHMMSS>.zip"`.
+  ///
+  /// Se o header faltar ou não tiver `filename="..."`, devolve [fallback].
+  String _parseContentDisposition(
+    String? header, {
+    required String fallback,
+  }) {
+    if (header == null || header.isEmpty) return fallback;
+    final match = RegExp(r'filename="([^"]+)"').firstMatch(header);
+    if (match == null) return fallback;
+    final name = match.group(1);
+    if (name == null || name.isEmpty) return fallback;
+    return name;
+  }
 
   Future<http.Response> _send(
     String method,

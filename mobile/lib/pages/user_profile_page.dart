@@ -25,6 +25,14 @@
 // - onAuthorTap no ActivityCard do feed (link do autor).
 // - Lista de seguidores/seguindo (o web tem abas; o mobile fica pra S35).
 // - Editar perfil (requer PUT /users/me, não existe).
+//
+// [Sessão 37] +abas Seguidores/Seguindo (paridade com web ProfilePage.tsx):
+// - GET /users/{id}/followers?limit&offset (listFollowers — novo no ApiClient).
+// - GET /users/{id}/following?limit&offset (listFollowing — já existia).
+// - Carrega em paralelo no initState (_loadLists), separado de _load/_loadStats.
+// - Cada linha é um ListTile com avatar (inicial) + @username + full_name.
+// - onTap → /user/:id (rota existe desde S34).
+// - Retry por seção, sem afetar o resto da tela.
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -74,6 +82,13 @@ class _UserProfilePageState extends State<UserProfilePage> {
   String? _statsError;
   bool _statsForbidden = false;
 
+  // ===== [Sessão 37] Seguidores / Seguindo =====
+  List<User>? _followers;
+  List<User>? _following;
+  bool _listsLoading = true;
+  String? _listsError;
+  int _listTab = 0; // 0 = Seguidores, 1 = Seguindo
+
   bool get _isSelf =>
       widget.auth.currentUserId != null &&
       widget.auth.currentUserId == widget.userId;
@@ -83,6 +98,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
     super.initState();
     _load();
     _loadStats();
+    _loadLists();
   }
 
   Future<void> _load() async {
@@ -200,6 +216,49 @@ class _UserProfilePageState extends State<UserProfilePage> {
       setState(() => _statsError = 'Erro: $e');
     } finally {
       if (mounted) setState(() => _statsLoading = false);
+    }
+  }
+
+  /// [Sessão 37] Carrega seguidores + seguindo do alvo em paralelo.
+  ///
+  /// Separado de `_load()` e `_loadStats()` de propósito (falha aqui
+  /// não derruba o resto da tela). Chamado no `initState` e no retry
+  /// do widget `_SocialListsSection`.
+  Future<void> _loadLists() async {
+    if (!mounted) return;
+    setState(() {
+      _listsLoading = true;
+      _listsError = null;
+    });
+
+    try {
+      final results = await Future.wait([
+        widget.auth.api.listFollowers(
+          userId: widget.userId,
+          limit: 100,
+          offset: 0,
+          token: widget.auth.token,
+        ),
+        widget.auth.api.listFollowing(
+          userId: widget.userId,
+          limit: 100,
+          offset: 0,
+          token: widget.auth.token,
+        ),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _followers = results[0];
+        _following = results[1];
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _listsError = e.message);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _listsError = 'Erro: $e');
+    } finally {
+      if (mounted) setState(() => _listsLoading = false);
     }
   }
 
@@ -336,7 +395,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
   }
 
   Future<void> _refreshAll() async {
-    await Future.wait([_load(), _loadStats()]);
+    await Future.wait([_load(), _loadStats(), _loadLists()]);
   }
 
   @override
@@ -467,9 +526,218 @@ class _UserProfilePageState extends State<UserProfilePage> {
                             ),
                           ),
                       ],
+
+                      // ===== [Sessão 37] Seguidores / Seguindo =====
+                      const SizedBox(height: 24),
+                      _SocialListsSection(
+                        followers: _followers,
+                        following: _following,
+                        isLoading: _listsLoading,
+                        error: _listsError,
+                        tab: _listTab,
+                        onTabChanged: (t) => setState(() => _listTab = t),
+                        onRetry: _loadLists,
+                      ),
                     ],
                   ),
                 ),
+    );
+  }
+}
+
+// ===== [Sessão 37] Abas Seguidores/Seguindo =====
+// Widget separado (mesmo padrão do _StatsSection) pra manter o build()
+// do UserProfilePage legível. Paridade com o web ProfilePage.tsx → UserRow.
+class _SocialListsSection extends StatelessWidget {
+  final List<User>? followers;
+  final List<User>? following;
+  final bool isLoading;
+  final String? error;
+  final int tab;
+  final ValueChanged<int> onTabChanged;
+  final VoidCallback onRetry;
+
+  const _SocialListsSection({
+    required this.followers,
+    required this.following,
+    required this.isLoading,
+    required this.error,
+    required this.tab,
+    required this.onTabChanged,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final list = tab == 0 ? followers : following;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Botões-aba
+        Row(
+          children: [
+            Expanded(
+              child: _TabButton(
+                label: followers == null
+                    ? 'Seguidores'
+                    : 'Seguidores (${followers!.length})',
+                active: tab == 0,
+                onTap: () => onTabChanged(0),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _TabButton(
+                label: following == null
+                    ? 'Seguindo'
+                    : 'Seguindo (${following!.length})',
+                active: tab == 1,
+                onTap: () => onTabChanged(1),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // Conteúdo
+        if (error != null)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Erro ao carregar a lista: $error',
+                    style: TextStyle(color: theme.colorScheme.error),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.tonal(
+                    onPressed: onRetry,
+                    child: const Text('Tentar novamente'),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else if (isLoading)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+          )
+        else if (list == null || list.isEmpty)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+              child: Center(
+                child: Text(
+                  tab == 0
+                      ? 'Ninguém segue esta pessoa ainda.'
+                      : 'Esta pessoa ainda não segue ninguém.',
+                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          )
+        else
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: list.length,
+              separatorBuilder: (_, _) => const Divider(height: 1),
+              itemBuilder: (context, index) =>
+                  _UserRow(user: list[index]),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _TabButton extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _TabButton({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: active
+          ? theme.colorScheme.primary
+          : theme.colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: active
+                    ? theme.colorScheme.onPrimary
+                    : theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Linha de usuário na lista (espelho do `UserRow` do web).
+///
+/// Toca → `/user/:id` (rota existe desde S34). O próprio usuário
+/// aparece na lista se seguir/seguido — sem tratamento especial
+/// (o web também não tem).
+class _UserRow extends StatelessWidget {
+  final User user;
+  const _UserRow({required this.user});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListTile(
+      leading: CircleAvatar(
+        radius: 18,
+        child: Text(
+          user.initial,
+          style: theme.textTheme.labelLarge,
+        ),
+      ),
+      title: Text(
+        '@${user.username}',
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      subtitle: (user.fullName != null && user.fullName!.isNotEmpty)
+          ? Text(user.fullName!)
+          : null,
+      trailing: const Icon(Icons.chevron_right, size: 18),
+      onTap: () => context.push('/user/${user.id}'),
     );
   }
 }
