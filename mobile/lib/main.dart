@@ -8,13 +8,15 @@
 //   do feed, não uma área.
 //
 // [Sessão 34] +rota /user/:id (perfil público de terceiro + follow).
-// Fica fora do shell porque é fluxo (você chega nela a partir de um card
-// ou link, não é uma "área" da navegação principal). Mesma decisão de UX
-// do /activity/:id.
+// Fora do shell — é fluxo.
 //
-// [Sessão 35] +rota /search (busca de usuários). Fora do shell, mesma
-// decisão: é fluxo efêmero (abre, busca, toca no resultado → /user/:id,
-// fecha), não uma área da bottom nav.
+// [Sessão 35] +rota /search (busca de usuários). Fora do shell — fluxo.
+//
+// [Sessão 36] SearchPage com 2 abas (Usuários | Atividades) substitui a
+// UserSearchPage. Mesma rota (/search), mesmo fora do shell, mesma
+// decisão de UX. A rota continua sendo "abre, busca, toca no resultado,
+// fecha" — a busca de atividades é só uma segunda aba dentro do mesmo
+// fluxo. Apaga o user_search_page.dart.
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -22,9 +24,9 @@ import 'pages/activity_detail_page.dart';
 import 'pages/feed_page.dart';
 import 'pages/login_page.dart';
 import 'pages/profile_page.dart'; // [Sessão 32] rota /profile
+import 'pages/search_page.dart'; // [Sessão 36] rota /search (era user_search_page.dart)
 import 'pages/upload_page.dart'; // [Sessão 31] rota /upload
 import 'pages/user_profile_page.dart'; // [Sessão 34] rota /user/:id
-import 'pages/user_search_page.dart'; // [Sessão 35] rota /search
 import 'services/auth_service.dart';
 
 void main() {
@@ -78,7 +80,6 @@ class _RumoAppState extends State<RumoApp> {
           ),
         ),
         // [Sessão 34] Perfil público de terceiro + follow.
-        // Fora do shell (sem bottom nav), igual /activity/:id.
         GoRoute(
           path: '/user/:id',
           builder: (_, state) => UserProfilePage(
@@ -86,11 +87,11 @@ class _RumoAppState extends State<RumoApp> {
             auth: _auth,
           ),
         ),
-        // [Sessão 35] Busca de usuários. Fora do shell, mesma decisão
-        // de /user/:id e /activity/:id (fluxo, não área).
+        // [Sessão 36] Busca unificada (Usuários | Atividades).
+        // Fora do shell, mesma decisão de /user/:id e /activity/:id.
         GoRoute(
           path: '/search',
-          builder: (_, _) => UserSearchPage(auth: _auth),
+          builder: (_, _) => SearchPage(auth: _auth),
         ),
         // [Sessão 32] Bottom nav: Feed / Perfil.
         StatefulShellRoute.indexedStack(
