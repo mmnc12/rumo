@@ -106,6 +106,47 @@ class ApiClient {
         .toList();
   }
 
+  // ---------- Busca de atividades (Sessão 36) ----------
+
+  /// `GET /activities/search?q=&limit=` — busca atividades por texto
+  /// em `title`/`description`.
+  ///
+  /// Auth: Bearer JWT. `q` mínimo 2 caracteres (o backend valida com
+  /// `min_length=2`; o client também corta antes de disparar — paridade
+  /// com `useActivitySearch` do web, que usa `enabled: trimmed.length >= 2`).
+  ///
+  /// Visibilidade (backend): dono OU seguido — mesma regra do feed. Se o
+  /// viewer não segue o autor, a atividade dele não aparece.
+  ///
+  /// `limit` default 20 (mesmo do `useActivitySearch`). Rate limit do
+  /// backend: 20/min por IP.
+  ///
+  /// Retorna `List<Activity>` (o `FeedItemResponse` do backend tem
+  /// `author` E `user`; o `Activity.fromJson` lê `user` — fix da S36
+  /// destravou o uso direto no mobile).
+  ///
+  /// [Sessão 36] `Uri.encodeQueryComponent` (não `Uri.encodeFull`) —
+  /// paridade semântica com o `encodeURIComponent` do web.
+  Future<List<Activity>> searchActivities({
+    required String query,
+    int limit = 20,
+    String? token,
+  }) async {
+    final q = query.trim();
+    if (q.length < 2) return const <Activity>[];
+    final encoded = Uri.encodeQueryComponent(q);
+    final data = await get(
+      '/activities/search?q=$encoded&limit=$limit',
+      token: token,
+    );
+    if (data is! List) {
+      throw ApiException(500, 'Resposta inesperada em /activities/search');
+    }
+    return data
+        .map((e) => Activity.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   // ---------- Stats (Sessão 33) ----------
 
   /// `GET /users/{userId}/stats/summary` — totais gerais.
