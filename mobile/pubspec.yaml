@@ -21,6 +21,8 @@ dependencies:
   # [Sessão 37] Export mobile (unitário + lote) + share sheet nativo.
   path_provider: ^2.1.5
   share_plus: ^13.3.1
+  # [Sessão 38] Charts weekly/monthly do perfil (Dart puro, sem código nativo).
+  fl_chart: ^1.1.0
 
 dev_dependencies:
   flutter_test:

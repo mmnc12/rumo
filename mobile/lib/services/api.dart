@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import '../models/activity.dart'; // [Sessão 31] Activity.fromJson no retorno do upload
 import '../models/activity_track.dart';
 import '../models/comment.dart';
-import '../models/stats.dart'; // [Sessão 33] stats/summary + stats/by-type
+import '../models/stats.dart'; // [Sessão 33] stats/summary + stats/by-type; [Sessão 38] weekly/monthly
 import '../models/user.dart'; // [Sessão 34] User (UserPublic do backend)
 import '../utils/download.dart'; // [Sessão 37] countZipEntries (EOCD fail-open)
 
@@ -199,6 +199,53 @@ class ApiClient {
       throw ApiException(500, 'Resposta inesperada em stats/by-type');
     }
     return StatsByTypeResponse.fromJson(data);
+  }
+
+  // [Sessão 38] Weekly + Monthly — paridade com web/src/hooks/useStats.ts
+  // (defaults weeks=8, months=6). Shape confirmado em produção (P3a da S38):
+  // { weeks|months: int, items: [ { period_start, total_activities,
+  // total_distance_m, total_duration_s, total_calories } ] }.
+
+  /// `GET /users/{userId}/stats/weekly?weeks=N` — resumo semanal.
+  ///
+  /// Auth: Bearer JWT. Visibilidade: dono OU seguidor do dono (mesma
+  /// regra do summary). `weeks` default 8 (paridade com `useStatsWeekly`
+  /// do web). Retorna `StatsWeeklyResponse { weeks, items }` com items
+  /// em ordem crescente de `period_start` (o caller NÃO reordena).
+  Future<StatsWeeklyResponse> getStatsWeekly(
+    String userId, {
+    int weeks = 8,
+    String? token,
+  }) async {
+    final data = await get(
+      '/users/$userId/stats/weekly?weeks=$weeks',
+      token: token,
+    );
+    if (data is! Map<String, dynamic>) {
+      throw ApiException(500, 'Resposta inesperada em stats/weekly');
+    }
+    return StatsWeeklyResponse.fromJson(data);
+  }
+
+  /// `GET /users/{userId}/stats/monthly?months=N` — resumo mensal.
+  ///
+  /// Auth: Bearer JWT. Visibilidade: dono OU seguidor do dono. `months`
+  /// default 6 (paridade com `useStatsMonthly` do web). Retorna
+  /// `StatsMonthlyResponse { months, items }` — mesma semântica do weekly
+  /// (só muda a janela de agregação).
+  Future<StatsMonthlyResponse> getStatsMonthly(
+    String userId, {
+    int months = 6,
+    String? token,
+  }) async {
+    final data = await get(
+      '/users/$userId/stats/monthly?months=$months',
+      token: token,
+    );
+    if (data is! Map<String, dynamic>) {
+      throw ApiException(500, 'Resposta inesperada em stats/monthly');
+    }
+    return StatsMonthlyResponse.fromJson(data);
   }
 
   // ---------- Perfil público e follows (Sessão 34) ----------

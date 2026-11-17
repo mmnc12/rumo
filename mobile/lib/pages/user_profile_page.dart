@@ -33,6 +33,14 @@
 // - Cada linha é um ListTile com avatar (inicial) + @username + full_name.
 // - onTap → /user/:id (rota existe desde S34).
 // - Retry por seção, sem afetar o resto da tela.
+//
+// [Sessão 38] +filtros de period/compare + 4 charts (weekly/monthly ×
+// distance/activities) na seção de stats. Mesmo padrão do ProfilePage,
+// com uma diferença: quando _statsForbidden (403 do _ensure_can_view_stats),
+// os filtros ficam desabilitados e NÃO chamamos weekly/monthly (o backend
+// devolveria 403 nos 4). O short-circuit é feito em _loadStats: dispara
+// summary+byType primeiro, e só se byType voltar OK dispara weekly+monthly.
+// Se voltar 403, marca _statsForbidden e para.
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -44,6 +52,9 @@ import '../services/auth_service.dart';
 import '../widgets/activity_card.dart';
 import '../widgets/by_type_list.dart';
 import '../widgets/stats_cards.dart';
+// [Sessão 38] Filtros + charts do perfil de terceiro.
+import '../widgets/stats_chart.dart';
+import '../widgets/stats_filters.dart';
 
 class UserProfilePage extends StatefulWidget {
   final String userId;
@@ -78,9 +89,15 @@ class _UserProfilePageState extends State<UserProfilePage> {
   // ===== Stats =====
   StatsSummary? _summary;
   StatsByTypeResponse? _byType;
+  // [Sessão 38] Weekly + Monthly (para os charts).
+  StatsWeeklyResponse? _weekly;
+  StatsMonthlyResponse? _monthly;
   bool _statsLoading = true;
   String? _statsError;
   bool _statsForbidden = false;
+  // [Sessão 38] Filtros de period/compare (default = S33: 90d/prev).
+  String _statsPeriod = kStatsPeriod90d;
+  String _statsCompare = kStatsComparePrev;
 
   // ===== [Sessão 37] Seguidores / Seguindo =====
   List<User>? _followers;
@@ -178,6 +195,16 @@ class _UserProfilePageState extends State<UserProfilePage> {
     }
   }
 
+  // [Sessão 38] Stats agregadas com short-circuit em 403.
+  //
+  // Diferente do ProfilePage, aqui o backend pode devolver 403 quando o
+  // viewer não segue o alvo (_ensure_can_view_stats). Nesse caso, os 4
+  // endpoints devolveriam 403 — não adianta tentar os 4. Estratégia:
+  // 1. Dispara summary + byType em paralelo.
+  // 2. Se byType voltar 403, marca _statsForbidden e PARA (não tenta
+  //    weekly/monthly).
+  // 3. Se byType voltar OK, dispara weekly + monthly em paralelo.
+  // 4. Falha de um individual (não-403) → null, sem derrubar os outros.
   Future<void> _loadStats() async {
     if (!mounted) return;
     setState(() {
@@ -186,23 +213,82 @@ class _UserProfilePageState extends State<UserProfilePage> {
       _statsForbidden = false;
     });
 
+    final period = _statsPeriod;
+    final compare = _statsCompare;
+
     try {
-      final results = await Future.wait([
-        widget.auth.api.getStatsSummary(
-          widget.userId,
-          token: widget.auth.token,
-        ),
-        widget.auth.api.getStatsByType(
-          widget.userId,
-          period: '90d',
-          compare: 'prev',
-          token: widget.auth.token,
-        ),
-      ]);
+      // Fase 1: summary + byType (paralelo, catchError individual).
+      final summaryF = widget.auth.api
+          .getStatsSummary(widget.userId, token: widget.auth.token)
+          .then<Object?>((v) => v)
+          .catchError((Object e) {
+        if (e is ApiException && e.statusCode == 403) {
+          // Sinaliza 403 via Future.error custom — capturado abaixo.
+          throw _Stats403();
+        }
+        return null;
+      });
+      final byTypeF = widget.auth.api
+          .getStatsByType(
+            widget.userId,
+            period: period,
+            compare: compare,
+            token: widget.auth.token,
+          )
+          .then<Object?>((v) => v)
+          .catchError((Object e) {
+        if (e is ApiException && e.statusCode == 403) {
+          throw _Stats403();
+        }
+        return null;
+      });
+
+      final List<Object?> phase1;
+      try {
+        phase1 = await Future.wait<Object?>([summaryF, byTypeF]);
+      } on _Stats403 {
+        if (!mounted) return;
+        setState(() {
+          _statsForbidden = true;
+          _statsLoading = false;
+        });
+        return;
+      }
+
       if (!mounted) return;
+      final summary = phase1[0] as StatsSummary?;
+      final byType = phase1[1] as StatsByTypeResponse?;
+
+      // Fase 2: weekly + monthly (só se phase1 não deu 403).
+      final weeklyF = widget.auth.api
+          .getStatsWeekly(widget.userId, weeks: 8, token: widget.auth.token)
+          .then<Object?>((v) => v)
+          .catchError((Object e) => null);
+      final monthlyF = widget.auth.api
+          .getStatsMonthly(widget.userId, months: 6, token: widget.auth.token)
+          .then<Object?>((v) => v)
+          .catchError((Object e) => null);
+
+      final phase2 = await Future.wait<Object?>([weeklyF, monthlyF]);
+      if (!mounted) return;
+      final weekly = phase2[0] as StatsWeeklyResponse?;
+      final monthly = phase2[1] as StatsMonthlyResponse?;
+
+      // Falha agregada (só conta não-403).
+      final failed = <String>[];
+      if (summary == null) failed.add('resumo');
+      if (byType == null) failed.add('por tipo');
+      if (weekly == null) failed.add('semanal');
+      if (monthly == null) failed.add('mensal');
+
       setState(() {
-        _summary = results[0] as StatsSummary;
-        _byType = results[1] as StatsByTypeResponse;
+        _summary = summary;
+        _byType = byType;
+        _weekly = weekly;
+        _monthly = monthly;
+        _statsError = failed.isEmpty
+            ? null
+            : 'Falha ao carregar: ${failed.join(', ')}.';
       });
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -440,9 +526,20 @@ class _UserProfilePageState extends State<UserProfilePage> {
                       _StatsSection(
                         summary: _summary,
                         byType: _byType,
+                        weekly: _weekly,
+                        monthly: _monthly,
                         isLoading: _statsLoading,
                         error: _statsError,
                         forbidden: _statsForbidden,
+                        period: _statsPeriod,
+                        compare: _statsCompare,
+                        onFiltersChanged: (period, compare) {
+                          setState(() {
+                            _statsPeriod = period;
+                            _statsCompare = compare;
+                          });
+                          _loadStats();
+                        },
                         onRetry: _loadStats,
                       ),
                       const SizedBox(height: 16),
@@ -543,6 +640,15 @@ class _UserProfilePageState extends State<UserProfilePage> {
                 ),
     );
   }
+}
+
+/// [Sessão 38] Marcador interno de 403 nos stats.
+///
+/// Usado só dentro do `_loadStats` para curto-circuitar a fase 1
+/// (summary + byType) quando o backend devolve 403 (`_ensure_can_view_stats`).
+/// Não vaza pra fora — é capturado pelo `try/on _Stats403`.
+class _Stats403 implements Exception {
+  const _Stats403();
 }
 
 // ===== [Sessão 37] Abas Seguidores/Seguindo =====
@@ -858,20 +964,33 @@ class _UserHeader extends StatelessWidget {
 // Reusa StatsCards e ByTypeList do S33 (mesmos shapes de dados).
 // `forbidden` é o 403 do _ensure_can_view_stats: mostra mensagem neutra
 // sem botão de retry (só o Follow muda a permissão, não o retry).
+//
+// [Sessão 38] +StatsFilters no topo (disabled quando isLoading||forbidden)
+// +4 StatsChart abaixo do ByTypeList (só quando !forbidden).
 class _StatsSection extends StatelessWidget {
   final StatsSummary? summary;
   final StatsByTypeResponse? byType;
+  final StatsWeeklyResponse? weekly;
+  final StatsMonthlyResponse? monthly;
   final bool isLoading;
   final String? error;
   final bool forbidden;
+  final String period;
+  final String compare;
+  final void Function(String period, String compare) onFiltersChanged;
   final VoidCallback onRetry;
 
   const _StatsSection({
     required this.summary,
     required this.byType,
+    required this.weekly,
+    required this.monthly,
     required this.isLoading,
     required this.error,
     required this.forbidden,
+    required this.period,
+    required this.compare,
+    required this.onFiltersChanged,
     required this.onRetry,
   });
 
@@ -888,33 +1007,16 @@ class _StatsSection extends StatelessWidget {
             children: [
               Text('Estatísticas', style: theme.textTheme.titleMedium),
               const SizedBox(height: 8),
+              StatsFilters(
+                period: period,
+                compare: compare,
+                disabled: true,
+                onChanged: onFiltersChanged,
+              ),
+              const SizedBox(height: 8),
               Text(
                 'Siga pra ver as estatísticas.',
                 style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (error != null) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Estatísticas', style: theme.textTheme.titleMedium),
-              const SizedBox(height: 8),
-              Text(
-                'Erro ao carregar estatísticas: $error',
-                style: TextStyle(color: theme.colorScheme.error),
-              ),
-              const SizedBox(height: 8),
-              FilledButton.tonal(
-                onPressed: onRetry,
-                child: const Text('Tentar novamente'),
               ),
             ],
           ),
@@ -927,19 +1029,81 @@ class _StatsSection extends StatelessWidget {
       children: [
         Text('Estatísticas', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
-        StatsCards(
-          data: summary,
-          isLoading: isLoading,
-          isError: false,
+        StatsFilters(
+          period: period,
+          compare: compare,
+          disabled: isLoading,
+          onChanged: onFiltersChanged,
         ),
-        const SizedBox(height: 12),
-        Text('Por tipo de atividade', style: theme.textTheme.titleSmall),
         const SizedBox(height: 8),
-        ByTypeList(
-          data: byType,
-          isLoading: isLoading,
-          isError: false,
-        ),
+        if (error != null)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Erro ao carregar estatísticas: $error',
+                    style: TextStyle(color: theme.colorScheme.error),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.tonal(
+                    onPressed: onRetry,
+                    child: const Text('Tentar novamente'),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else ...[
+          StatsCards(
+            data: summary,
+            isLoading: isLoading,
+            isError: false,
+          ),
+          const SizedBox(height: 12),
+          Text('Por tipo de atividade', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          ByTypeList(
+            data: byType,
+            isLoading: isLoading,
+            isError: false,
+          ),
+          const SizedBox(height: 12),
+          // [Sessão 38] 4 charts — paridade com o ProfilePage.
+          StatsChart(
+            period: ChartPeriod.weekly,
+            metric: ChartMetric.distance,
+            items: weekly?.items,
+            isLoading: isLoading,
+            isError: false,
+          ),
+          const SizedBox(height: 8),
+          StatsChart(
+            period: ChartPeriod.weekly,
+            metric: ChartMetric.activities,
+            items: weekly?.items,
+            isLoading: isLoading,
+            isError: false,
+          ),
+          const SizedBox(height: 8),
+          StatsChart(
+            period: ChartPeriod.monthly,
+            metric: ChartMetric.distance,
+            items: monthly?.items,
+            isLoading: isLoading,
+            isError: false,
+          ),
+          const SizedBox(height: 8),
+          StatsChart(
+            period: ChartPeriod.monthly,
+            metric: ChartMetric.activities,
+            items: monthly?.items,
+            isLoading: isLoading,
+            isError: false,
+          ),
+        ],
       ],
     );
   }

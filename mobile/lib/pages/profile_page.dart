@@ -31,6 +31,15 @@
 // - Download via share_plus (utils/download.dart → saveAndShare).
 // - Feedback inline âmbar (ZIP vazio) / verde (N atividades) / vermelho (erro).
 // - Validação client-side de from > to antes de chamar o backend.
+//
+// [Sessão 38] +filtros de period/compare + 4 charts (weekly/monthly ×
+// distance/activities) na seção de stats:
+// - StatsFilters (novo widget) no topo da _StatsSection.
+// - _loadStats faz 4 requests em paralelo (summary, byType, weekly, monthly)
+//   com catchError individual — falha de um não derruba os outros.
+// - _statsPeriod/_statsCompare no estado; trocar filtro refaz _loadStats.
+// - StatsChart (novo widget, fl_chart) renderiza os 4 charts abaixo do
+//   ByTypeList, cada um com seu próprio isLoading/isError.
 import 'dart:async'; // [Sessão 37] Timer do feedback transitório
 
 import 'package:flutter/material.dart';
@@ -45,6 +54,9 @@ import '../utils/download.dart'; // [Sessão 37] saveAndShare
 import '../widgets/activity_card.dart';
 import '../widgets/by_type_list.dart';
 import '../widgets/stats_cards.dart';
+// [Sessão 38] Filtros + charts do perfil.
+import '../widgets/stats_chart.dart';
+import '../widgets/stats_filters.dart';
 
 class ProfilePage extends StatefulWidget {
   final AuthService auth;
@@ -69,8 +81,14 @@ class _ProfilePageState extends State<ProfilePage> {
   // ===== Stats agregadas (S33) =====
   StatsSummary? _summary;
   StatsByTypeResponse? _byType;
+  // [Sessão 38] Weekly + Monthly (para os charts).
+  StatsWeeklyResponse? _weekly;
+  StatsMonthlyResponse? _monthly;
   bool _statsLoading = true;
   String? _statsError;
+  // [Sessão 38] Filtros de period/compare (default = S33: 90d/prev).
+  String _statsPeriod = kStatsPeriod90d;
+  String _statsCompare = kStatsComparePrev;
 
   // ===== Export em lote (S37) =====
   _BulkExportFormat _exportFormat = _BulkExportFormat.csv;
@@ -148,9 +166,13 @@ class _ProfilePageState extends State<ProfilePage> {
 
   // [Sessão 33] Stats agregadas — separado de _load() de propósito.
   // Roda em paralelo no initState; falha aqui NÃO derruba a lista de
-  // atividades (e vice-versa). period=90d&compare=prev é o default do
-  // contrato S33 (o web usa "all", mas "all" não tem delta — o delta é
-  // o valor da seção de by-type).
+  // atividades (e vice-versa).
+  //
+  // [Sessão 38] 4 requests em paralelo (summary, byType, weekly, monthly)
+  // com period/compare do estado. Cada request tem catchError individual
+  // → falha de um não derruba os outros (o erro agregado vai pra
+  // _statsError se QUALQUER um falhar, mas os dados dos que voltaram
+  // continuam visíveis).
   Future<void> _loadStats() async {
     if (!mounted) return;
     setState(() {
@@ -168,24 +190,80 @@ class _ProfilePageState extends State<ProfilePage> {
       return;
     }
 
+    final period = _statsPeriod;
+    final compare = _statsCompare;
+    // compare é ignorado pelo backend quando period == "all" — mandamos
+    // do mesmo jeito (default "prev"), paridade com useStatsByType do web.
+    final byTypeFuture = widget.auth.api.getStatsByType(
+      userId,
+      period: period,
+      compare: compare,
+      token: widget.auth.token,
+    );
+    final weeklyFuture = widget.auth.api.getStatsWeekly(
+      userId,
+      weeks: 8,
+      token: widget.auth.token,
+    );
+    final monthlyFuture = widget.auth.api.getStatsMonthly(
+      userId,
+      months: 6,
+      token: widget.auth.token,
+    );
+
+    // Cada Future tem seu próprio catchError → devolve null no erro,
+    // sem rejeitar o Future.wait inteiro.
+    final summaryF = widget.auth.api
+        .getStatsSummary(userId, token: widget.auth.token)
+        .then<Object?>((v) => v)
+        .catchError((Object e) {
+      if (e is ApiException) return null;
+      return null;
+    });
+    final byTypeF = byTypeFuture.then<Object?>((v) => v).catchError((Object e) {
+      if (e is ApiException) return null;
+      return null;
+    });
+    final weeklyF = weeklyFuture.then<Object?>((v) => v).catchError((Object e) {
+      if (e is ApiException) return null;
+      return null;
+    });
+    final monthlyF =
+        monthlyFuture.then<Object?>((v) => v).catchError((Object e) {
+      if (e is ApiException) return null;
+      return null;
+    });
+
     try {
-      final results = await Future.wait([
-        widget.auth.api.getStatsSummary(userId, token: widget.auth.token),
-        widget.auth.api.getStatsByType(
-          userId,
-          period: '90d',
-          compare: 'prev',
-          token: widget.auth.token,
-        ),
+      final results = await Future.wait<Object?>([
+        summaryF,
+        byTypeF,
+        weeklyF,
+        monthlyF,
       ]);
       if (!mounted) return;
+      final summary = results[0] as StatsSummary?;
+      final byType = results[1] as StatsByTypeResponse?;
+      final weekly = results[2] as StatsWeeklyResponse?;
+      final monthly = results[3] as StatsMonthlyResponse?;
+
+      // Detecta falha agregada: se qualquer um voltou null, marca erro
+      // (mas mantém os dados dos que voltaram, pra UI mostrar o que tem).
+      final failed = <String>[];
+      if (summary == null) failed.add('resumo');
+      if (byType == null) failed.add('por tipo');
+      if (weekly == null) failed.add('semanal');
+      if (monthly == null) failed.add('mensal');
+
       setState(() {
-        _summary = results[0] as StatsSummary;
-        _byType = results[1] as StatsByTypeResponse;
+        _summary = summary;
+        _byType = byType;
+        _weekly = weekly;
+        _monthly = monthly;
+        _statsError = failed.isEmpty
+            ? null
+            : 'Falha ao carregar: ${failed.join(', ')}.';
       });
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      setState(() => _statsError = e.message);
     } catch (e) {
       if (!mounted) return;
       setState(() => _statsError = 'Erro: $e');
@@ -461,14 +539,26 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                       const SizedBox(height: 16),
 
-                      // ===== [Sessão 33] Stats agregadas =====
+                      // ===== [Sessão 33/38] Stats agregadas =====
                       // Seção própria: se falhar, mostra erro + "Tentar
                       // novamente" SÓ nos stats, sem afetar a lista abaixo.
+                      // [Sessão 38] +filtros + 4 charts.
                       _StatsSection(
                         summary: _summary,
                         byType: _byType,
+                        weekly: _weekly,
+                        monthly: _monthly,
                         isLoading: _statsLoading,
                         error: _statsError,
+                        period: _statsPeriod,
+                        compare: _statsCompare,
+                        onFiltersChanged: (period, compare) {
+                          setState(() {
+                            _statsPeriod = period;
+                            _statsCompare = compare;
+                          });
+                          _loadStats();
+                        },
                         onRetry: _loadStats,
                       ),
                       const SizedBox(height: 16),
@@ -749,21 +839,31 @@ class _DateField extends StatelessWidget {
   }
 }
 
-// ===== [Sessão 33] Seção de stats agregadas =====
-// Extraída como widget separado pra manter o build() do ProfilePage
-// legível e deixar a lógica de loading/erro dos stats autocontida.
+// ===== [Sessão 33/38] Seção de stats agregadas =====
+// [Sessão 38] +StatsFilters no topo + 4 StatsChart (weekly/monthly ×
+// distance/activities) abaixo do ByTypeList.
 class _StatsSection extends StatelessWidget {
   final StatsSummary? summary;
   final StatsByTypeResponse? byType;
+  final StatsWeeklyResponse? weekly;
+  final StatsMonthlyResponse? monthly;
   final bool isLoading;
   final String? error;
+  final String period;
+  final String compare;
+  final void Function(String period, String compare) onFiltersChanged;
   final VoidCallback onRetry;
 
   const _StatsSection({
     required this.summary,
     required this.byType,
+    required this.weekly,
+    required this.monthly,
     required this.isLoading,
     required this.error,
+    required this.period,
+    required this.compare,
+    required this.onFiltersChanged,
     required this.onRetry,
   });
 
@@ -774,33 +874,9 @@ class _StatsSection extends StatelessWidget {
     // Erro: mostra mensagem + botão "Tentar novamente" SÓ nos stats.
     // A lista de atividades abaixo continua funcionando (a S33 separa
     // os dois carregamentos de propósito).
-    if (error != null) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Estatísticas',
-                style: theme.textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Erro ao carregar estatísticas: $error',
-                style: TextStyle(color: theme.colorScheme.error),
-              ),
-              const SizedBox(height: 8),
-              FilledButton.tonal(
-                onPressed: onRetry,
-                child: const Text('Tentar novamente'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
+    //
+    // [Sessão 38] Os filtros ficam ANTES do erro — o usuário pode trocar
+    // period/compare pra tentar destravar (ex: era 1y e não tinha dado).
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -809,22 +885,84 @@ class _StatsSection extends StatelessWidget {
           style: theme.textTheme.titleMedium,
         ),
         const SizedBox(height: 8),
-        StatsCards(
-          data: summary,
-          isLoading: isLoading,
-          isError: false, // erro já tratado acima (error != null)
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Por tipo de atividade',
-          style: theme.textTheme.titleSmall,
+        StatsFilters(
+          period: period,
+          compare: compare,
+          disabled: isLoading,
+          onChanged: onFiltersChanged,
         ),
         const SizedBox(height: 8),
-        ByTypeList(
-          data: byType,
-          isLoading: isLoading,
-          isError: false, // erro já tratado acima
-        ),
+        if (error != null)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Erro ao carregar estatísticas: $error',
+                    style: TextStyle(color: theme.colorScheme.error),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.tonal(
+                    onPressed: onRetry,
+                    child: const Text('Tentar novamente'),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else ...[
+          StatsCards(
+            data: summary,
+            isLoading: isLoading,
+            isError: false,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Por tipo de atividade',
+            style: theme.textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
+          ByTypeList(
+            data: byType,
+            isLoading: isLoading,
+            isError: false,
+          ),
+          const SizedBox(height: 12),
+          // [Sessão 38] 4 charts — paridade com o web (PeriodChart.tsx).
+          StatsChart(
+            period: ChartPeriod.weekly,
+            metric: ChartMetric.distance,
+            items: weekly?.items,
+            isLoading: isLoading,
+            isError: false,
+          ),
+          const SizedBox(height: 8),
+          StatsChart(
+            period: ChartPeriod.weekly,
+            metric: ChartMetric.activities,
+            items: weekly?.items,
+            isLoading: isLoading,
+            isError: false,
+          ),
+          const SizedBox(height: 8),
+          StatsChart(
+            period: ChartPeriod.monthly,
+            metric: ChartMetric.distance,
+            items: monthly?.items,
+            isLoading: isLoading,
+            isError: false,
+          ),
+          const SizedBox(height: 8),
+          StatsChart(
+            period: ChartPeriod.monthly,
+            metric: ChartMetric.activities,
+            items: monthly?.items,
+            isLoading: isLoading,
+            isError: false,
+          ),
+        ],
       ],
     );
   }
