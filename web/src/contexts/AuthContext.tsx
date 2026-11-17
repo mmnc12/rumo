@@ -5,6 +5,10 @@
  * - Guardar o UserResponse em memória
  * - Reidratar sessão ao carregar a página (chama /auth/me se tiver token)
  * - Expor login/register/logout pras telas
+ * - [Sessão 40] Expor setUser pra permitir que fluxos que atualizam o
+ *   próprio perfil (PUT /users/me) reflitam o novo estado em memória sem
+ *   precisar de reload. Usado pelo useUpdateMe (onSuccess) — sem isso, o
+ *   modal de edição reaberto na mesma sessão mostraria dados velhos.
  *
  * Persistência do token fica em `api/client.ts` (localStorage), não aqui.
  * Aqui só orquestramos o ciclo de vida da sessão.
@@ -31,6 +35,9 @@ export interface AuthContextValue {
   login: (payload: LoginPayload) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => void;
+  // [Sessão 40] Atualiza o user em memória após PUT /users/me.
+  // Não persiste nada (o token já está no localStorage; o user é cache).
+  setUser: (user: UserResponse) => void;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -100,6 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       register,
       logout,
+      setUser,
     }),
     [user, isLoading, login, register, logout]
   );

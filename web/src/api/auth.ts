@@ -57,3 +57,30 @@ export async function register(
 export async function getMe(): Promise<UserResponse> {
   return apiFetch<UserResponse>("/auth/me");
 }
+
+// [Sessão 40] PUT /users/me — edição do próprio perfil (peso, altura, nome).
+//
+// Semântica do backend (exclude_unset, S39):
+// - campo AUSENTE do body  → não toca no banco
+// - campo = null           → limpa o campo
+// - campo com valor        → atualiza
+//
+// O caller (EditProfileModal) só inclui no payload os campos que o
+// usuário MUDOU ou LIMPOU. Campo intocado fica fora do body.
+//
+// `extra="forbid"` no backend: email/username/senha no body → 422.
+// Response: UserResponse (mesmo shape do /auth/me).
+export interface UpdateMePayload {
+  full_name?: string | null;
+  weight_kg?: number | null;
+  height_cm?: number | null;
+}
+
+export async function updateMe(
+  payload: UpdateMePayload
+): Promise<UserResponse> {
+  return apiFetch<UserResponse>("/users/me", {
+    method: "PUT",
+    body: payload,
+  });
+}

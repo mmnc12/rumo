@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { updateMe, type UpdateMePayload } from "../api/auth";
 import { getFollowers, getFollowing, getUser } from "../api/social";
 import { useAuth } from "./useAuth";
 import { socialKeys } from "./useSocial";
@@ -61,5 +62,29 @@ export function useUser(userId: string | undefined) {
     enabled: !!userId,
     staleTime: 5 * 60_000,
     retry: 1,
+  });
+}
+
+// [Sessão 40] PUT /users/me — edição do próprio perfil.
+//
+// No onSuccess:
+// 1. auth.setUser(updated) → atualiza o AuthContext em memória. Sem isso,
+//    o modal de edição reaberto na mesma sessão mostraria dados velhos
+//    (o `user` do useAuth é a fonte do pré-preenchimento).
+// 2. invalidateQueries(["users", updated.id]) → o useUser(id) refaz
+//    GET /users/{id} e o header do ProfilePage reflete o novo full_name.
+//
+// Não invalidamos ["users", undefined] nem outros — só o id do usuário
+// logado. O cache de terceiros não muda.
+export function useUpdateMe() {
+  const auth = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: UpdateMePayload) => updateMe(payload),
+    onSuccess: (updated) => {
+      auth.setUser(updated);
+      queryClient.invalidateQueries({ queryKey: ["users", updated.id] });
+    },
   });
 }
