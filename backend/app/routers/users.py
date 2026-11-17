@@ -16,7 +16,7 @@ from app.schemas.stats import (
     StatsSummary,
     StatsWeeklyResponse,
 )
-from app.schemas.user import UserPublic
+from app.schemas.user import UserPublic, UserResponse, UserUpdate
 from app.services import follow_service, stats_service, user_service
 from app.services.errors import ServiceError
 
@@ -76,6 +76,30 @@ async def search_users(
         return await user_service.search_users(db, q, current_user.id, limit)
     except ServiceError as exc:
         raise _handle_service_error(exc)
+
+
+# [Sessão 39] Update do próprio perfil.
+# Rota estática `/me` declarada ANTES de `/{user_id}` pelo mesmo motivo do
+# `/search`: senão o FastAPI tenta parsear "me" como UUID e retorna 422.
+# Auth: Bearer JWT via get_current_user (o próprio usuário é o alvo — não
+# existe user_id no path). Response: UserResponse (mesmo shape do /auth/me),
+# devolve o estado pós-update pra UI refletir sem precisar de um GET extra.
+# Semântica de "não mandou" vs "mandou null": resolvida no service via
+# model_dump(exclude_unset=True). `{}` é idempotente (200, nada muda);
+# `null` limpa o campo; ausente não toca.
+@router.put("/me", response_model=UserResponse)
+async def update_me(
+    payload: UserUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Atualiza o perfil do próprio usuário autenticado.
+
+    Campos aceitos (todos opcionais): weight_kg, height_cm, full_name.
+    Campos proibidos por essa rota (extra="forbid" no UserUpdate):
+    email, username, senha (fluxos próprios, fora do escopo).
+    """
+    return await user_service.update_me(db, current_user, payload)
 
 
 @router.post("/{user_id}/follow", status_code=status.HTTP_204_NO_CONTENT)

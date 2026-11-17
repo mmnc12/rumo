@@ -1,4 +1,4 @@
-"""Service de usuários: busca por username/full_name."""
+"""Service de usuários: busca por username/full_name e update do próprio perfil."""
 
 from uuid import UUID
 
@@ -6,6 +6,7 @@ from sqlalchemy import case, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
+from app.schemas.user import UserUpdate
 from app.services.errors import ServiceError
 
 
@@ -56,3 +57,48 @@ async def search_users(
 
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
+
+# [Sessão 39] Update parcial do próprio perfil (PUT /users/me).
+# Semântica de "não mandou" vs "mandou null" via model_dump(exclude_unset=True):
+#   - campo ausente   -> não toca no banco (exclude_unset filtra)
+#   - campo = null    -> limpa o campo (valor None é aplicado)
+#   - campo com valor -> atualiza
+#
+# [Sessão 39 — fix] Recarrega o User na sessão do request via db.get ANTES
+# de mutar. Motivo: em produção o get_current_user já devolve o user na
+# sessão do request (get_db), então db.get é identity-map hit (sem query).
+# Em teste, o override de get_current_user devolve o user da fixture
+# (sessão diferente) — sem o db.get, o commit da sessão do request estoura
+# InvalidRequestError ("already attached to session X"). O db.get reattach
+# o objeto na sessão certa e o commit funciona nos dois cenários.
+async def update_me(
+    db: AsyncSession,
+    user: User,
+    payload: UserUpdate,
+) -> User:
+    """Aplica os campos enviados em UserUpdate ao usuário autenticado.
+
+    Retorna o User recarregado do banco (refresh garante que os valores
+    refletem o estado pós-commit, incluindo updated_at).
+    """
+    data = payload.model_dump(exclude_unset=True)
+
+    if not data:
+        # Nada a fazer — idempotente. Devolve o user como está.
+        # Sem commit/refresh desnecessário.
+        return user
+
+    # Reattach na sessão do request (ver comentário [Sessão 39 — fix]).
+    user = await db.get(User, user.id)
+    if user is None:
+        # Não deveria acontecer: get_current_user já validou que existe.
+        # Defensivo — se acontecer, é corrida com delete concorrente.
+        raise ServiceError(404, "Usuário não encontrado")
+
+    for field, value in data.items():
+        setattr(user, field, value)
+
+    await db.commit()
+    await db.refresh(user)
+    return user

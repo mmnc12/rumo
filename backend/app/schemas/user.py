@@ -31,6 +31,28 @@ class UserCreate(BaseModel):
     birth_date: date | None = None
 
 
+# [Sessão 39] Update parcial do próprio perfil (PUT /users/me).
+# Todos os campos são opcionais. A semântica de "não mandou" vs "mandou null"
+# é resolvida no service via model_dump(exclude_unset=True):
+#   - campo ausente  -> não toca no banco
+#   - campo = null   -> limpa o campo (weight_kg/height_cm/full_name)
+#   - campo com valor -> atualiza
+# extra="forbid" rejeita email/username/senha/hashed_password por essa rota:
+#   email e username são chave única e exigem validação de conflito (fora do
+#   escopo da S39); senha tem fluxo próprio. Falhar explícito é melhor que
+#   aceitar e ignorar.
+# As restrições de weight_kg/height_cm/full_name espelham o UserCreate —
+# paridade de validação entre cadastro e edição.
+class UserUpdate(BaseModel):
+    """Atualização parcial do perfil do próprio usuário."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    weight_kg: float | None = Field(None, gt=0, lt=500, description="Peso em kg")
+    height_cm: float | None = Field(None, gt=0, lt=300, description="Altura em cm")
+    full_name: str | None = Field(default=None, max_length=120)
+
+
 class UserLogin(BaseModel):
     """Credenciais de login (para o futuro endpoint /auth/login)."""
 
