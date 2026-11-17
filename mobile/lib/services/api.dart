@@ -9,6 +9,7 @@ import '../models/activity_track.dart';
 import '../models/comment.dart';
 import '../models/stats.dart'; // [Sessão 33] stats/summary + stats/by-type; [Sessão 38] weekly/monthly
 import '../models/user.dart'; // [Sessão 34] User (UserPublic do backend)
+import '../models/user_me.dart'; // [Sessão 39] UserMe (resposta de /auth/me e PUT /users/me)
 import '../utils/download.dart'; // [Sessão 37] countZipEntries (EOCD fail-open)
 
 class ApiException implements Exception {
@@ -68,6 +69,18 @@ class ApiClient {
     String? token,
   }) async {
     final response = await _send('POST', path, token: token, body: body);
+    return _decode(response);
+  }
+
+  // [Sessão 39] PUT autenticado — usado por updateMe (PUT /users/me).
+  // Espelha o `post` (JSON body). Não existia porque até a S38 o app só
+  // precisava de GET/POST/DELETE.
+  Future<dynamic> put(
+    String path, {
+    Object? body,
+    String? token,
+  }) async {
+    final response = await _send('PUT', path, token: token, body: body);
     return _decode(response);
   }
 
@@ -261,6 +274,47 @@ class ApiClient {
       throw ApiException(500, 'Resposta inesperada em /users/{id}');
     }
     return User.fromJson(data);
+  }
+
+  // [Sessão 39] PUT /users/me — atualiza o próprio perfil.
+  //
+  // Semântica de "não mandou" vs "mandou null" (backend usa
+  // model_dump(exclude_unset=True)):
+  // - campo AUSENTE do map  → não toca no banco
+  // - campo = null          → limpa o campo
+  // - campo com valor       → atualiza
+  //
+  // O caller (EditProfilePage) monta o Map só com os campos que o usuário
+  // tocou. Campo intocado não entra no map (ausente). Campo que o usuário
+  // tocou em "Limpar" entra como `null` explícito. Campo que o usuário
+  // editou entra com o valor numérico/string.
+  //
+  // Retorna `UserMe` (mesmo shape do /auth/me) já com o estado pós-update,
+  // pra UI refletir sem GET extra (S39 — paridade com o backend que
+  // devolve UserResponse).
+  //
+  // Erros: 401 (sem token), 422 (validação Pydantic: range de weight/height,
+  // max_length de full_name, campo proibido como email/username).
+  Future<UserMe> updateMe({
+    String? fullName,
+    double? weightKg,
+    double? heightCm,
+    required Map<String, bool> fieldsToClear,
+    String? token,
+  }) async {
+    final body = <String, dynamic>{};
+    if (fullName != null) body['full_name'] = fullName;
+    if (weightKg != null) body['weight_kg'] = weightKg;
+    if (heightCm != null) body['height_cm'] = heightCm;
+    fieldsToClear.forEach((key, shouldClear) {
+      if (shouldClear) body[key] = null;
+    });
+
+    final data = await put('/users/me', body: body, token: token);
+    if (data is! Map<String, dynamic>) {
+      throw ApiException(500, 'Resposta inesperada em PUT /users/me');
+    }
+    return UserMe.fromJson(data);
   }
 
   /// `POST /users/{userId}/follow` — segue um usuário.
@@ -712,6 +766,11 @@ class ApiClient {
       case 'POST':
         response = await _client
             .post(uri, headers: headers, body: encodedBody)
+            .timeout(const Duration(seconds: 30));
+      // [Sessão 39] PUT — necessário pro updateMe (PUT /users/me).
+      case 'PUT':
+        response = await _client
+            .put(uri, headers: headers, body: encodedBody)
             .timeout(const Duration(seconds: 30));
       case 'DELETE':
         response = await _client

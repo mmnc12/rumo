@@ -17,10 +17,22 @@
 // decisão de UX. A rota continua sendo "abre, busca, toca no resultado,
 // fecha" — a busca de atividades é só uma segunda aba dentro do mesmo
 // fluxo. Apaga o user_search_page.dart.
+//
+// [Sessão 39] +rota /edit-profile (edição do próprio perfil). Fora do
+// shell — é fluxo. Recebe o UserMe atual via `extra` (state.extra do
+// go_router); se `extra` não for UserMe (deep-link sem extra), redireciona
+// pro /profile. O pop retorna o UserMe pós-update pro caller (ProfilePage
+// faz setState). Consome PUT /users/me (commit 9d52470).
+//
+// [Sessão 39 — fix] builder usa (context, state), não (_, state) — o
+// GoRouterState 18.x NÃO tem `.context` (removido). O context do builder
+// é o que serve pro `context.go('/profile')` no fallback do deep-link.
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'models/user_me.dart'; // [Sessão 39] extra do /edit-profile
 import 'pages/activity_detail_page.dart';
+import 'pages/edit_profile_page.dart'; // [Sessão 39] rota /edit-profile
 import 'pages/feed_page.dart';
 import 'pages/login_page.dart';
 import 'pages/profile_page.dart'; // [Sessão 32] rota /profile
@@ -30,7 +42,7 @@ import 'pages/user_profile_page.dart'; // [Sessão 34] rota /user/:id
 import 'services/auth_service.dart';
 
 void main() {
-  runApp(const RumoApp());
+  runApp(RumoApp());
 }
 
 class RumoApp extends StatefulWidget {
@@ -47,19 +59,17 @@ class _RumoAppState extends State<RumoApp> {
   @override
   void initState() {
     super.initState();
-
     _auth.bootstrap();
 
     _router = GoRouter(
-      initialLocation: '/feed',
-      refreshListenable: _auth,
+      initialLocation: '/login',
+      // [Sessão 32] Redirect global: sem login → /login. Com login em
+      // /login → /feed. As rotas do shell (/feed, /profile) exigem auth.
       redirect: (context, state) {
-        if (_auth.loading) return null;
-        final loggingIn = state.matchedLocation == '/login';
-        if (!_auth.isLoggedIn) {
-          return loggingIn ? null : '/login';
-        }
-        if (loggingIn) return '/feed';
+        final loggedIn = _auth.isLoggedIn;
+        final goingToLogin = state.matchedLocation == '/login';
+        if (!loggedIn && !goingToLogin) return '/login';
+        if (loggedIn && goingToLogin) return '/feed';
         return null;
       },
       routes: [
@@ -67,7 +77,6 @@ class _RumoAppState extends State<RumoApp> {
           path: '/login',
           builder: (_, _) => LoginPage(auth: _auth),
         ),
-        // [Sessão 31] Tela de upload de GPX/FIT.
         GoRoute(
           path: '/upload',
           builder: (_, _) => UploadPage(auth: _auth),
@@ -75,28 +84,50 @@ class _RumoAppState extends State<RumoApp> {
         GoRoute(
           path: '/activity/:id',
           builder: (_, state) => ActivityDetailPage(
-            activityId: state.pathParameters['id']!,
             auth: _auth,
+            activityId: state.pathParameters['id']!,
           ),
         ),
-        // [Sessão 34] Perfil público de terceiro + follow.
         GoRoute(
           path: '/user/:id',
           builder: (_, state) => UserProfilePage(
-            userId: state.pathParameters['id']!,
             auth: _auth,
+            userId: state.pathParameters['id']!,
           ),
         ),
-        // [Sessão 36] Busca unificada (Usuários | Atividades).
-        // Fora do shell, mesma decisão de /user/:id e /activity/:id.
         GoRoute(
           path: '/search',
           builder: (_, _) => SearchPage(auth: _auth),
         ),
-        // [Sessão 32] Bottom nav: Feed / Perfil.
+        // [Sessão 39] Edição do próprio perfil. `extra` carrega o UserMe
+        // atual (o ProfilePage passa via context.push<UserMe>(...)).
+        // Sem extra (deep-link), redireciona pro /profile — evita crash
+        // com `null as UserMe`.
+        //
+        // [Sessão 39 — fix] builder usa `(context, state)` — o GoRouterState
+        // 18.x NÃO tem `.context` (a 18.x removeu). O `context` do builder
+        // é o que serve pro `context.go('/profile')` no fallback.
+        GoRoute(
+          path: '/edit-profile',
+          builder: (context, state) {
+            final extra = state.extra;
+            if (extra is! UserMe) {
+              // Fallback defensivo: deep-link sem extra → volta pro perfil.
+              // WidgetsBinding.addPostFrameCallback evita "setState during build"
+              // do go_router (não dá pra chamar context.go dentro do builder).
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (context.mounted) context.go('/profile');
+              });
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            return EditProfilePage(auth: _auth, current: extra);
+          },
+        ),
         StatefulShellRoute.indexedStack(
           builder: (context, state, navigationShell) {
-            return _ScaffoldWithNavBar(navigationShell: navigationShell);
+            return _ShellScaffold(auth: _auth, navigationShell: navigationShell);
           },
           branches: [
             StatefulShellBranch(
@@ -125,22 +156,21 @@ class _RumoAppState extends State<RumoApp> {
   Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'Rumo',
-      debugShowCheckedModeBanner: false,
       theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFF97316)),
         useMaterial3: true,
-        colorSchemeSeed: Colors.green,
       ),
       routerConfig: _router,
     );
   }
 }
 
-/// [Sessão 32] Casca do bottom nav. Cada página da branch mantém seu
-/// próprio Scaffold/AppBar; este Scaffold só fornece o NavigationBar.
-class _ScaffoldWithNavBar extends StatelessWidget {
+/// [Sessão 32] Scaffold do shell com bottom nav (Feed / Perfil).
+class _ShellScaffold extends StatelessWidget {
+  final AuthService auth;
   final StatefulNavigationShell navigationShell;
 
-  const _ScaffoldWithNavBar({required this.navigationShell});
+  const _ShellScaffold({required this.auth, required this.navigationShell});
 
   @override
   Widget build(BuildContext context) {
@@ -148,16 +178,14 @@ class _ScaffoldWithNavBar extends StatelessWidget {
       body: navigationShell,
       bottomNavigationBar: NavigationBar(
         selectedIndex: navigationShell.currentIndex,
-        onDestinationSelected: (index) {
-          navigationShell.goBranch(
-            index,
-            initialLocation: index == navigationShell.currentIndex,
-          );
-        },
+        onDestinationSelected: (i) => navigationShell.goBranch(
+          i,
+          initialLocation: i == navigationShell.currentIndex,
+        ),
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.dynamic_feed_outlined),
-            selectedIcon: Icon(Icons.dynamic_feed),
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
             label: 'Feed',
           ),
           NavigationDestination(

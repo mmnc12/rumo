@@ -40,6 +40,13 @@
 // - _statsPeriod/_statsCompare no estado; trocar filtro refaz _loadStats.
 // - StatsChart (novo widget, fl_chart) renderiza os 4 charts abaixo do
 //   ByTypeList, cada um com seu próprio isLoading/isError.
+//
+// [Sessão 39] +botão "Editar perfil" no _ProfileHeader. Abre
+// /edit-profile via context.push<UserMe> (extra = _me). O pop do
+// EditProfilePage devolve o UserMe pós-update (ou null se cancelou).
+// Em sucesso: setState(_me) + Future.wait([_load(), _loadStats()]) —
+// mesma ação do pull-to-refresh. `_openEditProfile` usa `context.push`
+// do go_router (já importado).
 import 'dart:async'; // [Sessão 37] Timer do feedback transitório
 
 import 'package:flutter/material.dart';
@@ -348,6 +355,25 @@ class _ProfilePageState extends State<ProfilePage> {
     await Future.wait([_load(), _loadStats()]);
   }
 
+  // [Sessão 39] Abre o editor de perfil. Recebe o UserMe pós-update via
+  // pop do EditProfilePage; se não-null, atualiza o estado local +
+  // re-sincroniza via pull-to-refresh programático (mesma ação do
+  // RefreshIndicator).
+  //
+  // `context.push<UserMe>` (não `.go`) — push empilha; o pop do
+  // EditProfilePage devolve o UserMe. `.go` substituiria a rota e
+  // perderia a referência ao ProfilePage.
+  Future<void> _openEditProfile() async {
+    final me = _me;
+    if (me == null) return;
+    final updated = await context.push<UserMe>('/edit-profile', extra: me);
+    if (!mounted) return;
+    if (updated != null) {
+      setState(() => _me = updated);
+      await Future.wait([_load(), _loadStats()]);
+    }
+  }
+
   // ===== [Sessão 37] Export em lote =====
 
   /// Abre o date picker e atualiza `_exportFrom` ou `_exportTo`.
@@ -506,7 +532,11 @@ class _ProfilePageState extends State<ProfilePage> {
                     padding: const EdgeInsets.all(12),
                     children: [
                       if (_me != null)
-                        _ProfileHeader(me: _me!, onLogout: _logout),
+                        _ProfileHeader(
+                          me: _me!,
+                          onLogout: _logout,
+                          onEdit: _openEditProfile, // [Sessão 39]
+                        ),
                       const SizedBox(height: 16),
 
                       // ===== [Sessão 37] Export em lote =====
@@ -968,11 +998,19 @@ class _StatsSection extends StatelessWidget {
   }
 }
 
+/// [Sessão 39] `onEdit` opcional — o botão "Editar perfil" só aparece se
+/// o caller passar. Hoje o único caller (ProfilePage) sempre passa; mas
+/// `_ProfileHeader` fica reusável em outra tela sem edit.
 class _ProfileHeader extends StatelessWidget {
   final UserMe me;
   final VoidCallback onLogout;
+  final VoidCallback? onEdit; // [Sessão 39]
 
-  const _ProfileHeader({required this.me, required this.onLogout});
+  const _ProfileHeader({
+    required this.me,
+    required this.onLogout,
+    this.onEdit, // [Sessão 39]
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1027,13 +1065,25 @@ class _ProfileHeader extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: onLogout,
-                icon: const Icon(Icons.logout, size: 18),
-                label: const Text('Sair'),
-              ),
+            // [Sessão 39] Wrap com "Editar perfil" + "Sair" (alinha à
+            // direita, quebra em linha em telas estreitas — paridade com
+            // o padrão do _SocialListsSection do UserProfilePage da S37).
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              children: [
+                if (onEdit != null)
+                  TextButton.icon(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit, size: 18),
+                    label: const Text('Editar perfil'),
+                  ),
+                TextButton.icon(
+                  onPressed: onLogout,
+                  icon: const Icon(Icons.logout, size: 18),
+                  label: const Text('Sair'),
+                ),
+              ],
             ),
           ],
         ),
