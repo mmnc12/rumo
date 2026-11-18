@@ -10,6 +10,8 @@ import {
   type ChartPeriod,
   type ChartMetric,
 } from "../components/PeriodChart";
+// [Sessão 41] Modal de edição do próprio perfil (paridade com o mobile S39).
+import { EditProfileModal } from "../components/EditProfileModal";
 import { useUserActivities } from "../hooks/useActivities";
 import {
   useFollowers,
@@ -35,6 +37,10 @@ import {
 import type { StatsPeriod, StatsCompare } from "../api/stats";
 import { useFollowUser } from "../hooks/useSocial";
 import { ApiError } from "../api/client";
+// [Sessão 41] Fonte do usuário logado — usada só pra abrir o modal de
+// edição (current = user do AuthContext). O header continua usando
+// `profile` (do useUser) pra refletir o full_name atualizado.
+import { useAuth } from "../hooks/useAuth";
 // [Sessão 23] Export em lote (paridade de UI com o endpoint /activities/export).
 // [Sessão 29] +tipo do resultado (entryCount) pra tipar o handler.
 import {
@@ -138,6 +144,14 @@ export default function ProfilePage() {
   // [Sessão 29] Passa a carregar `{ text, kind }` pra diferenciar
   // "sucesso" (verde) de "ZIP vazio" (âmbar).
   const [exportInfo, setExportInfo] = useState<ExportInfo | null>(null);
+
+  // [Sessão 41] Estado do modal "Editar perfil" (só no próprio perfil).
+  const [editOpen, setEditOpen] = useState<boolean>(false);
+
+  // [Sessão 41] Usuário logado — fonte do `current` do modal.
+  // O header continua usando `profile` (do useUser) pra refletir o
+  // novo full_name após o save (o useUpdateMe invalida ["users", id]).
+  const { user } = useAuth();
 
   // [Sessão 24] Limpa o feedback de sucesso depois de alguns segundos.
   useEffect(() => {
@@ -345,7 +359,21 @@ export default function ProfilePage() {
               )}
 
               {isSelf ? (
-                <p className="mt-2 text-sm text-gray-400">Este é você.</p>
+                // [Sessão 41] "Este é você." + botão "Editar perfil".
+                // O botão só renderiza quando `user` (do AuthContext)
+                // está disponível — o modal precisa do `current`.
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <p className="text-sm text-gray-400">Este é você.</p>
+                  {user && (
+                    <button
+                      type="button"
+                      onClick={() => setEditOpen(true)}
+                      className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                    >
+                      Editar perfil
+                    </button>
+                  )}
+                </div>
               ) : (
                 <button
                   type="button"
@@ -839,6 +867,18 @@ export default function ProfilePage() {
           )}
         </div>
       </main>
+
+      {/* [Sessão 41] Modal de edição — só no próprio perfil. Fica fora
+          do <main> pra que o backdrop `fixed inset-0` cubra a tela toda
+          (AppHeader fica atrás). O `user` do AuthContext é o `current`;
+          após o save, o useUpdateMe faz setUser + invalidateQueries. */}
+      {isSelf && user && (
+        <EditProfileModal
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          current={user}
+        />
+      )}
     </div>
   );
 }
@@ -928,8 +968,8 @@ function PreviousDelta({ item }: { item: StatsByTypeItem }) {
       />
       {/* [Sessão 30] Pace só nos PACE_TYPES. `computePace` devolve `null`
           quando distância=0 (evita div/0); coalesce pra 0 pra caber no
-          `DeltaLine` (que só aceita number). Nesse caso, delta=0 →
-          cinza "Pace 0:00 /km" — visualmente neutro, mas semanticamente
+          `DeltaLine` (que só aceita number). Nesse caso, delta=0 → cinza
+          "Pace 0:00 /km" — visualmente neutro, mas semanticamente
           coerente (pace indeterminado dos dois lados). */}
       {showPace && (
         <DeltaLine
