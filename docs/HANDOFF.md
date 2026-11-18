@@ -1,107 +1,112 @@
-HANDOFF — Rumo (backend + frontend + mobile) — Sessão 41
 SEÇÃO 0 — LEIA PRIMEIRO (contexto operacional)
-Regra de ouro para o assistente novo
-VOCÊ NÃO TEM ACESSO AO DISCO DO USUÁRIO. Não existe "listar pasta", "abrir arquivo", "ver o repo". Toda informação chega por DUAS vias: (a) o usuário cola o conteúdo de um arquivo via Get-Content -Encoding UTF8; (b) o usuário cola a saída de um comando de terminal. NUNCA invente caminho de arquivo. NUNCA diga "vou olhar o arquivo X". NUNCA reescreva um arquivo que você não recebeu nesta sessão. Se precisar de um arquivo, PEÇA e espere. Se a estrutura de pastas for necessária, PEÇA a saída de Get-ChildItem.
+Regra de ouro (S21–S42, inalterada)
+VOCÊ NÃO TEM ACESSO AO DISCO DO USUÁRIO. Toda informação chega por (a) Get-Content -Encoding UTF8 de um arquivo, ou (b) saída de comando de terminal. Nunca inventar caminho, nunca dizer "vou olhar X", nunca reescrever arquivo não recebido. Se precisar, pedir e esperar. Se a estrutura for necessária, pedir Get-ChildItem.
 
-Regras críticas (S21–S41) — contrato de trabalho, não sugestão
-Mantidas integralmente da S40. Adições da S41:
+Regras críticas (S21–S42) — contrato de trabalho, não sugestão
+Todas as S21–S41 mantidas. Adições da S42:
 
-S41a (NOVA, pedido explícito do usuário) — aviso proativo de interrupção iminente. Se o assistente perceber que o código entregue pode ser cortado no meio (limite de contexto do chat OU limite do site/IA), avisar ANTES de começar a entregar, não depois. O usuário disse textualmente: "ontem o chat acabou no meio do código, gostaria que você avisasse se caso isso for ocorrer, não estou falando apenas do limite do chat, mas sim o limite do site (IA)." Na prática: quando o arquivo for grande (>250 linhas) e o contexto estiver acima de ~60%, avisar antes de colar.
+S42a (NOVA — validação de arquivo de scaffold antes do commit). O flutter create e o flutter_native_splash:create reescrevem arquivos que não são alvo (ex.: mobile/web/index.html, analysis_options.yaml). Sempre rodar git status --short + git diff <arquivo> antes de commitar arquivos que o comando de scaffold tocou. Na S42, o flutter_native_splash:create colapsou o HTML de mobile/web/index.html e comeu o <link rel="icon"> — foi restaurado com git restore + Remove-Item -Recurse do mobile/web/splash/ (S42p). Regra: commitar só o que o escopo pede; o que o scaffold tocou de colateral, restaurar.
 
-S41b (NOVA — handoff desatualizado) — o handoff S40 dizia "3 arquivos M não commitados + handoff pendente", mas a realidade (git log) já mostrava 3deb4f8 docs: handoff S40 e fb77754 feat(web): ... (3/5) como HEAD==origin/main, working tree limpo. Regra: sempre rodar git status --short + git log --oneline -5 na Fase 0 antes de assumir o estado do handoff anterior. O handoff registra o estado no momento em que foi escrito; o commit pode ter acontecido depois.
+S42b (NOVA — hash do index-*.js não muda com mudanças em index.html/public/). O index.html e os assets de public/ são copiados pro dist/ sem entrar no bundle JS. Mudanças nesses arquivos não alteram o hash do index-*.js. O sinal de "deploy novo no ar" é o conteúdo do index.html (meta tags novas, favicon novo) e o favicon servido, não o hash do JS. (S42o — evita falso alarme "o hash não mudou, o deploy não foi".)
 
-S41c (NOVA — Vercel) — o index da Vercel mudou de index-CJjOEm0V.js (S38/S39/S40) para index-BRp7iIdJ.js na Fase 0 da S41, sem a S41 ter pushado nada. Explicação: o commit fb77754 da S40 (3 arquivos web) disparou o deploy; o hash do index mudou porque os 3 chunks de página (ProfilePage, ActivityDetailPage, SearchPage) são dependências transitivas de auth.ts/AuthContext.tsx/useProfile.ts e foram renomeados por referência cruzada (S28b). Os 3 chunks de lib externa (leaflet, recharts, rolldown-runtime) mantiveram hash. Não é bug; é deploy da sessão anterior. Regra: na Fase 0 de qualquer sessão, se o index da Vercel estiver diferente do registrado no handoff, primeiro checar git log — pode ser deploy do último commit já pushado, não bundle estranho.
+S42c (NOVA — Invoke-WebRequest.Content é byte[] para application/manifest+json). No PS 5.1, -UseBasicParsing devolve Content como string para text/html, mas como byte[] para application/json/application/manifest+json (que é o Content-Type do Vercel para manifest.webmanifest). .Substring() quebra. Usar [System.Text.Encoding]::UTF8.GetString($resp.Content) se precisar do texto. Não é bug do Rumo; é comportamento do PS 5.1. (S42q.)
 
-S41d (NOVA — design de componente sem lib) — o repo web não tem modal/dialog genérico, e não usa @headlessui/react/radix-ui/react-modal no código (só react-hook-form e zod estão instalados, mas o ProfilePage.tsx e o resto do repo usam useState + handlers diretos). Regra: modal novo é feito à mão (<div> + useEffect para Esc/backdrop/foco/overflow:hidden), sem introduzir padrão novo. Se um dia aparecer 3º modal, extrair componente genérico.
+S42d (NOVA — flutter_launcher_icons não aceita SVG, só PNG). O image_path do config tem que apontar pra um PNG 1024×1024 (mínimo). SVG não funciona. No fluxo S42: web/public/logo.svg (master, texto, ~1.6 KB) → gerar logo1024.png (ferramenta externa: cloudconvert, Chrome, magick) → salvar em mobile/assets/icon/logo1024.png → config flutter_launcher_icons aponta pra ele. O logo1024.png também foi copiado pra web/public/ como fallback iOS antigo (hashes idênticos, S42 — verificado).
 
-Todas as regras S21–S40 permanecem válidas e não foram reincidentes na S41 (0 tropeços de código).
+S42e (NOVA — flutter create --platforms=... respeita unmanaged_files do .metadata). O lib/main.dart não é tocado (o .metadata lista como unmanaged). Mas o flutter create cria test/widget_test.dart (template padrão) que referencia MyApp — se o lib/main.dart real não tem MyApp, o flutter analyze acusa erro. Fix: deletar test/widget_test.dart (template inútil). Idempotente.
 
-O que é LOCAL vs. o que é PRODUÇÃO
-LOCAL: D:\Rumo (repo git), D:\Rumo\backend (FastAPI + Postgres/PostGIS + Alembic + pytest), D:\Rumo\web (React 19 + Vite 8 + TypeScript + Tailwind + react-leaflet + recharts), D:\Rumo\mobile (Flutter). Assistente NÃO tem acesso a esses arquivos.
+S42f (NOVA — mobile sem scaffolds Android/iOS desde o início). O .metadata do mobile/ só listava web e windows. Não havia android/ nem ios/. Bloqueador real pra publicação nas lojas. Resolvido na S42 com flutter create --platforms=android,ios . (64 arquivos gerados). Lição: antes de planejar identidade visual nativa, checar se os scaffolds existem (Test-Path android, Test-Path ios).
 
-PRODUÇÃO: backend no Render (https://rumo-api-5s0b.onrender.com), frontend web na Vercel (https://rumo-wheat.vercel.app).
+S42g (NOVA — favicon existia mas não era referenciado). web/public/favicon.svg (9.5 KB, roxo/violeta, arte gerada por IA) existia no repo, mas o web/index.html apontava pra /vite.svg (genérico). Além disso, roxo ≠ laranja do app (rumo-500 = #f97316). Fix: favicon recriado em laranja (mantendo a forma de raio/energia), index.html corrigido. Lição: verificar se os assets de identidade que existem no repo estão referenciados (não só presentes).
 
-Fluxo: editar em D:\Rumo → pytest local (Docker de teste na 5433) → commit → push → Render + Vercel redeployam → validar via HTTP em produção.
+S42h (NOVA — icons.svg é sprite de UI, não logo). web/public/icons.svg (5 KB) contém <symbol id="bluesky-icon"> — é sprite de ícones de redes sociais, não identidade. Não usar como favicon nem logo.
 
-Mobile: roda em emulador/aparelho (Chrome/web nesta sessão), consumindo o mesmo backend Render.
+S42i (NOVA — pubspec.yaml com description: "A new Flutter project."). Placeholder genérico do template. Corrigido na S42 para descrição real do produto.
+
+S42j (NOVA — pubspec.yaml sem flutter_launcher_icons/flutter_native_splash). Adicionados na S42 como dev_dependencies (^0.14.4 / ^2.4.6), resolvidos sem conflito com Dart 3.13.7.
+
+S42k (NOVA — PWA sem PNGs no manifest). O manifest.webmanifest referencia /logo.svg como "src" (SVG cobre navegadores modernos; Lighthouse moderno aceita). logo192.png/logo512.png não foram gerados (não tenho ferramenta de SVG→PNG aqui; o usuário pode gerar quando quiser). Não é bloqueador. O apple-touch-icon aponta pra /logo.svg (iOS 16+ aceita; iOS < 16 cai no fallback favicon). web/public/logo1024.png existe como fallback.
+
+S42l (NOVA — modal à mão sem lib, S41d, continua válido). O repo web não tem modal/dialog genérico. react-hook-form/zod instalados mas não usados. Modal novo à mão (<div> + useEffect para Esc/backdrop/foco/overflow:hidden). Consistência.
+
+S42m (NOVA — flutter create reescreveu analysis_options.yaml). Adicionou exclusões de build/ e das pastas de plataforma na análise. Benéfico, não regressão. Commitar como está.
+
+S42n (NOVA — index.html sem <link rel="manifest">). O manifest.webmanifest foi criado (arquivo 3/7) mas o index.html não o referenciava. Fix de 1 linha no passo 7.1 (S42n): + <link rel="manifest" href="/manifest.webmanifest" /> + apple-touch-icon trocado de /favicon.svg pra /logo.svg (fundo creme é melhor pra ícone de tela inicial).
+
+S42o (NOVA — hash do index-*.js não muda nesta S42). Ver S42b.
+
+S42p (NOVA — flutter_native_splash:create toca mobile/web/index.html). O comando gera splash web (CSS inline, <picture id="splash"> com light-*/dark-*, script de remoção) e colapsa o HTML (parser reformatou <!DOCTYPE html><html><head>, normalizou async="", removeu <link rel="icon">). Restaurado com git restore mobile/web/index.html + Remove-Item -Recurse -Force mobile\web\splash (o mobile/web não é usado em produção; o web real é o web/ React na Vercel). Lição: rodar flutter_native_splash:create em projeto com web/ sempre exige git status + git diff antes do commit (S42a). Se o mobile/web não for usado, git restore + remover splash/.
+
+S42q (NOVA — Content byte[] pra manifest). Ver S42c.
+
+S42r (NOVA — "tudo como esperado" sem output). O usuário às vezes responde "tudo como esperado" sem colar a saída completa. Não assumir verde — quando o comando é crítico (build, pytest, hash, git status), pedir a saída específica mesmo que o usuário já tenha dito "tudo certo". Na S42, o git status --short pós-restore veio completo e confirmou. Mas em caso de dúvida, pedir o output específico. Exceção: se a resposta anterior já mostrou o output completo e o usuário só confirma, aceitar a confirmação (não re-pedir).
+
+Todas as regras S21–S41 permanecem válidas e não foram reincidentes na S42 (0 tropeços de código na entrega; 1 tropeço cosmético no script de validação, S42q — não-bug).
+
+O que é LOCAL vs. PRODUÇÃO (inalterado)
+LOCAL: D:\Rumo (repo), D:\Rumo\backend, D:\Rumo\web, D:\Rumo\mobile. Assistente não tem acesso.
+
+PRODUÇÃO: backend Render (https://rumo-api-5s0b.onrender.com), web Vercel (https://rumo-wheat.vercel.app).
+
+Fluxo: editar em D:\Rumo → pytest local (Docker 5433) → commit → push → Render + Vercel redeployam → validar HTTP em produção.
+
+Mobile: roda em emulador/aparelho. Nesta S42, ganhou scaffolds Android/iOS (antes só web/windows).
 
 Estrutura do repo (referência — conferir, não assumir)
 text
 D:\Rumo
-├── backend/ (venv em backend/venv, Python 3.13.7)
-│   ├── alembic/ app/ (core/ models/ routers/ schemas/ services/)
-│   ├── samples/ scripts/ tests/ (9 arquivos, 180 testes)
-│   ├── _scratch/ docker-compose.test.yml pytest.ini requirements.txt
+├── backend/ (venv, Python 3.13.7, pytest, 180 testes)
+│   └── (inalterado desde S39 — S40/S41/S42 não tocaram)
 ├── docs/HANDOFF.md
 ├── mobile/
-│   ├── lib/
-│   │   ├── main.dart (StatefulShellRoute + bottom nav desde S32;
-│   │   │   +rota /user/:id desde S34; +rota /search desde S35;
-│   │   │   +rota /edit-profile desde S39)
-│   │   ├── models/ (activity.dart, activity_track.dart, comment.dart,
-│   │   │   stats.dart, user.dart, user_me.dart — EDITADO S39)
-│   │   ├── pages/ (activity_detail_page.dart, edit_profile_page.dart
-│   │   │   ← NOVO S39, feed_page.dart, login_page.dart,
-│   │   │   profile_page.dart, search_page.dart, upload_page.dart,
-│   │   │   user_profile_page.dart)
-│   │   ├── services/ (api.dart ← EDITADO S39 (+put wrapper),
-│   │   │   auth_service.dart)
-│   │   ├── utils/ (download.dart, format.dart)
-│   │   └── widgets/ (activity_card.dart, activity_map.dart,
-│   │       by_type_list.dart, like_button.dart, stats_cards.dart,
-│   │       stats_chart.dart, stats_filters.dart)
-│   ├── pubspec.yaml (file_picker: ^13.3.3, fl_chart: ^1.1.0 (resolveu 1.3.1),
-│   │   go_router: ^18.1.2, path_provider: ^2.1.5, share_plus: ^13.3.1)
-│   └── windows/flutter/ (generated_plugin_registrant.cc, generated_plugins.cmake)
-├── web/src/
-│   ├── api/ (activities.ts, auth.ts ← EDITADO S40, client.ts,
-│   │   notifications.ts, photos.ts, social.ts, stats.ts)
-│   ├── assets/ components/ (EditProfileModal.tsx ← NOVO S41,
-│   │   AppHeader.tsx, ActivityCard.tsx, StatsCards.tsx, PeriodChart.tsx,
-│   │   CommentsSection.tsx, LikeButton.tsx, NotificationBell.tsx,
-│   │   PhotoGallery.tsx, PhotoUpload.tsx, ProtectedRoute.tsx,
-│   │   RouteMap.tsx, ActivityResults.tsx, UserResults.tsx)
-│   ├── contexts/ (AuthContext.tsx ← EDITADO S40)
-│   ├── hooks/ (useActivities.ts, useActivitySearch.ts, useAuth.ts,
-│   │   useDebounce.ts, useNotifications.ts, usePhotos.ts,
-│   │   useProfile.ts ← EDITADO S40, useSocial.ts, useStats.ts,
-│   │   useUserSearch.ts)
-│   ├── lib/ pages/ (ProfilePage.tsx ← EDITADO S41) types/ (api.ts)
+│   ├── lib/ (inalterado na S42 — S39 foi a última a tocar)
+│   ├── android/  ← NOVO S42 (scaffold completo + ícones + splash)
+│   ├── ios/      ← NOVO S42 (scaffold completo + ícones + splash)
+│   ├── web/      ← existia; flutter_native_splash tentou modificar, foi restaurado (S42p)
+│   ├── windows/  (inalterado)
+│   ├── assets/icon/logo1024.png  ← NOVO S42
+│   ├── pubspec.yaml  ← EDITADO S42 (+deps +config +description)
+│   ├── analysis_options.yaml  ← reescrito pelo flutter create (S42m)
+│   └── test/widget_test.dart  ← DELETADO S42 (template quebrado)
+├── web/src/ (inalterado na S42 — S41 foi a última a tocar)
+├── web/public/
+│   ├── favicon.svg  ← SUBSTITUÍDO S42 (laranja, era roxo)
+│   ├── logo.svg     ← NOVO S42 (master 512×512, fundo creme)
+│   ├── logo1024.png ← NOVO S42 (fallback iOS antigo)
+│   ├── manifest.webmanifest  ← NOVO S42 (PWA)
+│   └── icons.svg    (inalterado — sprite de UI, S42h)
+├── web/index.html   ← EDITADO S42 (+favicon +manifest +theme-color +description)
 └── README.md
-Como rodar comandos Flutter
-Flutter em C:\Users\nasci\flutter (bin em ...\flutter\bin). Versões: Flutter 3.47.9 / Dart 3.13.7. Sempre usar & "C:\Users\nasci\flutter\bin\flutter.bat" <comando> (o flutter puro às vezes não é reconhecido no PS).
+Como rodar comandos Flutter (inalterado)
+& "C:\Users\nasci\flutter\bin\flutter.bat" <comando> (Flutter 3.47.9 / Dart 3.13.7 em C:\Users\nasci\flutter).
 
-Contas de teste
-prod@rumo.com / senha12345 — id 01a12c83-be2a-71fa-b966-1c93ca64f341, 8 atividades, 34.081,56 m. Estado em 2026-11-17 (S41, medido na Fase 0 e confirmado na Fase 4): weight_kg=null, height_cm=null, full_name="Prod User". Username backend: produser. O weight_kg=80.0 registrado no handoff S39 não persiste — confirmado em 3 sessões seguidas (S39 registrou 80.0, S40 mediu null, S41 mediu null). Não é bug de código; é estado de dados (alguém limpou entre S39 e S40, ou o handoff S39 registrou estado transitório que não foi persistido). Anotado e encerrado como "estado".
+Contas de teste (inalterado)
+prod@rumo.com / senha12345 — id 01a12c83-be2a-71fa-b966-1c93ca64f341, 8 atividades, 34.081,56 m. Estado em 2026-11-17 (S42, Fase 0): weight_kg=null, height_cm=null, full_name="Prod User". Confirmado em 4 sessões seguidas (S39 registrou 80.0, S40 null, S41 null, S42 null). Encerrado como estado (não é bug de código).
 
-Tem atividade Teste mapa - rota sintetica (01a1b36a-0951-71e8-9044-c55c71558441, walk, 60 pontos, ~10 min).
+Prod2 — id 01a141e7-5ea4-7600-8959-19145475ad0a, username Prod2, email prod2@rumo.com, 2 atividades, 14.643 m, pace 496,89 s/km, 0 kcal. prod ↔ Prod2 bidirecional desde S37.
 
-Tem atividade sintética Teste delta S33 (01a1e10b-8012-711a-9216-19d3eac8ed19, walk, started_at=2026-06-01T10:00:00Z, 316.73 m, 480 s, 33 kcal, bbox null).
+⚡ "Quem sou eu" é GET /auth/me, NÃO /users/me (esse devolve 422/405).
 
-Prod2 — id 01a141e7-5ea4-7600-8959-19145475ad0a, username Prod2, email prod2@rumo.com, 2 atividades, 14.643 m, pace 496,89 s/km, 0 kcal. prod ↔ Prod2 bidirecional desde a validação manual da S37.
+Acordos de trabalho (inalterados + S42)
+SEMPRE seguir a recomendação do assistente (você reforçou na S42: "já falei, vamos fazer sempre o que você recomendar").
 
-⚡ "Quem sou eu" é GET /auth/me, NÃO /users/me (esse devolve 422 ou 405).
+CÓDIGO COMPLETO ao atualizar arquivo (nunca diff parcial, nunca placeholder), trecho alterado marcado com // [Sessão N].
 
-Acordos de trabalho (válidos em todas as sessões — reforçados S21 à S41)
-SEMPRE seguir a recomendação do assistente. Quando houver decisão pendente, executar a recomendada salvo instrução explícita em contrário.
+UMA versão por arquivo por resposta.
 
-SEMPRE entregar o CÓDIGO COMPLETO ao atualizar um arquivo — nunca diff parcial, nunca // resto igual, nunca placeholder. Destacar trecho alterado com // [Sessão N] ou // [Sessão N — fix].
+HANDOFF PREVENTIVO em ~50–60% quando entregando arquivos grandes em sequência (>250 linhas); ~70–80% no caso normal (S40c).
 
-UMA versão por arquivo por resposta. Se errar, cortar a errada e entregar só a corrigida com nota de 1 linha.
+AVISO PROATIVO DE INTERRUPÇÃO IMINENTE (S41a) — antes de começar a entregar, não depois. Vale pro limite do chat e do site/IA.
 
-HANDOFF PREVENTIVO em ~50–60% quando a sessão estiver entregando arquivos grandes em sequência (>250 linhas); ~70–80% no caso normal. (S40c — pedido explícito do usuário por medo de "ficar na mão".)
+PERCENTUAL DE PRONTIDÃO anexo ao handoff (Fase 5), quebrado por camada.
 
-AVISO PROATIVO DE INTERRUPÇÃO IMINENTE (S41a) — antes de começar a entregar, não depois.
+VALIDAÇÃO INCREMENTAL. Buildar antes de entregar o próximo arquivo.
 
-PERCENTUAL DE PRONTIDÃO anexo ao handoff (não no meio da sessão, não na abertura). Quebrado por camada, com consolidado e estimativa de sessões restantes.
+VERIFICAR SAVE ANTES DE BUILD (S21).
 
-VALIDAÇÃO INCREMENTAL. Arquivos da mesma stack: colar o base e buildar antes de entregar o próximo.
+NUNCA placeholder no código entregue (S21) nem em comando com here-string (S36g).
 
-VERIFICAR SAVE ANTES DE BUILD (S21) — Get-Content | Select-String "<símbolo>" antes de build/test.
-
-NUNCA placeholder no código entregue (S21) nem em comandos com here-string (S36g).
-
-Não adivinhar nomes de símbolos (S21, reforçada S39b). Vale pro arquivo que está sendo editado, não só pros novos.
+Não adivinhar nomes de símbolos (S21/S39b).
 
 git status + git log antes de git restore (S21).
 
@@ -111,41 +116,41 @@ Validar openapi.json antes de acusar bug em rota nova (S22).
 
 Validar bundle da Vercel baixando index-*.js (S23).
 
-Vercel pode demorar >90 s no primeiro deploy (S24).
+Vercel pode demorar >90s no primeiro deploy (S24).
 
-Select-String -SimpleMatch não aceita | como alternância (S25a, S33a, S36d, S38b). Para alternância, usar -Pattern "a|b" (sem -SimpleMatch).
+Select-String -SimpleMatch não aceita | (S25a/S33a/S36d/S38b). Usar -Pattern "a|b".
 
-Confirmar lines[-1] suspeito com Get-Content | Select-Object -Last N antes de concluir (S25b).
+Confirmar lines[-1] suspeito com Select-Object -Last N (S25b).
 
 Exigir output do bloco de validação antes de pedir commit (S25c).
 
-Teste definitivo do save: git hash-object ≠ git rev-parse HEAD:<path> + git status --short mostra M (S25d + S34a — path relativo à raiz do repo no rev-parse; hash-object aceita path relativo ao CWD).
+Teste definitivo do save: git hash-object ≠ git rev-parse HEAD:<path> + git status --short mostra M (S25d + S34a).
 
-Entregar conteúdo de arquivo para colar SEM cerca markdown envolvendo (S25e).
+Entregar conteúdo de arquivo SEM cerca markdown envolvendo (S25e).
 
-PS 5.1: resp.Content de Invoke-WebRequest -UseBasicParsing é string, não byte[] (S26a).
+PS 5.1: Content de Invoke-WebRequest -UseBasicParsing é string para text/html, byte[] para JSON/manifest (S26a + S42q).
 
 Validar GPX em prod por regex no Content (S26b).
 
-Render free tier pode demorar >3 min (>5 min na S39) para redeployar (S26c).
+Render free tier pode demorar >3 min (S26c).
 
 Commitar o handoff pendente ANTES de qualquer outra coisa (S27a).
 
-Ordem fixa dos blocos da Fase 0: handoff → log/status → build/lint/analyze → docker/pytest/ruff → prod backend → prod frontend. Cada bloco só depois do anterior verde (S27b).
+Ordem fixa da Fase 0: handoff → log/status → build/lint/analyze → docker/pytest/ruff → prod backend → prod frontend. Cada bloco só depois do anterior verde (S27b).
 
-Antes de aceitar o escopo do handoff anterior como verdade, pedir TODOS os arquivos que o contrato toca (S28a).
+Antes de aceitar o escopo do handoff anterior, pedir TODOS os arquivos que o contrato toca (S28a).
 
 Chunk com hash novo e tamanho idêntico = renomeação de referência cruzada (S28b).
 
 Contar entradas de ZIP no client via EOCD, fail-open, sem ZIP64 (S29a).
 
-Vercel reescreve hash de chunk; sinal de "novo no ar" = hash mudou vs. sessão anterior (S29b).
+Vercel reescreve hash de chunk; sinal de "novo no ar" = hash mudou vs. sessão anterior (S29b — exceto para index-*.js quando só index.html/public/ mudaram, S42b).
 
 Contar ocorrências reais antes de anunciar "esperado Nx" (S29c).
 
 ESLint no-useless-assignment: let x: T; sem inicializar quando try/catch cobre todos os caminhos (S29d).
 
-Select-String "TODO" casa case-insensitive "Todos". Usar -CaseSensitive ou regex \bTODO\b (S30a).
+Select-String "TODO" casa case-insensitive "Todos". Usar -CaseSensitive ou \bTODO\b (S30a).
 
 Componente genérico com semântica oposta: prop booleana default-false, 4 casos (S30b).
 
@@ -157,7 +162,7 @@ file_picker 13.x: API estática + length()/readAsBytes() (S31b).
 
 Select-String do disco mostrando conteúdo antigo após save → WriteAllText no PowerShell (S31c, reforçada S36f).
 
-Select-String -SimpleMatch 'class X' casa PREFIXOS; _Simbolo casa menções em comentários (S32a/S32b).
+Select-String -SimpleMatch 'class X' casa PREFIXOS (S32a/S32b).
 
 "Esperado" de Select-String é SEMPRE piso ou faixa, nunca exato (S32c/S32d/S33b/S34b/S38a).
 
@@ -167,68 +172,85 @@ Bundle minified: Select-String devolve a linha inteira. Usar [regex]::Matches (S
 
 Toque no ActivityCard: confirmar PRIMEIRO qual tela está aberta pela URL (S36c).
 
-AutomaticKeepAliveClientMixin é @mustCallSuper — super.build obrigatório. Lint: // ignore_for_file: unnecessary_overrides na linha 1 (S36e).
+AutomaticKeepAliveClientMixin é @mustCallSuper — super.build obrigatório. Lint: // ignore_for_file: unnecessary_overrides (S36e).
 
 Editor falhou em salvar → WriteAllText com o arquivo inteiro (S36f).
 
 share_plus 13.x: SharePlus.instance.share(ShareParams(files: [XFile.fromData(...)])) (S37c).
 
-Download no Chrome via share_plus dispara download no browser, não share sheet do SO (S37d).
+Download no Chrome via share_plus dispara download no browser (S37d).
 
-Import não usado por inferência de tipo → remover, não forçar uso (S37e).
+Import não usado por inferência de tipo → remover (S37e).
 
 unnecessary_underscores (Dart 3.7+): (_, __) vira (_, _) (S37f).
 
 ^ de continuação do PowerShell não é confiável — usar backtick ou uma linha só (S38c).
 
-"Esperado" de git diff --cached --stat é piso/faixa, nunca estimativa de linhas (S38d).
+"Esperado" de git diff --cached --stat é piso/faixa (S38d).
 
-GoRouterState no go_router 18.x NÃO tem .context — usar o 1º parâmetro do builder (S39a).
+GoRouterState no go_router 18.x NÃO tem .context (S39a).
 
-REGRA S21 vale pro arquivo que está sendo editado, não só pros novos (S39b, CRÍTICA).
+REGRA S21 vale pro arquivo que está sendo editado, não só pros novos (S39b).
 
-Só git restore preserva o encoding do blob — git show HEAD:... > ... no PS 5.1 grava UTF-16 LE e corrompe (S39c).
+Só git restore preserva o encoding do blob — git show HEAD:... > ... no PS 5.1 grava UTF-16 LE (S39c).
 
 AuthContext do web ganhou setUser na S40 (S40a).
 
-apiFetch do web já aceita method: "PUT" — não criar put() novo no client.ts. O mobile precisou de put() wrapper no api.dart (S39). As stacks divergem — não assumir simetria (S40b).
+apiFetch do web já aceita method: "PUT" — não criar put() novo no client.ts (S40b).
 
-Handoff preventivo em ~50–60% quando arquivos grandes em sequência (>250 linhas); ~70–80% no caso normal (S40c).
+Handoff preventivo em ~50–60% quando arquivos grandes em sequência (S40c).
 
-S41a–S41d (novas, vide acima).
+S41a–S41d (vide handoff S41; válidas).
 
-Processo que o usuário elogiou na S21–S41 (para manter)
-Fase 0 (validar estado) → Fase 1 (descoberta, pedir arquivos) → Fase 2 (contrato travado) → Fase 3 (entrega incremental, 1 arquivo por vez) → Fase 3.5 (verificar save + commit) → Fase 4 (validação) → Fase 5 (handoff + percentual).
+S42a–S42r (vide acima).
+
+Processo que o usuário elogiou (manter)
+Fase 0 (validar estado) → Fase 1 (descoberta, pedir arquivos) → Fase 2 (contrato travado) → Fase 3 (entrega incremental, 1 arquivo por vez) → Fase 3.5 (verificar save + commit) → Fase 4 (validação em produção) → Fase 5 (handoff + percentual).
 
 SEÇÃO 1 — TL;DR para quem chega agora
-Backend: 180 testes passando LOCALMENTE, 0 warnings. S39 adicionou PUT /users/me (commit 9d52470). FeedItemResponse expõe autor em author (web) + user (mobile) desde S36. Todos os endpoints do MVP em produção. Estado inalterado desde S39 (S40 e S41 não tocaram no backend).
+Backend: 180 testes passando, 0 warnings. Inalterado desde S39. Todos os endpoints do MVP em produção.
 
-Web: S41 fechou a paridade web do "Editar perfil" (5/5). Entregues nas S40+S41:
+Web: S42 fechou a identidade visual. Entregues:
 
-web/src/api/auth.ts — +UpdateMePayload, +updateMe() (PUT /users/me) ✅ S40
+web/public/favicon.svg — recriado em laranja (#f97316/#ea580c), era roxo/violeta. Forma de raio/energia mantida.
 
-web/src/contexts/AuthContext.tsx — +setUser no AuthContextValue + no useMemo ✅ S40
+web/index.html — <link rel="icon"> de /vite.svg → /favicon.svg; +theme-color; +apple-touch-icon (/logo.svg); +manifest; +description.
 
-web/src/hooks/useProfile.ts — +useUpdateMe() (mutation com onSuccess → auth.setUser(updated) + invalidateQueries(["users", updated.id])) ✅ S40
+web/public/logo.svg — master 512×512, fundo creme #fff7ed (iOS não gosta de PNG transparente).
 
-web/src/components/EditProfileModal.tsx — NOVO (~300 linhas): modal com 3 campos, validação espelhando mobile, "Limpar"/"Desfazer", Esc/backdrop, foco, role="dialog" ✅ S41
+web/public/logo1024.png — fallback iOS antigo (PNG 1024×1024, 49 KB).
 
-web/src/pages/ProfilePage.tsx — EDITADO (+~20 linhas): +import useAuth, +import EditProfileModal, +editOpen, botão "Editar perfil" ao lado de "Este é você." quando isSelf, <EditProfileModal> no final ✅ S41
+web/public/manifest.webmanifest — PWA (name, short_name, theme_color, background_color, start_url, display: standalone, ícones SVG).
 
-Mobile: flutter analyze limpo. S39 entregou EditProfilePage (384 linhas), api.updateMe, rota /edit-profile, botão no ProfilePage. Nada a fazer no mobile — paridade já fechada na S39.
+Mobile: S42 fechou scaffolds + identidade nativa. Entregues:
 
-Bloqueadores não-código: 0%. Ícone, identidade visual, política de privacidade, build assinado, contas de dev, publicação nas lojas. O maior gap pro lançamento. Próximo alvo: OPÇÃO 4 (identidade visual), S42/S43.
+mobile/android/ — scaffold completo (antes não existia), 64 arquivos.
 
-Endpoints relevantes (backend, S39)
-text
-PUT /users/me                                            — auth: Bearer JWT (self)
-  body: { weight_kg?: float(0,500), height_cm?: float(0,300), full_name?: str(≤120) }
-  response 200: UserResponse (mesmo shape do /auth/me)
-  erros: 401 (sem token), 422 (validação Pydantic: range, max_length, extra="forbid")
-  semântica: ausente → não toca; null → limpa; valor → atualiza (exclude_unset)
-  proibidos: email, username, senha (extra="forbid" → 422)
-  rota declarada ANTES de /{user_id} (mesma lição do /search — evita 422)
-SEÇÃO 2 — PRODUÇÃO E AMBIENTE
+mobile/ios/ — scaffold completo (antes não existia), idem.
+
+mobile/android/app/src/main/res/mipmap-*/launcher_icon.png — 5 densidades + launcher_icon.xml (adaptive icon v26).
+
+mobile/ios/Runner/Assets.xcassets/AppIcon.appiconset/ — 21 PNGs (todos os tamanhos iOS).
+
+mobile/android/app/src/main/res/drawable-*/splash.png + android12splash.png — splash Android por densidade.
+
+mobile/ios/Runner/Base.lproj/LaunchScreen.storyboard + LaunchImage.imageset — splash iOS.
+
+mobile/pubspec.yaml — +flutter_launcher_icons ^0.14.4, +flutter_native_splash ^2.4.6, +assets/icon/, +config dos dois; description corrigida (era "A new Flutter project.").
+
+mobile/assets/icon/logo1024.png — PNG fonte (49 KB).
+
+mobile/test/widget_test.dart — deletado (template quebrado).
+
+mobile/.metadata — +android/ios na lista de plataformas.
+
+mobile/analysis_options.yaml — reescrito pelo flutter create (exclui build/ e plataformas — S42m).
+
+Bloqueadores não-código: ~5% agora (era 0%). O ícone e a identidade visual existem; o splash existe. O que falta: política de privacidade, build assinado, contas de dev, publicação nas lojas, screenshots, tile server próprio.
+
+Próximo alvo: S43 — release prep pesado (política de privacidade + build assinado + contas de dev + tile server próprio). O handoff S41 recomendava "S43 = release prep". Mantido.
+
+SEÇÃO 2 — PRODUÇÃO E AMBIENTE (inalterado)
 Backend: https://rumo-api-5s0b.onrender.com
 
 Docs Backend: https://rumo-api-5s0b.onrender.com/docs
@@ -237,7 +259,7 @@ Frontend Web: https://rumo-wheat.vercel.app
 
 Repo local: D:\Rumo
 
-Mobile: D:\Rumo\mobile
+Mobile: D:\Rumo\mobile (agora com android/ e ios/)
 
 Web: D:\Rumo\web (scripts: dev, build, lint, preview)
 
@@ -247,316 +269,197 @@ Docker Desktop: 4.93.0 (engine 29.8.1, compose v5.5.1)
 
 SO: Windows, PowerShell 5.1
 
-Python: 3.13.7 (venv em D:\Rumo\backend\venv) — NÃO usar 3.14
+Python: 3.13.7 (venv em D:\Rumo\backend\venv)
 
-Venv backend: D:\Rumo\backend\venv (ativa com .\venv\Scripts\Activate.ps1)
+Venv backend: D:\Rumo\backend\venv
 
-Deps web relevantes: React 19, Vite 8, TypeScript 6, Tailwind 3.4, react-router-dom 7, @tanstack/react-query 5, react-leaflet 5, recharts 3. Não usa @headlessui/radix/react-modal (S41d). Tem react-hook-form e zod instalados, mas não usa no código existente.
+Deps web (inalteradas)
+React 19, Vite 8, TypeScript 6, Tailwind 3.4 (rumo-500 = #f97316), react-router-dom 7, @tanstack/react-query 5, react-leaflet 5, recharts 3. Não usa @headlessui/radix/react-modal (S41d). react-hook-form/zod instalados mas não usados (S41).
 
-Deps mobile: file_picker: ^13.3.3, fl_chart: ^1.1.0 (resolveu 1.3.1), go_router: ^18.1.2, path_provider: ^2.1.5, share_plus: ^13.3.1. Package name: rumo_mobile.
+Deps mobile (atualizadas na S42)
+file_picker ^13.3.3, fl_chart ^1.1.0 (resolveu 1.3.1), go_router ^18.1.2, path_provider ^2.1.5, share_plus ^13.3.1, flutter_launcher_icons ^0.14.4 (novo S42), flutter_native_splash ^2.4.6 (novo S42). Package name: rumo_mobile.
 
-Git (estado ao fim da Sessão 41 — working tree limpo)
+Git (estado ao fim da Sessão 42 — working tree limpo)
 text
-6701560 (HEAD -> main, origin/main) feat(web): EditProfileModal + botao Editar perfil no ProfilePage (Sessao 41, 5/5)
+aaeb7c4 (HEAD -> main, origin/main) feat(mobile): scaffolds android/ios + icone e splash nativo (Sessao 42)
+8576d95 feat(web): identidade visual — favicon laranja + manifest PWA + index.html (Sessao 42)
+9b9df95 docs: handoff da Sessao 41
+6701560 feat(web): EditProfileModal + botao Editar perfil no ProfilePage (Sessao 41, 5/5)
 fb77754 feat(web): PUT /users/me + setUser no AuthContext + useUpdateMe (Sessao 40, 3/5)
 3deb4f8 docs: handoff da Sessao 40
-e6978d2 docs: handoff da Sessao 39
-e251057 feat(mobile): EditProfilePage consumindo PUT /users/me (Sessao 39)
-9d52470 feat(backend): PUT /users/me para editar weight_kg e height_cm (Sessao 39)
-git status --short vazio. HEAD == origin/main. Pendente: commit do handoff S41 (este arquivo) — primeira ação da S42 (S27a).
+git status --short vazio. HEAD == origin/main == aaeb7c4. Pendente: commit do handoff S42 (este arquivo) — primeira ação da S43 (S27a).
 
-SEÇÃO 3 — O QUE FOI FEITO NA SESSÃO 41
-3.1 Fase 0 — validação de estado inicial (completa, 6/6 blocos verdes)
-Primeira sessão desde a S40 a rodar a Fase 0 completa na ordem da REGRA S27b. Todos os 6 blocos verdes:
+SEÇÃO 3 — O QUE FOI FEITO NA SESSÃO 42
+3.1 Fase 0 — validação de estado inicial (6/6 blocos verdes)
+Handoff pendente: git status --short vazio; handoff S41 já commitado como 9b9df95 (S42b do handoff S41 já registrava: "handoff registra estado no momento em que foi escrito; o commit pode ter acontecido depois" — confirmado pela 2ª vez).
 
-Handoff pendente — git status --short vazio. Handoff S40 já commitado como 3deb4f8. Achado S41b: o handoff S40 dizia "3 arquivos M + handoff pendente", mas o git log mostrou que a S40 já tinha commitado o handoff (3deb4f8) e os 3 arquivos web (fb77754). O handoff S40 registrou estado anterior ao commit.
+Log/status: HEAD == origin/main == 9b9df95. Working tree limpo.
 
-Log/status — HEAD == origin/main == fb77754. Working tree limpo.
+Build/lint/analyze: npm run build verde (✓ built in 2.00s), lint vazio, flutter analyze No issues found!.
 
-Build/lint/analyze — npm run build verde, npm run lint limpo, flutter analyze No issues found!.
+Docker + pytest + ruff: rumo_postgres_test Up (healthy) 5433, 180 passed in 47.42s, ruff check . limpo.
 
-Docker + pytest + ruff — rumo_postgres_test Up (healthy) na 5433, pytest -q → 180 passed, ruff check . → All checks passed!.
+Prod backend: /auth/me → weight_kg=null height_cm=null full_name="Prod User". Confirmado pela 4ª sessão seguida (estado, não bug).
 
-Prod backend — OK PUT /users/me (rota da S39 no ar), /auth/me → weight_kg=null height_cm=null full_name=Prod User, /feed → 3 itens com author=produser e user=produser (S36 confirmada), /activities/stats/summary → total_activities=8 total_distance_m=34081.56.
+Prod frontend: index servido: /assets/index-tC5onOwK.js — diferente do handoff S41 (que registrou index-BRp7iIdJ na Fase 0 + hash novo na Fase 4). Deploy da S41 no ar (S41c).
 
-Prod frontend — index servido: /assets/index-BRp7iIdJ.js (diferente do index-CJjOEm0V.js registrado na S40). Achado S41c: o hash mudou porque o commit fb77754 da S40 disparou o deploy; os 3 chunks de página (ProfilePage-, ActivityDetailPage-, SearchPage-) mudaram de hash (S28b), os 3 de lib externa (leaflet-, recharts-, rolldown-runtime-) mantiveram. Não é bug.
+3.2 Fase 1 — descoberta (8 itens pedidos, 5 entregues, 3 erros de caminho)
+Entregues: tailwind.config.js (paleta rumo-500 = #f97316), web/index.html (/vite.svg genérico), web/public/ (favicon.svg roxo 9.5 KB + icons.svg sprite), pubspec.yaml (sem libs de ícone/splash, description genérica), .metadata (só web/windows).
 
-3.2 Fase 1 — descoberta (completa)
-Arquivos pedidos e recebidos na S41:
+Erros de caminho (S42f): mobile/android/app/src/main/AndroidManifest.xml não existe; mobile/android/app/src/main/res/ não existe; mobile/ios/Runner/Info.plist não existe; mobile/ios/Runner/Assets.xcassets/ não existe. Confirmado por Test-Path android → False, Test-Path ios → False, Test-Path windows → True, Test-Path web → True.
 
-web/src/pages/ProfilePage.tsx (~1019 linhas — arquivo a editar, S39b)
+Achados que moldaram o contrato: S42f (sem scaffolds), S42g (favicon roxo não referenciado), S42h (icons.svg sprite), S42i (description), S42j (sem libs), S42k (PWA sem PNG).
 
-web/src/api/auth.ts (S40 — confirmar UpdateMePayload/updateMe)
+3.3 Fase 2 — contrato travado (5 decisões)
+Gerar scaffolds Android/iOS agora: SIM (flutter create --platforms=android,ios .).
 
-web/src/contexts/AuthContext.tsx (S40 — confirmar setUser + user)
+Paleta: manter laranja (rumo-500); favicon recriado em laranja.
 
-web/src/hooks/useProfile.ts (S40 — confirmar useUpdateMe)
+Ferramenta: flutter_launcher_icons + flutter_native_splash (declarativo).
 
-web/src/types/api.ts (confirmar UserResponse)
+Símbolo: A (raio/energia em laranja — mantém a forma do favicon atual).
 
-mobile/lib/pages/edit_profile_page.dart (384 linhas — referência de UX)
+Escopo S42: 10 itens (favicon + index.html + logos + manifest + pubspec + scaffolds + comandos + validação + commit).
 
-Get-ChildItem web/src/components -Filter "*.tsx" (confirmar que não existe modal/dialog genérico)
+Fora de escopo (S43+): política de privacidade, build assinado, contas de dev, publicação, screenshots, tile server próprio, PNGs logo192/logo512 (S42k).
 
-web/package.json (confirmar libs)
+3.4 Fase 3 — entrega incremental (7 arquivos, todos verdes)
+#	Arquivo	Validação
+1/7	web/public/favicon.svg (laranja, 1618 bytes)	Last 3 linhas ok, Length 1618 ✅
+2/7	web/index.html (favicon + theme-color + description)	build 1.18 kB ✅
+3a/7	web/public/logo.svg (512×512, fundo creme)	✅
+3b/7	web/public/manifest.webmanifest (PWA)	ConvertFrom-Json ok, build ✅
+4/7	mobile/pubspec.yaml (description + 2 dev_deps)	flutter pub get ok, analyze limpo ✅
+5a	flutter create --platforms=android,ios . (64 arquivos)	Test-Path android True, Test-Path ios True ✅
+5a-fix	Deletar test/widget_test.dart (template quebrado)	analyze limpo ✅
+5b	PNG logo1024.png (49 KB, gerado por você)	Length 49989 ✅
+6/7	mobile/pubspec.yaml (config ícone+splash) + geração	5 mipmaps, 21 PNGs iOS, LaunchScreen.storyboard ✅
+7/7	Validação final + 2 commits + push + Fase 4	✅
+Achados durante a entrega: S42n (index.html sem <link rel="manifest"> — fix no 7.1), S42p (flutter_native_splash:create tocou mobile/web/index.html — restaurado), S42q (Content byte[] no PS 5.1).
 
-Achados que moldaram o contrato:
+3.5 Fase 3.5 — verificar save + commits
+Save verificado em todos os 7 arquivos.
 
-Nenhum modal/dialog genérico existe — modal feito à mão (S41d).
+Commit 1 (web): 8576d95 — 5 arquivos, +73/−2. web/index.html, web/public/favicon.svg, web/public/logo.svg, web/public/logo1024.png, web/public/manifest.webmanifest.
 
-UpdateMePayload já existe (auth.ts, S40). Só importar.
+Commit 2 (mobile): aaeb7c4 — 103 arquivos, +1533/−20. Scaffolds android/ + ios/, assets/icon/logo1024.png, pubspec.yaml, pubspec.lock, .metadata, analysis_options.yaml.
 
-useUpdateMe() já existe (useProfile.ts, S40) com setUser + invalidateQueries no onSuccess. Só chamar .mutate(payload, { onSuccess, onError }).
+Push: 9b9df95..aaeb7c4 main -> main (142 objetos, 314.78 KiB). HEAD == origin/main == aaeb7c4. Working tree limpo.
 
-AuthContext expõe user: UserResponse | null e setUser (S40).
+3.6 Fase 4 — validação em produção (verde)
+index.html servido: 6 matches (favicon, apple-touch, manifest ×3, theme-color).
 
-UserResponse extends UserPublic e tem weight_kg/height_cm/full_name: T | null. Bate com o backend.
+favicon.svg: OK: favicon laranja no ar + OK: roxo removido.
 
-Referência de UX (mobile): _formatNumber (null→"", inteiro→"80", senão→"80.5"), _parseNumber (aceita ,/.), validação (0,500)/(0,300)/≤120, "vazio = não toca", "Limpar = null explícito", sem "Limpar" no full_name (apagar texto + salvar → null).
+manifest.webmanifest: 200 (S42q: .Substring deu erro cosmético por Content ser byte[]; não-bug).
 
-ProfilePage.tsx já tem useIsFollowing(id) retornando { isFollowing, isSelf }, mas não importava useAuth diretamente. Adicionado na S41.
+logo.svg: 200 + tem #fff7ed.
 
-Botão "Editar perfil": no bloco {isSelf ? ... : ...}, substituído <p>Este é você.</p> por um <div> com o texto + botão. Fica onde o "Seguir" do terceiro fica (S41).
+index-*.js: hash tC5onOwK — igual ao da Fase 0, exatamente como previsto (S42b/S42o): mudanças em index.html/public/ não afetam o hash do index-*.js.
 
-Modal no final do componente, depois do </main>, dentro do <div className="min-h-screen"> — backdrop fixed inset-0 cobre tudo, AppHeader fica atrás (S41).
+3.7 Tropeços da S42
+0 tropeços de código. Os 7 arquivos entregues passaram de primeira.
 
-Tailwind 3.4 disponível, rumo-500/rumo-600 é a cor de CTA do projeto.
+1 tropeço cosmético no script de validação (S42q): .Substring em Content byte[] do manifest.webmanifest. Não-bug; PS 5.1.
 
-Padrão de erro: ApiError de ../api/client, err.detail string → mostra; senão Falha ao salvar (HTTP N). — mesmo padrão do handleExportAll.
+1 surpresa durante o commit (S42p): flutter_native_splash:create tocou mobile/web/index.html + criou mobile/web/splash/. Restaurado com git restore + Remove-Item. S42a (nova regra): git status + git diff antes de commitar arquivos de scaffold.
 
-Sem react-hook-form/zod no código existente (só instalados) — useState + validação derivada (S41).
+1 falso alarme evitado (S42o): hash do index-*.js igual ao da Fase 0 não significa "deploy não foi" — significa "só index.html/public/ mudaram". Sinal de deploy é o conteúdo do index.html + favicon.
 
-Acessibilidade: role="dialog", aria-modal, aria-labelledby, foco no primeiro input, Esc/backdrop fecham, body com overflow:hidden.
+3.8 Resultado da suíte (S42)
+pytest -q → 180 passed (mesmo número desde S39 — S42 não tocou no backend).
 
-3.3 Fase 2 — contrato travado
-Decisões travadas:
+ruff check . → All checks passed!
 
-Modal à mão (sem lib) — S41d.
+npm run build → ✓ built in 1.60s (Fase 3.5) / 2.00s (Fase 0).
 
-useState + validação derivada (sem react-hook-form/zod) — consistente com o repo.
+npm run lint → limpo.
 
-useUpdateMe().mutate(payload, { onSuccess: onClose, onError }) — reaproveita S40.
+flutter analyze → No issues found!
 
-Payload com semântica do mobile: intocado → ausente; "Limpar" → null; valor novo → valor. payload vazio → onClose() sem request (idempotente).
+Validação em produção (Vercel) → favicon laranja no ar, roxo removido, manifest 200, logo.svg 200.
 
-Botão "Editar perfil" ao lado de "Este é você." (flex-wrap).
+3.9 Commits pushados (S42)
+aaeb7c4 feat(mobile): scaffolds android/ios + icone e splash nativo (Sessao 42)
 
-Modal fora do <main> (backdrop cobre tudo).
+8576d95 feat(web): identidade visual — favicon laranja + manifest PWA + index.html (Sessao 42)
 
-Fora de escopo (confirmado): birth_date (backend não aceita), email/username (rotas próprias), avatar/foto (não existe no backend).
+9b9df95 docs: handoff da Sessao 41 (já estava — S42b)
 
-3.4 Fase 3 — entrega incremental (5/5)
-Arquivo 4/5 (web/src/components/EditProfileModal.tsx, NOVO) — build/lint verdes de primeira.
+SEÇÃO 4 — CONTRATOS DO BACKEND RELEVANTES (INALTERADOS)
+Contratos S1–S40 inalterados. Repetidos do handoff S41 por completude (backend não foi tocado na S42):
 
-Arquivo 5/5 (web/src/pages/ProfilePage.tsx, editado) — build/lint verdes de primeira. 1034 linhas no disco (1019 originais + ~15 do bloco do modal/imports/estado).
+Auth: POST /auth/login (form-urlencoded), GET /auth/me (Bearer, "quem sou eu").
 
-3.5 Fase 3.5 — verificar save + commit (completa)
-Save verificado: 5694e9... (disco) ≠ f81d5a... (HEAD) + M no git status.
+Perfil próprio: PUT /users/me (Bearer, {weight_kg?, height_cm?, full_name?}, semântica exclude_unset — ausente não toca, null limpa, valor atualiza; extra="forbid"; rota antes de /{user_id}).
 
-Build: ✓ built in 5.83s, 825 módulos, novos chunks ProfilePage-DBRAiqeH.js (28.31 kB) + index-DqP5ShST.js (436.25 kB).
+Atividades: GET /activities (filtro, self ou seguido), GET /activities/{id}, GET /activities/{id}/track (LineString), GET /activities/search?q=, POST /activities/upload (multipart), GET /activities/{id}/export?format=csv|gpx, GET /activities/export?format=csv|gpx[&from][&to] (ZIP).
 
-Lint: limpo.
+Feed: GET /feed (FeedItemResponse com author (web) e user (mobile), S36).
 
-Commit único: 6701560 feat(web): EditProfileModal + botao Editar perfil no ProfilePage (Sessao 41, 5/5).
+Comentários: GET/POST /activities/{id}/comments, DELETE /comments/{id}.
 
-Push: HEAD == origin/main, working tree limpo.
+Stats: GET /activities/stats/summary, /weekly, /monthly, /by-type; GET /users/{user_id}/stats/{...} (self ou seguido → 200, senão 403/404).
 
-3.6 Fase 4 — validação em produção (completa)
-Após o push:
-
-Vercel redeployou — index servido com hash novo (diferente do BRp7iIdJ da Fase 0), chunks de página com hash novo e chunks de lib com hash estável (S28b/S29b). Bundle novo no ar.
-
-Backend estável — /auth/me com weight_kg=null height_cm=null full_name=Prod User.
-
-Teste manual no Chrome (feito pelo usuário, relatado como "tudo como esperado"):
-
-Login prod@rumo.com ✅
-Perfil mostra "Este é você." + botão "Editar perfil" ✅
-Modal abre com pré-preenchimento correto e foco no peso ✅
-Preenche peso/altura, salva, modal fecha ✅
-Reabre o modal → mostra valores novos (S40a — setUser funcionando) ✅
-"Limpar" peso → "Desfazer" vira, input esvazia, salva ✅
-Reabre → peso vazio, altura intocada ✅
-Cancelar/Esc/backdrop fecham ✅
-Validação client-side (peso 999 → borda vermelha + mensagem + Salvar desabilitado) ✅
-A S41 fechou a paridade web do "Editar perfil" em produção. ✅
-
-3.7 Tropeços da S41
-Nenhum tropeço de código. A S41 foi ainda mais limpa que a S40:
-
-Fase 0 completa, 6/6 blocos verdes.
-
-Fase 1 descoberta, 8 itens pedidos (incluindo Get-ChildItem e package.json), 0 adivinhação.
-
-Fase 2 contrato travado, 3 decisões confirmadas (modal à mão, useState sem RHF, botão ao lado do "Este é você.").
-
-Fase 3 entrega incremental, 2/2 arquivos, build/lint verdes de primeira em ambos.
-
-Fase 4 validação manual no Chrome, todos os cenários passaram.
-
-Único "achado" não-tropeço: S41b (handoff S40 desatualizado sobre o que estava commitado) + S41c (hash da Vercel da S40, não da S41).
-
-3.8 Resultado da suíte (S41)
-pytest -q → 180 passed (mesmo número da S39/S40 — S41 não tocou no backend).
-
-ruff check . → All checks passed!.
-
-npm run build → ✓ built in 5.83s (Fase 3.5) e verde na Fase 0.
-
-npm run lint → limpo em ambos os arquivos entregues.
-
-flutter analyze → No issues found!.
-
-Validação manual no Chrome → passou (10 cenários, S41).
-
-3.9 Commits pushados (S41)
-6701560 feat(web): EditProfileModal + botao Editar perfil no ProfilePage (Sessao 41, 5/5) (2 files: 1 novo + 1 M).
-
-fb77754 feat(web): PUT /users/me + setUser no AuthContext + useUpdateMe (Sessao 40, 3/5) (já commitado antes da S41 começar — vide S41b).
-
-3deb4f8 docs: handoff da Sessao 40.
-
-SEÇÃO 4 — CONTRATOS DO BACKEND RELEVANTES
-(Contratos S1–S40 inalterados. Repetidos por completude.)
-
-Autenticação
-text
-POST /auth/login — application/x-www-form-urlencoded (username=email, password).
-  200: {access_token, token_type}. 401/422.
-GET /auth/me — Bearer JWT.
-  200: UserResponse completo (id, email, username, full_name, weight_kg,
-       height_cm, birth_date, is_active, created_at). É o "quem sou eu".
-  /users/me não existe pra GET (405).
-Perfil próprio
-text
-PUT /users/me (S39) — Bearer JWT, body {weight_kg?: float(0,500), height_cm?:
-  float(0,300), full_name?: str(≤120)}. Semântica exclude_unset: ausente →
-  não toca; null → limpa; valor → atualiza. extra="forbid" (email/username/
-  senha → 422). 200: UserResponse pós-update. 401/422. Rota declarada ANTES
-  de /{user_id}.
-Atividades
-text
-GET /activities?user_id=&limit=1..100&offset=0 — Bearer JWT. Filtra por
-  usuário. Para user_id == currentUserId, sempre passa; para terceiro,
-  requer seguir (403 se não seguir). Retorna ActivityResponse[] puro.
-GET /activities/{id} — Bearer JWT, dono OU seguidor do dono. 200: ActivityResponse.
-GET /activities/{id}/track — Bearer JWT, dono OU seguidor. 200: TrackResponse
-  ({activity_id, type: "LineString", coordinates: [[lon,lat],...], bbox,
-  n_points, simplified}). 404 se route IS NULL ("Atividade não possui rota").
-GET /activities/search?q=<min 2>&limit&offset — Bearer JWT. Busca em title/
-  description ILIKE. Visibilidade: dono OU seguido. list[FeedItemResponse].
-  Rate limit 20/min.
-POST /activities/upload — Bearer JWT, multipart/form-data (file, title?,
-  activity_type?, description?). 201: ActivityResponse. 422/429/401.
-  Rate limit 10/h.
-GET /activities/{id}/export?format=csv|gpx — Bearer JWT, dono OU seguidor.
-  CSV funciona com/sem rota; GPX exige rota.
-  Content-Disposition: attachment; filename="rumo_<id>_<type>.<ext>".
-GET /activities/export?format=csv|gpx[&from=YYYY-MM-DD][&to=YYYY-MM-DD] —
-  Bearer JWT, self-only. ZIP. 0 atividades → ZIP vazio (200). from > to → 422.
-Feed
-text
-GET /feed?limit&offset — Bearer JWT. FeedItemResponse (herda ActivityResponse +
-  author E user — mesmo Activity.user do ORM; author = web, user = mobile
-  desde S36).
-Comentários
-text
-GET /activities/{id}/comments — Bearer JWT. list[CommentResponse] cronológico.
-POST /activities/{id}/comments — Bearer JWT, body {content}. 201: CommentResponse. 422/401.
-DELETE /comments/{id} — Bearer JWT, só o autor.
-Stats
-text
-GET /activities/stats/summary?activity_type — StatsSummary.
-GET /activities/stats/weekly?weeks=N — StatsWeeklyResponse ({weeks, items}).
-  Items crescentes em period_start.
-GET /activities/stats/monthly?months=N — StatsMonthlyResponse ({months, items}).
-GET /activities/stats/by-type?period=all|90d|1y&compare=prev|yoy — StatsByTypeResponse.
-  Cada item tem 5 métricas + previous (nullable). Não inclui avg_pace (derivado no front).
-GET /users/{user_id}/stats/{summary,weekly,monthly,by-type} — mesmos shapes.
-  Visibilidade: self → 200; viewer segue target → 200; não segue → 403;
-  target não existe → 404.
-StatsPeriod (item): {period_start: "YYYY-MM-DD", total_activities,
-  total_distance_m, total_duration_s, total_calories}.
-Follows
-text
-POST /users/{user_id}/follow — 204. 400 (self) / 404.
-DELETE /users/{user_id}/follow — 204. Idempotente.
-GET /users/{user_id}/followers?limit&offset — list[UserPublic].
-GET /users/{user_id}/following?limit&offset — list[UserPublic].
-GET /users/search?q=<min 2>&limit — list[UserPublic]. Rate limit 20/min.
-⚡ NÃO existe GET /users/{id}/is-following. O cliente infere via GET /users/{meId}/following e checa se o alvo está na lista.
-
-⚡ UserPublic (/users/{id}, /users/{id}/followers, /users/{id}/following, /users/search): 4 campos apenas (id, username, full_name, is_active). Sem email, sem avatar_url. Para self, usar /auth/me.
+Follows: POST/DELETE /users/{user_id}/follow (204, idempotente), GET /users/{user_id}/followers, /following, GET /users/search?q= (rate limit 20/min).
+
+⚡ Não existe GET /users/{id}/is-following — cliente infere via /users/{meId}/following.
+
+⚡ UserPublic = 4 campos (id, username, full_name, is_active). Sem email/avatar. Para self, GET /auth/me.
 
 SEÇÃO 5 — COMMITS PENDENTES / ESTADO DO REPO
-Sessões 9–41 commitadas e pushadas. HEAD == origin/main == 6701560. Working tree limpo.
+Sessões 9–42 commitadas e pushadas. HEAD == origin/main == aaeb7c4. Working tree limpo.
 
-Primeira ação da Sessão 42 (REGRA S27a — handoff primeiro):
+Primeira ação da Sessão 43 (REGRA S27a — handoff primeiro):
 
 powershell
 cd D:\Rumo
 git status --short
-Se aparecer M docs/HANDOFF.md (este arquivo), commitar:
-
-powershell
+# Se M docs/HANDOFF.md (este arquivo):
 git add docs/HANDOFF.md
-git commit -m "docs: handoff da Sessao 41"
+git commit -m "docs: handoff da Sessao 42"
 git push
-Estado esperado da S42 ao abrir: HEAD == origin/main == 6701560 (ou o commit do handoff S41 se já commitado). Working tree com M docs/HANDOFF.md (se ainda não commitado). Zero arquivos de código pendentes — a S41 fechou 5/5 e a S40 já estava commitada.
+Estado esperado da S43 ao abrir: HEAD == origin/main == aaeb7c4 (ou o commit do handoff S42 se já commitado). git status --short com M docs/HANDOFF.md (se ainda não commitado). Zero arquivos de código pendentes — S42 fechou 7/7 e as surpresas foram resolvidas.
 
-SEÇÃO 6 — SCRIPTS ÚTEIS (PowerShell)
+SEÇÃO 6 — SCRIPTS ÚTEIS (PowerShell, atualizado S42)
+Fase 0 — sanidade de build
 powershell
-# [Sessão 42 — primeira ação] Abrir PowerShell via Win+R → powershell
-cd D:\Rumo
-git status --short
-# Se M docs/HANDOFF.md:
-git add docs/HANDOFF.md
-git commit -m "docs: handoff da Sessao 41"
-git push
-git --no-pager log --oneline -8
-git status --short
-powershell
-# [Sessão 42 — Fase 0] Sanidade de build:
 cd D:\Rumo\web
 npm run build
 npm run lint
 cd ..\mobile
 & "C:\Users\nasci\flutter\bin\flutter.bat" analyze
+Fase 0 — Docker + pytest
 powershell
-# [Sessão 42 — Fase 0] Docker + pytest local:
-docker version
-docker compose version
 cd D:\Rumo\backend
 docker compose -f docker-compose.test.yml up -d
 docker ps -a --filter "name=rumo_postgres_test"
-docker exec rumo_postgres_test pg_isready -h 127.0.0.1 -p 5432
-# Se o prompt já mostra (venv), PULE a linha abaixo:
 .\venv\Scripts\Activate.ps1
 python -m pytest -q
-ruff check .
-# Esperado: 180 passed, ruff limpo, container Up (healthy).
+ruff check . 
+Fase 0 — Prod backend
 powershell
-# [Sessão 42 — detecção de versão em produção (front — Vercel)]:
-$html = Invoke-WebRequest -Uri "https://rumo-wheat.vercel.app" -UseBasicParsing
-$m = [regex]::Match($html.Content, 'src="(/assets/index-[^"]+\.js)"')
-$idxUrl = "https://rumo-wheat.vercel.app" + $m.Groups[1].Value
-Write-Host "index servido: $($m.Groups[1].Value)"
-$idx = Invoke-WebRequest -Uri $idxUrl -UseBasicParsing
-$chunks = [regex]::Matches($idx.Content, 'assets/(\w+)-[A-Za-z0-9_-]+\.js')
-$chunks | ForEach-Object { Write-Host $_.Value }
-# Esperado (fim da S41): hash do index diferente do BRp7iIdJ (da S40),
-# ProfilePage- com hash diferente do BOESyRiB (da S40), libs (leaflet,
-# recharts, rolldown-runtime) com hash estável.
-powershell
-# Login (produção):
 $body = "username=prod@rumo.com&password=senha12345"
 $login = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/login" -Method Post -ContentType "application/x-www-form-urlencoded" -Body $body
-$token = $login.access_token
-$h = @{ Authorization = "Bearer $token" }
+$h = @{ Authorization = "Bearer $($login.access_token)" }
 $me = Invoke-RestMethod -Uri "https://rumo-api-5s0b.onrender.com/auth/me" -Headers $h
-$meId = $me.id
+Write-Host "weight_kg=$($me.weight_kg) height_cm=$($me.height_cm) full_name=$($me.full_name)"
+Fase 0 / Fase 4 — Prod frontend (Vercel, S42 atualizado)
 powershell
-# Diagnóstico de save de arquivo (lição S25 + S32 + S33 + S34 + S36 + S37 + S38 + S39 + S40 + S41):
+$html = Invoke-WebRequest -Uri "https://rumo-wheat.vercel.app" -UseBasicParsing
+$m = [regex]::Match($html.Content, 'src="(/assets/index-[^"]+\.js)"')
+Write-Host "index JS: $($m.Groups[1].Value)"
+[regex]::Matches($html.Content, 'favicon|theme-color|manifest|apple-touch') | ForEach-Object { Write-Host $_.Value }
+# Favicon laranja?
+$fav = Invoke-WebRequest -Uri "https://rumo-wheat.vercel.app/favicon.svg" -UseBasicParsing
+if ($fav.Content -match '#f97316') { Write-Host "OK: favicon laranja" } else { Write-Host "FALHA" }
+if ($fav.Content -match '#863bff') { Write-Host "ATENCAO: roxo antigo" } else { Write-Host "OK: roxo removido" }
+# manifest (S42q: Content byte[], usar GetString)
+$man = Invoke-WebRequest -Uri "https://rumo-wheat.vercel.app/manifest.webmanifest" -UseBasicParsing
+$manText = [System.Text.Encoding]::UTF8.GetString($man.Content)
+Write-Host "manifest: $($man.StatusCode) | 80 chars: $($manText.Substring(0,80))"
+Diagnóstico de save (S25 + S42)
+powershell
 Write-Host "=== [1] termos proibidos (deve vir vazio) ==="
 Select-String -Path <arquivo> -Pattern "\bTODO\b|\bFIXME\b" -CaseSensitive
 Write-Host "=== [2] total de linhas ==="
@@ -567,40 +470,32 @@ Write-Host "=== [4] git status (deve mostrar ' M <arquivo>') ==="
 git status --short
 Write-Host "=== [5] hash do disco ==="
 git hash-object <arquivo>
-Write-Host "=== [6] hash do HEAD (path relativo a RAIZ do repo!) ==="
-git rev-parse HEAD:<path/relativo/a/raiz/do/repo>
-# Se [5] == [6] e [4] vazio → o disco é igual ao commitado. O save NÃO pegou.
-# Se [5] ≠ [6] e [4] mostra M → save pegou, pode commitar.
+Write-Host "=== [6] hash do HEAD (path relativo a RAIZ) ==="
+git rev-parse HEAD:<path/relativo/a/raiz>
+# [5] ≠ [6] e [4] com M → save pegou, pode commitar.
+Contornar editor que não salva (S31c + S36f)
 powershell
-# Contornar editor que não salva (S31c + S36f):
 cd D:\Rumo\web
 $content = @'
-// [Sessão N] conteúdo completo do arquivo aqui (SEM PLACEHOLDER — S36g/S39c)
+// [Sessão N] conteúdo completo do arquivo (SEM PLACEHOLDER — S36g/S39c)
 '@
 [System.IO.File]::WriteAllText("D:\Rumo\web\src\components\X.tsx", $content, [System.Text.UTF8Encoding]::new($false))
-Write-Host "total de linhas: $((Get-Content -Encoding UTF8 'D:\Rumo\web\src\components\X.tsx').Count)"
+Commits (S38c — sem ^)
 powershell
-# Comando git add/commit sem ^ (S38c):
-# ERRADO (o ^ de continuação do PowerShell não funciona consistentemente):
-# git add arquivo1 ^
-#         arquivo2 ^
-#         arquivo3
-# CERTO (uma linha só):
 git add arquivo1 arquivo2 arquivo3
-# CERTO também (backtick):
+# ou com backtick:
 git add arquivo1 `
         arquivo2 `
         arquivo3
-apiFetch do web já aceita method: "PUT" (S40b) — usar direto, sem wrapper novo
+git restore + remover pasta órfã (S42p)
+powershell
+git restore mobile/web/index.html
+Remove-Item -Recurse -Force mobile\web\splash
+git status --short mobile/web/  # deve vir vazio
+apiFetch do web (S40b — inalterado)
 ts
-// CERTO:
-return apiFetch<UserResponse>("/users/me", {
-  method: "PUT",
-  body: payload,
-});
-// ERRADO (não criar put() novo no client.ts — o apiFetch já cobre):
-// export function put<T>(path, body) { ... }
-useMutation + invalidateQueries (padrão do web — S40)
+return apiFetch<UserResponse>("/users/me", { method: "PUT", body: payload });
+useMutation + invalidateQueries (S40 — inalterado)
 ts
 export function useUpdateMe() {
   const auth = useAuth();
@@ -613,265 +508,277 @@ export function useUpdateMe() {
     },
   });
 }
-AuthContext expõe setUser (S40a) — usar no onSuccess do mutation
-ts
-// No useUpdateMe:
-auth.setUser(updated);
-// Sem isso, o modal de edição reaberto na mesma sessão mostraria dados velhos.
-SEÇÃO 7 — DÍVIDAS TÉCNICAS
+Config flutter_launcher_icons + flutter_native_splash (S42)
+yaml
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon/logo1024.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true
+  adaptive_icon_background: "#fff7ed"
+  adaptive_icon_foreground: "assets/icon/logo1024.png"
+
+flutter_native_splash:
+  color: "#fff7ed"
+  image: assets/icon/logo1024.png
+  android: true
+  ios: true
+  android_12:
+    color: "#fff7ed"
+    image: assets/icon/logo1024.png
+SEÇÃO 7 — DÍVIDAS TÉCNICAS (S42)
 Fechadas
-(Todas as S1–S39 continuam fechadas. Adicionadas na S40/S41:)
+(S1–S41) todas continuam fechadas.
 
-(S40) Web sem editor de perfil — FECHADO na S41 (5/5). updateMe no auth.ts ✅, setUser no AuthContext ✅, useUpdateMe no useProfile ✅ (S40); EditProfileModal.tsx + ProfilePage.tsx ✅ (S41).
+(S40) Web sem editor de perfil — FECHADO S41.
 
-(S40) AuthContext não expunha setUser/refresh — setUser adicionado (S40a).
+(S40) AuthContext sem setUser — FECHADO S40.
 
-(S40) apiFetch do web já aceita PUT — não criar put() novo (S40b). Mobile divergiu (S39).
+(S41) Paridade web do "Editar perfil" — FECHADO S41.
 
-(S41) Paridade web do "Editar perfil" — FECHADO. Validado em produção no Chrome.
+(S42f) Mobile sem scaffolds Android/iOS — FECHADO S42.
+
+(S42g) Favicon roxo não referenciado — FECHADO S42.
+
+(S42i) Description genérica — FECHADO S42.
+
+(S42j) Sem libs de ícone/splash — FECHADO S42.
+
+(S42n) index.html sem <link rel="manifest"> — FECHADO S42.
 
 Conhecidas (não-bug)
-(S1–S40 continuam. Adicionadas na S41:)
+(S41) Estado do prod@rumo.com: weight_kg=null height_cm=null full_name="Prod User" — 4 sessões confirmando (S39 registrou 80.0, S40/S41/S42 null). Encerrado como estado.
 
-(S41) Estado do prod@rumo.com: weight_kg=null height_cm=null full_name="Prod User" — confirmado em 3 sessões (S39 registrou 80.0, S40 mediu null, S41 mediu null). Não é bug; é estado de dados. Encerrado como estado.
+(S41) EditProfileModal.tsx bundlado dentro do ProfilePage-*.js — comportamento esperado do code-splitting. Não é bug.
 
-(S41) EditProfileModal.tsx bundlado dentro de ProfilePage-*.js — o modal só é importado pelo ProfilePage, então o Vite não separa em chunk próprio. Não é bug; é o comportamento esperado de code-splitting por entry point. Se um dia outro lugar precisar do modal, ele vira chunk compartilhado.
+(S41) EditProfileModal usa useState + validação derivada — consistente com o repo. Não usar react-hook-form/zod.
 
-(S41) EditProfileModal usa useState + validação derivada, não react-hook-form/zod — consistente com o resto do repo (ProfilePage.tsx, AppHeader.tsx usam useState). react-hook-form e zod estão instalados mas não usados. Decisão de consistência.
+(S41) formatNumber duplicado entre EditProfileModal.tsx (TS) e edit_profile_page.dart (Dart) — stacks diferentes. Aceitável.
 
-(S41) formatNumber em EditProfileModal.tsx duplica a lógica de _formatNumber do edit_profile_page.dart — stacks diferentes (Dart vs TS), paridade manual. Aceitável.
+(S41) EditProfileModal recebe current via prop — desacoplamento. Decisão.
 
-(S41) EditProfileModal recebe current via prop (do useAuth().user no ProfilePage), não lê do contexto direto. Decisão de desacoplamento/testabilidade.
+(S41) Botão "Editar perfil" só com user && isSelf — boot antes do /auth/me. Aceitável (isLoading cobre).
 
-(S41) Botão "Editar perfil" só aparece quando user && isSelf — se user for null (boot antes do /auth/me), o botão não renderiza. Aceitável; isLoading do AuthContext cobre o boot no ProtectedRoute.
+(S41) Modal sem "Limpar" no full_name — apagar + salvar → null. Paridade mobile.
 
-(S41) Modal não tem "Limpar" no full_name — apagar o texto + salvar manda null, exatamente como o mobile. Paridade mantida. Decisão de UX.
+(S41) Modal sem "Desfazer" global — só por campo. Mesma decisão mobile.
 
-(S41) Modal não tem "Desfazer" global — só por campo ("Limpar" → "Desfazer" nos numéricos). Nome completo: apagar texto + cancelar descarta; sem "Limpar" específico. Mesma decisão do mobile.
+(S41) Apagar texto do peso/altura sem "Limpar" e salvar NÃO manda null — campo intocado/igual fica ausente. Paridade mobile.
 
-(S41) Apagar o texto do peso/altura sem "Limpar" e salvar NÃO manda null — o campo intocado/igual ao inicial fica ausente. Se o usuário quiser limpar de verdade, precisa acionar "Limpar". Mesma semântica do mobile (S39).
+(S41) ProfilePage.tsx não exibe weight_kg/height_cm no header — só no modal.
 
-(S41) ProfilePage.tsx não exibe weight_kg/height_cm no header — só no modal. Se o produto quiser exibir, S42+.
+(S41) birth_date fora do escopo — backend não aceita. S43+.
 
-(S41) birth_date continua fora do escopo — backend UserUpdate não aceita. S42+ (mudar schema).
+(S41) email/username fora do escopo — rotas próprias. S43+.
 
-(S41) email/username continuam fora do escopo — rotas próprias, chave única. S42+.
+(S42k) PWA sem PNGs no manifest — SVG cobre navegadores modernos. Lighthouse moderno aceita. Não é bloqueador.
+
+(S42m) analysis_options.yaml reescrito pelo flutter create — exclui build/ e plataformas. Benéfico. Commitar como está.
+
+(S42o) Hash do index-*.js não muda com index.html/public/ — não é sinal de "deploy não foi". Sinal é o conteúdo do index.html + favicon.
+
+(S42p) flutter_native_splash:create tocou mobile/web/index.html — restaurado. O mobile/web não é usado em produção (web real é o React na Vercel).
+
+(S42q) Content byte[] no PS 5.1 para manifest — comportamento do PS, não-bug do Rumo.
+
+(S42 — novo) mobile/android/ e mobile/ios/ gerados pelo flutter create — os MainActivity.kt e AppDelegate.swift são template padrão. Não foram personalizados (nome do app = rumo_mobile, package = com.example.rumo_mobile). Trocar com.example.rumo_mobile pelo package real antes da publicação nas lojas (S43+) — Google Play rejeita com.example.*.
 
 Oportunidades
-(S1–S40 continuam. Atualizadas na S41:)
+(S1–S41) todas continuam.
 
-(S39) Paridade web do "Editar perfil" — FECHADO S41.
+(S42) Gerar logo192.png + logo512.png — S43+. Ferramenta: cloudconvert (SVG→PNG). Não-bloqueador.
 
-(S40) Testar EditProfileModal no Chrome — FECHADO S41 (10 cenários, passou).
+(S42) Trocar com.example.rumo_mobile pelo package real (ex: com.rumo.app) antes da publicação. Bloqueador de loja. S43.
 
-(S40) Validar PUT /users/me em produção após push — FECHADO S41 (validação manual no Chrome exercitou o PUT).
+(S42) Personalizar MainActivity.kt — hoje é template (class MainActivity: FlutterActivity()). Funciona, mas S43 pode querer customizar.
 
-(S40) Confirmar bundle novo no ar — FECHADO S41 (hash do ProfilePage- mudou vs S40).
+(S42) Adicionar ícone adaptativo monochrome para Android 13+ (themed icons) — S43+. O launcher_icon.xml atual tem foreground + background, falta monochrome. Não-bloqueador.
 
-(S34) Alinhar UserPublic local de activity.dart (remover avatarUrl) — S42+.
+(S43) Política de privacidade — obrigatória nas lojas. 0% hoje.
 
-(S34) Endpoint GET /users/{id}/is-following no backend — S42+.
+(S43) Build assinado (Android keystore + iOS provisioning) — 0% hoje.
 
-(S36) Deep-link ?q= na busca mobile (se aparecer necessidade) — S42+.
+(S43) Contas Google Play Developer ($25) + Apple Developer ($99/ano) — 0% hoje.
 
-(S36) Extrair o debounce manual (Timer 300ms) para utils/debounce.dart se aparecer terceira tela de busca — S42+.
+(S43+) Tile server próprio do OSM — 0% hoje. Hoje usa tile.openstreetmap.org público (rate limit).
 
-(S36) Tile server próprio do OSM (formalizar para produção) — S42+.
+(S43) Screenshots + descrição da loja — 0% hoje.
 
-(S37) Incluir botão de export unitário no web/src/pages/ActivityDetailPage.tsx para paridade com o mobile — S42+.
+(S34) Alinhar UserPublic local de activity.dart (remover avatarUrl) — S43+.
 
-(S38) Filtros de activity_type na UI do perfil (backend aceita em todos os 4 endpoints de stats) — S42+.
+(S34) Endpoint GET /users/{id}/is-following no backend — S43+.
 
-(S38) Testar StatsChart em Android/iOS físico — S42+.
+(S36) Deep-link ?q= na busca mobile — S43+.
 
-(S39) Editar birth_date — backend UserUpdate não aceita. S42+.
+(S36) Extrair debounce manual (Timer 300ms) — S43+.
 
-(S39) Editar email/username — rotas próprias. S42+.
+(S36) Tile server próprio do OSM — S43+.
 
-(S39) Trocar extra do /edit-profile por GET /auth/me dentro da própria EditProfilePage se o hot reload perder estado de forma recorrente — S42+.
+(S37) Botão de export unitário no web ActivityDetailPage.tsx — S43+.
 
-(S39) Testar EditProfilePage em Android/iOS físico — S42+.
+(S38) Filtros de activity_type na UI do perfil — S43+.
 
-(S40) Exibir weight_kg/height_cm no header do ProfilePage (hoje só no modal). S42+ se o produto pedir.
+(S38) Testar StatsChart em Android/iOS físico — S43+.
 
-(S41) Identidade visual (ícone + splash) — OPÇÃO 4. Próximo bloqueador não-código (pesa 15% do MVP). S42/S43.
+(S39) Editar birth_date — S43+.
 
-SEÇÃO 8 — PRÓXIMOS PASSOS RECOMENDADOS (Sessão 42 e além)
-Sessão 41 fechada em 5/5 + validada em produção
-A paridade web do "Editar perfil" está completa e validada. O código do MVP está em ~95% (backend+web+mobile). O que falta agora é bloqueador não-código.
+(S39) Editar email/username — S43+.
 
-Primeira ação obrigatória da Sessão 42 (REGRA S27a)
-Abrir PowerShell via Win+R → powershell. Rodar o bloco "[Sessão 42 — primeira ação]": git status --short → se M docs/HANDOFF.md, commitar como docs: handoff da Sessao 41, push, confirmar HEAD == origin/main.
+(S39) Trocar extra do /edit-profile por GET /auth/me dentro da própria EditProfilePage — S43+.
 
-Fase 0 completa (REGRA S27b) — a S42 deve rodar
-Handoff pendente (git status --short).
+(S39) Testar EditProfilePage em Android/iOS físico — S43+.
 
-Log/status (git log -8, git status).
+(S40) Exibir weight_kg/height_cm no header do ProfilePage — S43+ se o produto pedir.
 
-Build/lint/analyze (npm run build, npm run lint, flutter analyze).
+(S41) Identidade visual — FECHADO S42 (ícone + splash + paleta).
 
-Docker + pytest + ruff (docker ps -a, pytest -q → 180 passed, ruff check .).
+(S42) Testar o app mobile em emulador Android / simulador iOS — NUNCA foi feito (não havia scaffold antes). Prioridade S43 — antes de qualquer release prep, precisa confirmar que o app roda nos scaffolds novos.
 
-Prod backend (/auth/me, /feed, PUT /users/me no openapi.json).
+(S42) Testar splash screen no emulador — S43.
 
-Prod frontend (index-*.js da Vercel).
+(S42) Testar ícone no launcher do Android/iOS — S43.
 
-Nota S41b: rodar git log primeiro. O handoff S40 estava desatualizado sobre o estado do commit; o handoff S41 registra o estado real (6701560 como HEAD==origin/main, working tree limpo), mas sempre confirmar.
+SEÇÃO 8 — PRÓXIMOS PASSOS RECOMENDADOS (Sessão 43 e além)
+Sessão 42 fechada em 7/7 + validada em produção
+A S42 fechou o bloqueador não-código de identidade visual (0% → 5%). O código do MVP está em ~95%. O que falta agora é release prep pesado.
 
-Rota recomendada para a Sessão 42
-OPÇÃO 4 — identidade visual (começo). A S41 fechou o código do MVP. Agora o gargalo é 100% não-código.
+Primeira ação obrigatória da Sessão 43 (REGRA S27a)
+cd D:\Rumo; git status --short → se M docs/HANDOFF.md, commitar como docs: handoff da Sessao 42, push, confirmar HEAD == origin/main.
 
-Escopo da S42 (a ser travado com o usuário na Fase 1):
+Fase 0 completa (REGRA S27b) — a S43 deve rodar
+Handoff pendente → log/status → build/lint/analyze → docker/pytest/ruff → prod backend → prod frontend (com o script S42 atualizado, seção 6).
 
-Ícone do app (mobile + favicon web) — gerar/fornecer, criar web/public/favicon.ico + web/public/logo192.png/logo512.png, atualizar web/index.html, atualizar mobile/android/app/src/main/res/mipmap-*/ + mobile/ios/Runner/Assets.xcassets/AppIcon.appiconset/.
+Rota recomendada para a Sessão 43
+S43 = release prep pesado. Escopo proposto (a travar com você na Fase 1):
 
-Splash screen (mobile) — mobile/android/app/src/main/res/drawable/launch_background.xml + mobile/ios/Runner/Base.lproj/LaunchScreen.storyboard (ou usar flutter_native_splash — decisão na Fase 2).
+Trocar com.example.rumo_mobile pelo package real (com.rumo.app ou similar) — bloqueador de loja. Afeta android/app/build.gradle.kts, AndroidManifest.xml, MainActivity.kt, ios/Runner.xcodeproj.
 
-Identidade visual básica (logo, cores, tipografia) — se o usuário ainda não tem, sugerir paleta coerente com o rumo-500 (Tailwind) já usado no web.
+Política de privacidade — criar web/src/pages/PrivacyPage.tsx + link no rodapé + URL pública (https://rumo-wheat.vercel.app/privacy). Obrigatória pra Google Play e App Store.
 
-Favicon web — atualizar web/index.html + web/public/.
+Build assinado Android — gerar keystore (keytool -genkey), configurar android/app/build.gradle.kts (signingConfigs), guardar keystore no .gitignore (nunca commitar).
 
-Fora do escopo da S42 (ficam pra S43): política de privacidade, build assinado, contas de dev, publicação nas lojas.
+Build assinado iOS — provisioning profile, certificado (precisa de conta Apple Developer paga).
 
-Alternativas (se a S42 quiser reduzir escopo)
-OPÇÃO 5 reduzida — só o ícone (sem splash, sem logo). Não recomendado: o splash é o que mais pesa na primeira impressão e o custo é baixo.
+Contas de dev — Google Play Developer ($25 uma vez), Apple Developer ($99/ano). Você precisa criar; eu não posso.
 
-OPÇÃO 6 (release prep pesado já) — pular a identidade e ir direto pra política + build assinado + contas. Não recomendado: a identidade visual trava a geração de screenshots da loja (S44), e sem ícone não dá pra submeter.
+Testar o app no emulador Android — o scaffold existe, mas o app nunca rodou nele. flutter run -d <emulator> + validar login, feed, perfil, upload. Prioridade máxima — antes de qualquer release prep, confirmar que roda.
 
-OPÇÃO 7 (features extras) — notificações, feed "quem você segue", comentários aninhados. Fora do MVP. Não recomendado.
+(Se der tempo) Tile server próprio do OSM — decisão S43/S44.
 
-Recomendação final: S42 = começo da OPÇÃO 4 (ícone + splash + paleta). S43 = release prep pesado (política + build assinado + contas + tile server). S44+ = publicação.
+Fora do escopo da S43 (S44+): screenshots + descrição da loja, submissão Google Play, submissão App Store, correções de review.
 
-Ordem de entrega da S42 (proposta)
+Alternativas (se a S43 quiser reduzir escopo)
+OPÇÃO 5 reduzida — só o teste no emulador Android (item 6) + trocar package (item 1). Rápido, destrava o "o app roda?" que nunca foi respondido.
+
+OPÇÃO 6 — ir direto pra política + contas (itens 2, 5), deixando build assinado pra S44. Não recomendado: sem testar no emulador, o build assinado pode falhar por motivos que você não viu.
+
+Recomendação final: S43 = teste no emulador (6) + trocar package (1) + política (2) + contas (5). Build assinado (3, 4) e tile server (7) em S44. Screenshots + submissão em S45/S46.
+
+Ordem de entrega da S43 (proposta)
 Fase 0 completa (6 blocos).
 
-Fase 1 — descoberta: pedir web/index.html, web/public/ (Get-ChildItem), mobile/pubspec.yaml, mobile/android/app/src/main/AndroidManifest.xml, mobile/ios/Runner/Info.plist, mobile/android/app/src/main/res/ (Get-ChildItem -Recurse), mobile/ios/Runner/Assets.xcassets/ (Get-ChildItem -Recurse). Perguntar se o usuário já tem arte (logo, ícone, paleta) ou se quer que o assistente proponha.
+Fase 1 — descoberta: pedir mobile/android/app/build.gradle.kts, mobile/android/app/src/main/AndroidManifest.xml, mobile/android/app/src/main/kotlin/com/example/rumo_mobile/MainActivity.kt, mobile/ios/Runner.xcodeproj/project.pbxproj (só as partes relevantes), web/src/App.tsx (rotas), web/src/components/AppHeader.tsx (footer/link), web/src/pages/ (Get-ChildItem).
 
-Fase 2 — contrato travado: decidir paleta, formato do ícone (SVG? PNG? usar flutter_launcher_icons?), splash via flutter_native_splash ou XML nativo.
+Fase 2 — contrato travado: package name (com.rumo.app? br.com.rumo? decidir), texto da política de privacidade, URL da política, ordem dos passos.
 
-Fase 3 — entrega incremental (1 arquivo/config por vez).
+Fase 3 — entrega incremental (1 arquivo por vez).
 
 Fase 3.5 — verificar save + commit.
 
-Fase 4 — validação (rodar flutter build local? ou só flutter analyze + confirmar que os assets aparecem?).
+Fase 4 — validação (rodar flutter run no emulador, validar login/feed/perfil).
 
 Fase 5 — handoff + percentual.
 
-SEÇÃO 9 — PEDIDO EXPLÍCITO DO USUÁRIO PARA O PRÓXIMO CHAT
-O usuário disse textualmente ao fim da S21: "gostei da sua forma de trabalho código e teste. ficou bem fluido o trabalho. faça um handoff bem detalhado para o proximo chat e se tiver como pedir para que sempre trabalhe desta forma."
+SEÇÃO 9 — PEDIDO EXPLÍCITO DO USUÁRIO (histórico + S42)
+S21: "gostei da sua forma de trabalho código e teste. ficou bem fluido [...] faça um handoff bem detalhado [...] e se tiver como pedir para que sempre trabalhe desta forma."
 
-Na S22: "sempre vamos seguir o que você recomendar".
+S22: "sempre vamos seguir o que você recomendar."
 
-Na S23: "vamos deixar algumas coisas acordadas, sempre seguir suas recomendações, mesmo que atualize apenas parte do código, sempre colocar o código completo, fazer o handoff completo e bem explicado para o próximo chat quando o limite estiver próximo do limite de 70% a 80%."
+S23: "sempre seguir suas recomendações, mesmo que atualize apenas parte do código, sempre colocar o código completo, fazer o handoff completo e bem explicado [...] quando o limite estiver próximo do limite de 70% a 80%."
 
-Na S24: confirmou "tudo como esperado" duas vezes.
+S24: confirmou "tudo como esperado" 2×.
 
-S25–S40: reforçou os mesmos acordos. Tolerou tropeços (S21–S39: 1 a 8 tropeços por sessão; S40: 0; S41: 0).
+S25–S40: reforçou os mesmos acordos. Tolerou tropeços (S21–S39: 1–8 por sessão; S40: 0; S41: 0; S42: 0 de código).
 
-Na S40, fez um pedido novo e explícito:
+S40: "estou com receio de ficar na mão pois fique ontem. [...] me mande o comando no powershell [...] tome cuidado para não esgotar o site ou chat para fazer o handoff."
 
-"vamos continuar, só estou com receio de ficar na mão pois fique ontem. [...] me mande o comando no powershell para eu mandar [...] tome cuidado para não esgotar o site ou chat para fazer o handoff e não ficar sem ter como abrir um novo chat, ou o site em outro dia."
+S41: "ontem o chat acabou no meio do código, gostaria que você avisasse se caso isso for ocorrer, não estou falando apenas do limite do chat, mas sim o limite do site (IA)."
 
-Interpretação: handoff preventivo mais cedo (antes de 70–80%) por medo de corte silencioso. A S41 fechou em ~75% de contexto, sem necessidade de handoff preventivo (mas o assistente avisou proativamente em cada arquivo grande — S41a).
+S42: "já falei, vamos fazer sempre o que você recomendar." (reforço explícito, no início da S42, antes de qualquer decisão).
 
-Na S41, o usuário reforçou (no início da sessão):
+Acordos novos da S42: S42a–S42r (vide Seção 0).
 
-"ontem o chat acabou no meio do código, gostaria que você avisasse se caso isso for ocorrer, não estou falando apenas do limite do chat, mas sim o limite do site (IA)."
+O que funcionou na S42 (manter):
 
-Interpretação: S41a — aviso proativo de interrupção iminente (chat OU site), antes de começar a entregar, não depois.
+Fase 0 completa, 6/6 verdes.
 
-Acordos novos:
+Descoberta que encontrou 3 erros de caminho (S42f) — não assumiu que android/ existia.
 
-S31: percentual de prontidão anexo ao handoff (não no meio da sessão, não na abertura). Entregar no fechamento, junto com o handoff.
+Contrato travado com 5 decisões (incluindo a não-óbvia: gerar scaffolds, que não estava no handoff S41).
 
-S32: manter o processo S21–S31 (Fase 0 obrigatória na ordem S27b, Fase 1 descoberta, Fase 2 contrato, Fase 3 incremental, Fase 3.5 save+commit, Fase 4 validação, Fase 5 handoff+percentual).
+Entrega incremental 7/7 sem tropeço de código.
 
-S40: handoff preventivo em ~50–60% quando arquivos grandes em sequência (>250 linhas); ~70–80% normal (S40c).
+Validação em produção antes do handoff.
 
-S41: aviso proativo de interrupção iminente (S41a).
+Auto-correção durante a entrega: S42n (faltava <link rel="manifest">), S42p (restaurar mobile/web/index.html).
 
-O que funcionou nas S21–S41 (manter):
+Honestidade sobre limite: S42k (não consigo gerar PNG a partir de SVG aqui) e S42q (.Substring em byte[]).
 
-Ordem clara de fases, validação entre cada arquivo, contrato escrito antes, commits pequenos e temáticos, honestidade sobre os próprios erros e correção com base no output real do terminal (não na previsão).
-
-Disposição de reduzir escopo quando a descoberta mostrou que o handoff anterior estava desatualizado (S28, S29, S30, S32–S41).
-
-Consistência em aceitar os erros na hora e corrigir/registrar, sem contornar.
-
-S41 acrescentou: Fase 0 completa, descoberta cirúrgica (8 itens, incluindo Get-ChildItem e package.json para confirmar que não havia modal genérico), contrato travou 3 decisões (modal à mão, useState sem RHF, botão ao lado do "Este é você."), entrega incremental 2/2 sem tropeço, validação manual no Chrome com 10 cenários, e aviso proativo S41a em cada arquivo grande.
-
-PERCENTUAL DE PRONTIDÃO DO PROJETO (fim da Sessão 41)
-Quebrado por camada
-Backend — ~95%
+PERCENTUAL DE PRONTIDÃO DO PROJETO (fim da Sessão 42)
+Backend — ~95% (inalterado desde S39)
 Item	%	Status
-Auth (login, me)	100%	✅
-Perfil próprio (GET /auth/me, PUT /users/me)	100%	✅ (S39)
-Atividades (CRUD, list, detail, search, track)	100%	✅
-Feed (com author + user)	100%	✅
-Comentários	100%	✅
-Upload GPX/FIT	100%	✅
-Stats (summary, by-type, weekly, monthly)	100%	✅
-Follows (follow, unfollow, followers, following, search)	100%	✅
-Export (unitário + lote)	100%	✅
-Testes (180 passed)	100%	✅
+Auth, perfil próprio, atividades, feed, comentários, upload, stats, follows, export, testes	100%	✅
 Ruff (0 warnings)	100%	✅
-Faltando pro MVP: editar email/username (rotas próprias), editar birth_date (S42+), GET /users/{id}/is-following (opcional), notificações (pós-MVP)	—	⏳
+Faltando pro MVP: editar email/username (rotas próprias), editar birth_date, GET /users/{id}/is-following (opcional), notificações (pós-MVP)	—	⏳
 Consolidado backend: ~95%. O que falta é opcional pro MVP.
 
-Web — ~97% (subiu de ~94% na S40 com a paridade web fechada)
+Web — ~97% (inalterado desde S41; S42 adicionou identidade mas não features)
 Item	%	Status
-Feed	100%	✅
-Perfil próprio (com stats + filtros + 4 charts + export em lote + editar perfil)	100%	✅ (S41)
-Perfil de terceiro (com follow + abas Seguidores/Seguindo)	100%	✅
-Detalhe de atividade (com mapa, comentários, like)	100%	✅
-Upload (se houver — não confirmado nesta sessão)	?	❓
-Busca (atividades + usuários)	100%	✅
-Editar perfil (peso, altura, nome)	100%	✅ S41
+Feed, perfil (próprio + terceiro), detalhe, busca, editar perfil, stats	100%	✅
+Identidade visual (favicon + manifest + theme-color + logo.svg)	100%	✅ S42
+Upload (se houver — não confirmado)	?	❓
 Tile server próprio do OSM	0%	❌ S43+
-Consolidado web: ~97%. O gap real agora é só o tile server próprio (S43+) e o upload (se ainda não existir — não verificado; a S41 não tocou nisso).
+Consolidado web: ~97%. O gap real é o tile server próprio (S43+) e upload (não verificado).
 
-Mobile — ~93%
+Mobile — ~93% (S42 adicionou scaffolds + identidade, mas não testou em emulador)
 Item	%	Status
-Feed	100%	✅
-Perfil próprio (com stats + filtros + 4 charts + export em lote)	100%	✅
-Perfil de terceiro (com follow + abas Seguidores/Seguindo)	100%	✅
-Detalhe de atividade (com mapa, comentários, like, export unitário)	100%	✅
-Upload GPX/FIT	100%	✅
-Busca (2 abas: Usuários | Atividades)	100%	✅
-Editar perfil (peso, altura, nome)	100%	✅ (S39)
-Export (unitário + lote)	100%	✅
-Testes em dispositivo físico (Android/iOS)	0%	❌ S42+
+Feed, perfil, detalhe, upload, busca, editar perfil, stats, export	100%	✅
+Scaffolds Android/iOS	100%	✅ S42
+Ícone + splash nativo	100%	✅ S42
+Teste em emulador Android / simulador iOS	0%	❌ S43 (prioridade)
 Paridade visual exata com o web	~90%	🟡
-Refresh token / logout automático em 401	0%	❌ S42+
-Consolidado mobile: ~93%. O gap real é testes em dispositivo físico + paridade visual exata + refresh token. S41 não tocou no mobile (paridade já fechada na S39).
+Refresh token / logout automático em 401	0%	❌ S43+
+Consolidado mobile: ~93%. O gap real agora é testar em dispositivo físico/emulador (nunca foi feito — antes não havia scaffold) + paridade visual exata + refresh token.
 
-Bloqueadores não-código — 0%
+Bloqueadores não-código — ~5% (subiu de 0% na S42)
 Item	%	Status
-Ícone do app (mobile + favicon web)	0%	❌ S42
-Identidade visual (logo, splash)	0%	❌ S42
+Ícone do app (mobile + favicon web)	100%	✅ S42
+Identidade visual (logo, splash)	100%	✅ S42
 Política de privacidade	0%	❌ S43
 Build assinado (Android keystore + iOS provisioning)	0%	❌ S43
 Conta Google Play Developer ($25)	0%	❌ S43
 Conta Apple Developer ($99/ano)	0%	❌ S43
-Publicação nas lojas	0%	❌ S44
-Tile server próprio do OSM	0%	❌ S43+
-Screenshots / descrição da loja	0%	❌ S44
-Consolidado bloqueadores: 0%. É o maior gap pro lançamento. Nada disso é código, mas é obrigatório pra publicar.
+Trocar com.example.rumo_mobile pelo package real	0%	❌ S43 (bloqueador de loja)
+Publicação nas lojas	0%	❌ S45
+Tile server próprio do OSM	0%	❌ S44+
+Screenshots / descrição da loja	0%	❌ S45
+Consolidado bloqueadores: ~5%. O maior gap pro lançamento continua sendo não-código, mas a S42 moveu de 0% pra 5% (identidade visual pronta).
 
 Consolidado
 Camada	%	Peso estimado	Contribuição
 Backend	~95%	35%	33.3%
 Web	~97%	20%	19.4%
 Mobile	~93%	30%	27.9%
-Bloqueadores não-código	0%	15%	0%
-MVP consolidado	~80,6%	100%	~80,6%
-Interpretação: o código está em ~95% (backend+web+mobile) — praticamente pronto. Os bloqueadores não-código (ícone, política, build assinado, lojas) estão em 0% e pesam 15% do MVP. Sem eles, não há lançamento. O consolidado subiu de ~80.0% (S40) para ~80.6% (S41) — a paridade web fechada compensou o backend/mobile estáveis.
+Bloqueadores não-código	~5%	15%	0.75%
+MVP consolidado	~81,3%	100%	~81,3%
+Interpretação: subiu de ~80,6% (S41) para ~81,3% (S42) — a identidade visual (ícone + splash + favicon + manifest + paleta) compensou o backend/mobile estáveis. O código está em ~95%; os bloqueadores não-código estão em ~5% (identidade pronta, mas política/build/contas/lojas não). Sem eles, não há lançamento.
 
 Estimativa de sessões restantes
 Sessão	Foco	Estimativa
-S42	Começo da OPÇÃO 4 (ícone + splash + identidade visual)	1 sessão
-S43	Release prep pesado (política de privacidade + build assinado + contas de dev + tile server próprio)	1–2 sessões
-S44	Screenshots + descrição da loja + submissão Google Play (review ~1–3 dias)	1 sessão + review
-S45	Submissão App Store (review ~1–7 dias) + correções de review	1 sessão + review
-S46+	Pós-MVP (notificações, editar email/username, refresh token, paridade visual exata)	contínuo
-Estimativa: ~3–4 sessões pra chegar em "pronto pra submeter" (S42–S43), +1–2 sessões de review das lojas (S44+). Total: ~5–6 sessões até o app estar publicado.
+S43	Teste no emulador + trocar package + política + contas de dev	1 sessão
+S44	Build assinado (Android keystore + iOS provisioning) + tile server próprio	1–2 sessões
+S45	Screenshots + descrição da loja + submissão Google Play (review ~1–3 dias)	1 sessão + review
+S46	Submissão App Store (review ~1–7 dias) + correções de review	1 sessão + review
+S47+	Pós-MVP (notificações, editar email/username, refresh token, paridade visual exata)	contínuo
+Estimativa: ~3–4 sessões pra chegar em "pronto pra submeter" (S43–S44), +1–2 sessões de review das lojas (S45+). Total: ~5–6 sessões até o app estar publicado (mesma estimativa do handoff S41 — a S42 não mudou o número, só moveu a identidade de 0% pra 100%).
