@@ -1,11 +1,12 @@
-plugins {
+﻿plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
-    namespace = "com.example.rumo_mobile"
+    // [Sessão 43] package trocado de com.example.rumo_mobile -> br.com.rumo.app
+    namespace = "br.com.rumo.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -15,8 +16,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.rumo_mobile"
+        // [Sessão 43] applicationId trocado; TODO do Flutter removido (era o pedido de troca)
+        applicationId = "br.com.rumo.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

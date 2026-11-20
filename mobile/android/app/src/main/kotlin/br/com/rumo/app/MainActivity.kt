@@ -1,4 +1,4 @@
-package com.example.rumo_mobile
+﻿package br.com.rumo.app
 
 import io.flutter.embedding.android.FlutterActivity
 
