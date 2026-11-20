@@ -6,6 +6,7 @@ import ActivitiesPage from "./pages/ActivitiesPage";
 import FeedPage from "./pages/FeedPage";
 import LoginPage from "./pages/LoginPage";
 import NotificationsPage from "./pages/NotificationsPage";
+import PrivacyPage from "./pages/PrivacyPage"; // [Sessão 43] política pública
 import RegisterPage from "./pages/RegisterPage";
 import UploadPage from "./pages/UploadPage";
 
@@ -29,6 +30,8 @@ export default function App() {
         {/* Públicas */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        {/* [Sessão 43] política de privacidade — pública (exigência das lojas) */}
+        <Route path="/privacy" element={<PrivacyPage />} />
 
         {/* Protegidas */}
         <Route

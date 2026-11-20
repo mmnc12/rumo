@@ -212,6 +212,10 @@ export function AppHeader() {
                   Perfil (@{user.username})
                 </DrawerLink>
               )}
+              {/* [Sessão 43] política de privacidade no drawer mobile */}
+              <DrawerLink to="/privacy" onClick={closeMenu}>
+                Privacidade
+              </DrawerLink>
             </nav>
 
             <div className="border-t border-gray-200 p-2">
@@ -229,6 +233,16 @@ export function AppHeader() {
           </div>
         </div>
       )}
+
+      {/* [Sessão 43] footer global — aparece em todas as páginas que usam AppHeader */}
+      <div className="mx-auto max-w-4xl px-4 py-2">
+        <Link
+          to="/privacy"
+          className="text-xs text-gray-400 hover:text-gray-600"
+        >
+          Política de Privacidade
+        </Link>
+      </div>
     </header>
   );
 }
