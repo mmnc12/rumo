@@ -326,3 +326,151 @@ Bloqueadores não-código	~25%	inalterado (contas, keystore)
 MVP consolidado	~85%	subiu de ~83% (app funcional no celular real)
 
 Estimativa: ~2–3 sessões até "pronto pra submeter" + 1–2 de review. Total ~3–5 sessões. A S47 deve ser curta se o item 7 for concluído (validação visual no celular) e o item 10 for feito (keystore).
+
+SEÇÃO 10 — BACKLOG DA SESSÃO 47 (planejamento)
+
+Base: repo no commit 0898e5e (S46 fechada). App roda no Redmi Note 8, faz login, tela de detalhes sem overflow.
+10.1 Melhorar mensagens de erro (prioridade alta)
+
+Problema: erros técnicos aparecem crus para o usuário. Ex.: ClientException with SocketException: Failed host lookup: 'rumo-api-5s0b.onrender.com'. Na tela de login, o texto é vermelho e enorme, sem orientação.
+
+Solução proposta:
+
+    Criar um tradutor de erros em lib/utils/error_message.dart (novo arquivo):
+
+        SocketException / ClientException / Failed host lookup → "Não foi possível conectar. Verifique sua internet e tente novamente."
+
+        TimeoutException → "O servidor demorou para responder. Tente novamente."
+
+        ApiException com status == 401 → "E-mail ou senha incorretos."
+
+        ApiException com status == 409 → "Este e-mail já está cadastrado."
+
+        ApiException com status == 500 → "Erro no servidor. Tente novamente em instantes."
+
+        Fallback: "Algo deu errado. Tente novamente."
+
+    Substituir todos os 'Erro: $e' e e.message crus pelo tradutor. Arquivos afetados:
+
+        lib/pages/login_page.dart
+
+        lib/pages/activity_detail_page.dart
+
+        lib/pages/feed_page.dart
+
+        lib/pages/profile_page.dart
+
+        lib/pages/upload_page.dart
+
+        lib/pages/user_profile_page.dart
+
+        lib/pages/search_page.dart
+
+        lib/pages/edit_profile_page.dart
+
+    Padronizar a exibição: SnackBar (para erros de ação) ou texto vermelho inline (para erros de formulário). Não usar os dois ao mesmo tempo para o mesmo erro.
+
+10.2 Tela de Cadastro (prioridade alta)
+
+Problema: a tela de login não tem link para cadastro. Usuário novo não consegue criar conta.
+
+Solução proposta:
+
+    Criar lib/pages/register_page.dart (novo arquivo):
+
+        Campos: nome completo, username, e-mail, senha, confirmação de senha.
+
+        Validação local: e-mail com @, senha ≥ 8 caracteres, senhas iguais, campos não vazios.
+
+        Botão "Cadastrar" com spinner enquanto envia.
+
+        Link "Já tem conta? Entre" que volta para o login.
+
+    Integrar com o backend: verificar se o endpoint de registro existe (POST /auth/register ou similar) e qual o contrato. Se não existir, criar no backend também (S47 ou S48).
+
+    Adicionar link na login_page.dart: "Não tem conta? Cadastre-se" abaixo do botão "Entrar".
+
+    Após cadastro bem-sucedido: fazer login automático (se o backend devolver token) ou redirecionar para o login com mensagem "Conta criada. Faça login."
+
+10.3 Animação do percurso no mapa (prioridade média)
+
+Problema: o mapa da tela de detalhes é estático. Seria legal ver a rota sendo "desenhada" progressivamente, simulando a caminhada.
+
+Solução proposta:
+
+    Adicionar botão "Reproduzir rota" abaixo do mapa em activity_detail_page.dart.
+
+    Criar lib/widgets/activity_map_animated.dart (novo arquivo):
+
+        Recebe ActivityTrack.
+
+        Estado: _progress (0.0 a 1.0).
+
+        AnimationController com Duration proporcional ao número de pontos (ex.: 5s para 100 pontos).
+
+        A cada frame, desenhar Polyline com apenas os pontos até _progress * total.
+
+        Botão "Pausar/Retomar" e "Reiniciar".
+
+    Alternativa mais simples: usar flutter_map com Polyline cujo points é recalculado a cada tick do AnimationController. Não precisa de vídeo real, só a linha crescendo.
+
+Nota: o pacote flutter_map já está no pubspec.yaml (usado no activity_map.dart). A animação é só controle de estado + Polyline dinâmica.
+10.4 Outras melhorias sugeridas (prioridade baixa, mas valiosas)
+
+    Feedback visual de carregamento: botões com spinner (CircularProgressIndicator dentro do FilledButton) durante requisições. Já existe em alguns lugares (_sendingComment, _exporting), mas falta em login, cadastro, upload, like.
+
+    Empty states amigáveis:
+
+        Feed vazio → "Nenhuma atividade ainda. Que tal começar?"
+
+        Perfil sem atividades → "Você ainda não registrou nenhuma atividade."
+
+        Busca sem resultados → "Nenhum usuário encontrado."
+
+        Cada empty state com botão de ação (ex.: "Registrar atividade" → UploadPage).
+
+    Validação de formulário com Form + TextFormField:
+
+        Login: e-mail válido, senha não vazia.
+
+        Cadastro: e-mail válido, senha ≥ 8, senhas iguais.
+
+        Upload: campos obrigatórios (tipo, distância, duração).
+
+        Usar validator do TextFormField para mensagens inline.
+
+    Máscaras e formatadores:
+
+        E-mail: lowercase automático.
+
+        Senha: botão "mostrar/ocultar" (IconButton com obscureText).
+
+    Pull-to-refresh no feed e no perfil (RefreshIndicator).
+
+    Tratamento de sessão expirada: se ApiException com status == 401 em qualquer chamada, limpar token e redirecionar para login com mensagem "Sessão expirada. Faça login novamente."
+
+10.5 Itens herdados da S46 (não concluídos)
+
+    Item 7 completo: validar no Redmi Note 8 — feed, perfil, upload, like, comentários, export CSV/GPX.
+
+    Item 8: splash + ícone no launcher.
+
+    Item 10: keystore + signingConfigs.
+
+    Item 13: higiene (remover BOM de build.gradle.kts e AndroidManifest.xml, remover comentário com.example se ainda existir).
+
+10.6 Ordem sugerida para a S47
+
+    Fase 0 (obrigatória): git log, git status, web build/lint, mobile analyze, backend pytest/ruff, prod backend/frontend.
+
+    Item 10.1 (mensagens de erro) — rápido, alto impacto, afeta todos os fluxos.
+
+    Item 10.2 (tela de cadastro) — médio, requer backend (verificar endpoint).
+
+    Item 7 completo (validação no celular) — testar o que foi corrigido na S46 + o cadastro novo.
+
+    Item 10.3 (animação do mapa) — se sobrar tempo, é o mais "uau" mas o menos crítico.
+
+    Item 10.4 (outras melhorias) — incremental, conforme tempo.
+
+Se o backend não tiver endpoint de registro, a S47 faz o backend primeiro (S47 ou S48) e a tela de cadastro depois.
