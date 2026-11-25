@@ -1,91 +1,130 @@
-HANDOFF — SESSÃO 44 (ATUALIZADO)
+outro chat
+HANDOFF — SESSÃO 46 (ATUALIZADO)
+
+    Instruções para quem chega agora: leia a Seção 0 primeiro. Ela contém o contexto operacional e as regras que não mudam. Depois leia a Seção 8 (próximos passos) antes de tocar em qualquer arquivo.
+
 SEÇÃO 0 — LEIA PRIMEIRO (contexto operacional)
-Regra de ouro (S21–S44, inalterada): você não tem acesso ao disco do usuário. Toda informação chega por Get-Content -Encoding UTF8 ou saída de comando. Nunca inventar caminho, nunca reescrever arquivo não recebido. Se precisar, pedir e esperar.
 
-Regras críticas S21–S43 mantidas integralmente. Adições da S44:
+Regra de ouro (S21–S46, inalterada): você não tem acesso ao disco do usuário. Toda informação chega por Get-Content -Encoding UTF8 ou saída de comando. Nunca inventar caminho, nunca reescrever arquivo não recebido. Se precisar, pedir e esperar.
 
-S44a (NOVA — bloqueador AGP 9 + Flutter 3.47.9). O build Android NÃO compila. Erro: Cannot add task 'generateLockfiles' as a task with that name already exists. O Flutter Gradle Plugin tenta registrar essa task no root project e/ou no :app, e o Gradle rejeita porque ela já existe. A documentação oficial do Flutter afirma que AGP 9 usa Kotlin integrado por padrão, e apps que usam kotlin-android falham sem migração [citation:4]. O Flutter 3.44+ ofereceu suporte temporário com android.builtInKotlin=false, mas isso tem bugs no AGP 9.0.0. O Flutter 3.47 já suporta Kotlin integrado (android.builtInKotlin=true) se o app e todos os plugins migrarem [citation:4].
+Regras críticas S21–S45 mantidas integralmente. Adições da S46:
 
-S44b (NOVA — AGP 8.13.2 também falhou). A S44 tentou rebaixar AGP para 8.13.2, remover as flags android.newDsl=false e android.builtInKotlin=false, e manter kotlin-android no app. O erro generateLockfiles persistiu. Ou seja: não é a versão do AGP, é o estado do projeto/plugin.
+S46a (NOVA — celular real funcional). O app instalou e abriu no Redmi Note 8 (Android 10, API 29, arm64) via APK de release gerado manualmente (flutter build apk --release). O emulador foi abandonado (S45g). O APK foi transferido via nuvem/Telegram e instalado manualmente (contornando o INSTALL_FAILED_USER_RESTRICTED do MIUI).
 
-S44c (NOVA — app NUNCA rodou nos scaffolds novos). O item 7 do mapa (testar no emulador Android) continua 0%. O emulador emulador1 (Android 16, API 36) está funcionando e o Flutter o enxerga (emulator-5554). O problema é 100% build.
+S46b (NOVA — bug de layout corrigido). O BOTTOM OVERFLOWED BY 13 PIXELS nos cartões de estatísticas da tela de detalhes foi corrigido: GridView.count (com childAspectRatio fixo) substituído por Wrap em activity_detail_page.dart. O mapa também foi envolvido em ClipRRect + SizedBox(height: 280) para evitar overflow lateral dos créditos do flutter_map.
 
-S44d (NOVA — estado dos arquivos Android após S44, INCERTO). Durante a S44, os seguintes arquivos foram editados múltiplas vezes:
-- mobile/android/settings.gradle.kts: atualmente com com.android.application version "8.13.2" (foi 9.0.0, depois 8.7.3, depois 8.13.2)
-- mobile/android/gradle.properties: android.newDsl=false e android.builtInKotlin=false FORAM REMOVIDAS na última tentativa (estado atual: sem essas flags)
-- mobile/android/build.gradle.kts (nível superior): sem kotlin-android e sem bloco kotlin { } (corrigido)
-- mobile/android/app/build.gradle.kts: com id("kotlin-android") no plugins { } e bloco kotlin { compilerOptions { jvmTarget = JVM_17 } } no final (formato AGP 8)
-A próxima sessão DEVE inspecionar os 4 arquivos ANTES de qualquer edição (regra de ouro).
+S46c (NOVA — permissão de INTERNET ausente). O AndroidManifest.xml principal não tinha <uses-permission android:name="android.permission.INTERNET" />. Isso fazia o APK de release falhar com Failed host lookup: 'rumo-api-5s0b.onrender.com'. Corrigido: a linha foi adicionada no topo do <manifest>. O app agora faz login normalmente.
 
-S44e (NOVA — rota recomendada para S45: migrar para Kotlin integrado). A documentação oficial do Flutter [citation:4][citation:8] indica que para AGP 9+ o caminho correto é:
-1. Atualizar para AGP 9.0.1+ (o template do Flutter 3.47 usa AGP 9.1.0 [citation:5])
-2. Remover id("kotlin-android") do app/build.gradle.kts
-3. Remover o bloco kotlin { compilerOptions { } }
-4. Garantir android.builtInKotlin=true (ou ausente, pois é o padrão no AGP 9)
-5. Garantir android.newDsl=true (ou ausente)
-Isso NÃO foi testado na S44. A S44 tentou o caminho oposto (manter kotlin-android + flags false) e falhou.
+S46d (NOVA — login validado no celular real). Com a permissão de INTERNET, o login com prod@rumo.com funcionou no Redmi Note 8. A tela de detalhes da corrida abre sem overflow. O item 7 do mapa (testar no Android) está desbloqueado e parcialmente validado.
 
-S44f (NOVA — alternativa: projeto novo + copiar lib/). Se a migração S44e falhar, a rota mais segura é criar um projeto Flutter novo com flutter create (que já vem com AGP 9 e configuração correta), copiar a pasta lib/ e o pubspec.yaml, e testar. Isso elimina qualquer resquício de configuração antiga nos arquivos Gradle.
+S46e (NOVA — fluxo de teste no celular). Para testar no celular real sem depender de USB/MIUI:
+
+    flutter build apk --release
+
+    Transferir build\app\outputs\flutter-apk\app-release.apk via Drive/Telegram
+
+    Instalar no celular manualmente (Gerenciador de Arquivos → tocar no APK → permitir fonte desconhecida → Instalar)
 
 SEÇÃO 1 — TL;DR para quem chega agora
-Estado do repo: HEAD == origin/main == 0ce5626 (handoff S43). Working tree deve ter M em docs/HANDOFF.md + M em mobile/android/ (4 arquivos editados na S44, estado S44d).
 
-S44 feita nesta sessão:
-- Fase 0 completa: 6/6 verdes (web build/lint, mobile analyze, backend pytest 180, ruff)
-- Emulador Android: emulador1 (Android 16, API 36) rodando, Flutter enxerga emulator-5554
-- flutter doctor: licenças Android aceitas
-- flutter run: FALHOU 5 vezes. Erro persistente: Cannot add task 'generateLockfiles'.
-  - AGP 9.0.0 + kotlin-android no app + flags false: falhou
-  - AGP 8.7.3: Flutter exige >= 8.11.1 (falhou)
-  - AGP 9.0.0 + kotlin-android no nível superior (errado): falhou
-  - AGP 9.0.0 + kotlin-android no app (corrigido): falhou
-  - AGP 8.13.2 + sem flags: falhou (S44b)
+Estado do repo: HEAD == origin/main == 74ecb32 (dois commits de handoff S44). A S46 ainda NÃO foi commitada — os arquivos alterados na S46 estão no working tree e precisam ser commitados (ver Seção 5).
 
-O que falta (7–13): teste no emulador (item 7, bloqueado por S44a), keystore (10), contas (12), higiene de BOM (13).
+S46 feita nesta sessão:
 
-Percentual consolidado: ~82% (mobile caiu para ~88% porque o build não compila; código está lá, mas não roda).
+    App rodou no Redmi Note 8 (celular real) via APK de release
 
+    Bug visual BOTTOM OVERFLOWED corrigido em activity_detail_page.dart (GridView → Wrap)
+
+    Mapa contido com ClipRRect + SizedBox
+
+    Permissão de INTERNET adicionada ao AndroidManifest.xml
+
+    Login com prod@rumo.com validado no celular
+
+O que falta (itens 8–13 do mapa): splash + ícone no launcher (8), iOS (9), keystore (10), .gitignore do keystore (11), contas Google Play + Apple (12), higiene de BOM (13).
+
+Percentual consolidado: ~85% (mobile subiu de ~90% para ~93% porque o app roda, faz login e a tela de detalhes não tem overflow; falta validar feed/perfil/upload no celular).
 SEÇÃO 2 — PRODUÇÃO E AMBIENTE (inalterado)
-Backend: https://rumo-api-5s0b.onrender.com
-Frontend Web: https://rumo-wheat.vercel.app
-Repo local: D:\Rumo
-Flutter: 3.47.9 / Dart 3.13.7 (C:\Users\nasci\flutter)
-SO: Windows 11 (26H2), PowerShell 5.1
-Python: 3.13.7 (venv em D:\Rumo\backend\venv)
-Android SDK: C:\Users\nasci\AppData\Local\Android\Sdk (SDK 36.0.0, NDK 27.0 instalado na S44)
-Android Studio: C:\Program Files\Android\Android Studio\bin\studio64.exe
-Emulador: emulador1 (Android 16, API 36, x86_64) — rodando, emulator-5554
-AVDs disponíveis: emulador1, meuEmulador
 
-Git ao fim da S44 (esperado):
-0ce5626 (HEAD -> main, origin/main) docs: handoff da Sessao 43
+    Backend: https://rumo-api-5s0b.onrender.com
+
+    Frontend Web: https://rumo-wheat.vercel.app
+
+    Repo local: D:\Rumo
+
+    Flutter: 3.47.9 / Dart 3.13.7 (C:\Users\nasci\flutter)
+
+    SO: Windows 11 (26H2), PowerShell 5.1
+
+    Python: 3.13.7 (venv em D:\Rumo\backend\venv)
+
+    Android SDK: C:\Users\nasci\AppData\Local\Android\Sdk (SDK 36.0.0, NDK 27.0)
+
+    Android Studio: C:\Program Files\Android\Android Studio\bin\studio64.exe
+
+    Celular de teste: Redmi Note 8 (Android 10, API 29, arm64) — c767cacd no flutter devices
+
+    Emulador: emulador1 — NÃO usar (S45g)
+
+Git ao fim da S46 (esperado, após commit):
+text
+
+<novo_hash> (HEAD -> main, origin/main) fix(mobile): app roda no celular real + permissao INTERNET + overflow corrigido (Sessao 46)
+74ecb32 docs: handoff da Sessao 44 (build Android bloqueado)
+b893f98 docs: handoff da Sessao 44
+0ce5626 docs: handoff da Sessao 43
 2e09068 feat(mobile): package br.com.rumo.app + label Rumo + iOS bundle id (Sessao 43, 6/13)
 deb7969 feat(web): politica de privacidade (/privacy) + link no AppHeader (Sessao 43, 3/13)
 3fb3c5e docs: handoff da Sessao 42
 aaeb7c4 feat(mobile): scaffolds android/ios + icone e splash nativo (Sessao 42)
 8576d95 feat(web): identidade visual — favicon laranja + manifest PWA + index.html (Sessao 42)
 
-git status --short ao fim da S44: M docs/HANDOFF.md + M mobile/android/app/build.gradle.kts + M mobile/android/build.gradle.kts + M mobile/android/gradle.properties + M mobile/android/settings.gradle.kts. NADA disso foi commitado.
+git status --short --untracked-files=all esperado antes do commit:
+text
 
-SEÇÃO 3 — O QUE FOI FEITO NA SESSÃO 44
-3.1 Fase 0 — validação (6/6 verdes)
-git: HEAD == origin/main == 0ce5626, working tree limpo
-web build: 826 modules, built in 2.08s (index-BizVMh0m.js)
-web lint: OK
-mobile analyze: No issues found! (ran in 4.2s)
-backend pytest: 180 passed in 50.49s
-backend ruff: All checks passed!
+ M docs/HANDOFF.md
+ M mobile/android/app/src/main/AndroidManifest.xml
+ M mobile/android/app/build.gradle.kts
+ M mobile/android/gradle.properties
+ M mobile/android/settings.gradle.kts
+ M mobile/lib/pages/activity_detail_page.dart
+?? mobile/android/build/reports/problems/problems-report.html
 
-3.2 Emulador Android — preparação
-flutter emulators: 2 AVDs (emulador1, meuEmulador)
-flutter doctor --android-licenses -> All SDK package licenses accepted
-emulador1 iniciado: flutter emulators --launch emulador1
-flutter devices: sdk gphone64 x86 64 (mobile) • emulator-5554 • android-x64 • Android 16 (API 36) (emulator)
+O problems-report.html é lixo de build e NÃO deve ser commitado.
+SEÇÃO 3 — O QUE FOI FEITO NA SESSÃO 46
+3.1 Build Android — resolvido e validado no celular real
 
-3.3 flutter run — 5 tentativas, todas falharam com generateLockfiles
-O erro Cannot add task 'generateLockfiles' é um conflito de registro de task do Flutter Gradle Plugin. A documentação oficial do Flutter [citation:4] diz que AGP 9 exige Kotlin integrado; o caminho de compatibilidade com kotlin-android tem bugs.
+O app compilou e instalou no Redmi Note 8 via APK de release. O fluxo de teste (S46e) contorna o INSTALL_FAILED_USER_RESTRICTED do MIUI.
+3.2 Bug de layout — BOTTOM OVERFLOWED corrigido
 
-3.4 Mapa dos 13 itens (atualizado S44)
+Arquivo alterado: mobile/lib/pages/activity_detail_page.dart
+
+Antes: GridView.count com childAspectRatio: 2.2 — os cartões de estatísticas vazavam 13px para baixo.
+Depois: Wrap com spacing: 12, runSpacing: 12 — os cartões medem a altura real e quebram linha sem overflow.
+
+Mudanças detalhadas:
+
+    GridView.count(...) substituído por Wrap(...).
+
+    _StatCard reescrito: Container(width: 160, constraints: BoxConstraints(minHeight: 70)) com mainAxisSize: MainAxisSize.min — o card cresce conforme o conteúdo, sem altura fixa.
+
+    ActivityMap envolvido em ClipRRect(borderRadius: 12) + SizedBox(width: double.infinity, height: 280) — evita o overflow lateral dos créditos do flutter_map.
+
+3.3 Permissão de INTERNET — adicionada ao manifesto
+
+Arquivo alterado: mobile/android/app/src/main/AndroidManifest.xml
+
+Antes: sem <uses-permission android:name="android.permission.INTERNET" />. O APK de release não tinha acesso à rede, resultando em ClientException with SocketException: Failed host lookup: 'rumo-api-5s0b.onrender.com'.
+
+Depois: a linha foi adicionada no topo do <manifest>:
+xml
+
+<uses-permission android:name="android.permission.INTERNET" />
+
+3.4 Login validado no celular real
+
+Com a permissão de INTERNET, o login com prod@rumo.com funcionou no Redmi Note 8. A tela de detalhes da corrida abre sem overflow.
+3.5 Mapa dos 13 itens (atualizado S46)
 #	Item	Status	Evidência	Depende de
 1	Package Android br.com.rumo.app	✅	2e09068	—
 2	Bundle id iOS br.com.rumo.app	✅	2e09068	—
@@ -93,89 +132,197 @@ O erro Cannot add task 'generateLockfiles' é um conflito de registro de task do
 4	Info.plist sem hardcode	✅	2e09068	—
 5	Política de privacidade (/privacy)	✅	deb7969	—
 6	Link no AppHeader	✅	deb7969	—
-7	Testar no emulador Android	❌ (BLOQUEADO S44a)	emulador OK, build falha	AGP/Flutter (S44e)
-8	Testar splash + ícone no launcher	❌	—	item 7
+7	Testar no celular Android real	⚠️ parcial	login OK; falta feed/perfil/upload	S46
+8	Testar splash + ícone no launcher	❌	—	item 7 completo
 9	Testar no simulador iOS	❌	—	usuário ter Mac
-10	Gerar keystore + signingConfigs	❌	—	item 7
+10	Gerar keystore + signingConfigs	❌	—	item 7 completo
 11	.gitignore do keystore	❌	—	item 10
 12	Contas Google Play ($25) + Apple ($99/ano)	❌	—	só usuário
 13	Remover BOM/comentário com.example	❌	—	eu (higiene)
-
 SEÇÃO 4 — CONTRATOS DO BACKEND (INALTERADOS)
-Nenhuma mudança desde S39. 180 testes passando. Nada a fazer no backend para a S45.
 
+Nenhuma mudança desde S39. 180 testes passando. Nada a fazer no backend para a S47.
 SEÇÃO 5 — COMMITS PENDENTES / ESTADO DO REPO
-Primeira ação da S45 (S27a):
+
+Ação imediata na S46 (agora, antes de fechar o chat):
+powershell
+
 cd D:\Rumo
 git status --short --untracked-files=all
-# Opção 1 (recomendada): commitar handoff, reverter mobile/android/
-git add docs/HANDOFF.md && git commit -m "docs: handoff da Sessao 44 (build Android bloqueado)" && git push
-git checkout -- mobile/android/
-# Opção 2: commitar tudo como wip
-git add -A && git commit -m "wip: tentativa AGP 9/8 (falhou) + handoff S44" && git push
 
-Segunda ação (S27b): Fase 0 (handoff -> log/status -> build/lint/analyze -> docker/pytest/ruff -> prod backend -> prod frontend).
+Confirmar que aparecem os 6 arquivos esperados (5 M + 1 ??). Depois:
+powershell
 
-SEÇÃO 6 — SCRIPTS ÚTEIS (S44)
-Inspecionar estado dos 4 arquivos Android (FAZER PRIMEIRO na S45)
 cd D:\Rumo
-Get-Content mobile\android\settings.gradle.kts -Encoding UTF8
-Get-Content mobile\android\gradle.properties -Encoding UTF8
-Get-Content mobile\android\build.gradle.kts -Encoding UTF8
-Get-Content mobile\android\app\build.gradle.kts -Encoding UTF8
+# Remover o lixo de build (não commitar)
+Remove-Item mobile\android\build\reports\problems\problems-report.html -ErrorAction SilentlyContinue
 
-Emulador (já funcionou)
-& "C:\Users\nasci\flutter\bin\flutter.bat" emulators --launch emulador1
-& "C:\Users\nasci\flutter\bin\flutter.bat" devices
-# esperado: sdk gphone64 x86 64 • emulator-5554 • android-x64 • Android 16 (API 36)
+# Commitar os 5 arquivos alterados + o handoff
+git add docs/HANDOFF.md
+git add mobile/android/app/src/main/AndroidManifest.xml
+git add mobile/android/app/build.gradle.kts
+git add mobile/android/gradle.properties
+git add mobile/android/settings.gradle.kts
+git add mobile/lib/pages/activity_detail_page.dart
+git commit -m "fix(mobile): app roda no celular real + permissao INTERNET + overflow corrigido (Sessao 46)"
+git push
 
-Rota S44e (Kotlin integrado — NÃO testada na S44)
-# 1) Inspecionar os 4 arquivos
-# 2) settings.gradle.kts: com.android.application version "9.1.0" (template 3.47 usa 9.1.0 [citation:5])
-# 3) gradle.properties: garantir android.builtInKotlin=true (ou ausente) e android.newDsl=true (ou ausente)
-# 4) app/build.gradle.kts: REMOVER id("kotlin-android") e o bloco kotlin { }
-# 5) android/build.gradle.kts (nível superior): sem kotlin-android, sem bloco kotlin { }
-# 6) flutter clean && flutter run -d emulator-5554
+Mensagem sugerida do commit:
+text
 
-Rota S44f (projeto novo — fallback)
-# 1) flutter create --org br.com.rumo rumo_novo (em D:\Rumo\_temp, fora do repo)
-# 2) Copiar lib/ e pubspec.yaml do projeto atual para o novo
-# 3) flutter run -d emulator-5554 no projeto novo
-# 4) Se funcionar, comparar os arquivos android/ e aplicar as diferenças ao projeto real
+fix(mobile): app roda no celular real + permissao INTERNET + overflow corrigido (Sessao 46)
 
-SEÇÃO 7 — DÍVIDAS TÉCNICAS (S44)
-Fechadas na S44: nenhuma.
+- AndroidManifest.xml: adiciona <uses-permission android.permission.INTERNET> (S46c)
+  Sem isso, o APK de release falhava com Failed host lookup no login.
+- activity_detail_page.dart: GridView.count -> Wrap nos cards de estatisticas (S46b)
+  Corrige BOTTOM OVERFLOWED BY 13 PIXELS no Redmi Note 8 (API 29).
+- activity_detail_page.dart: ClipRRect + SizedBox(height: 280) no ActivityMap (S46b)
+  Evita overflow lateral dos creditos do flutter_map.
+- gradle.properties + app/build.gradle.kts + settings.gradle.kts: estado S44e (AGP 9.1.0,
+  sem kotlin-android, flags builtInKotlin/newDsl removidas) — build compila e app inicia.
+- docs/HANDOFF.md: handoff da Sessao 46.
+
+Se a S46 fechar sem commit (por limite ou decisão do usuário): a S47 começa pela Seção 5 e faz o commit como primeira ação.
+SEÇÃO 6 — SCRIPTS ÚTEIS (S46)
+
+Inspecionar estado dos arquivos alterados na S46 (FAZER PRIMEIRO na S47 se não commitado):
+powershell
+
+cd D:\Rumo
+git status --short --untracked-files=all
+git diff --stat
+
+Gerar APK de release para o celular:
+powershell
+
+cd D:\Rumo\mobile
+& "C:\Users\nasci\flutter\bin\flutter.bat" build apk --release
+# APK em: D:\Rumo\mobile\build\app\outputs\flutter-apk\app-release.apk
+
+Transferir para o celular e instalar:
+
+    Enviar app-release.apk via Google Drive / Telegram / WhatsApp (como documento)
+
+    No celular: Gerenciador de Arquivos → pasta Download → tocar no APK
+
+    Permitir "fonte desconhecida" → Instalar
+
+Rodar no celular via USB (se o MIUI permitir):
+powershell
+
+cd D:\Rumo\mobile
+& "C:\Users\nasci\flutter\bin\flutter.bat" devices  # confirmar c767cacd
+& "C:\Users\nasci\flutter\bin\flutter.bat" run -d c767cacd
+
+Limpar lixo de build:
+powershell
+
+cd D:\Rumo
+Remove-Item mobile\android\build\reports\problems\problems-report.html -ErrorAction SilentlyContinue
+
+SEÇÃO 7 — DÍVIDAS TÉCNICAS (S46)
+
+Fechadas na S46:
+
+    (S45f) App não inicializava (ClassNotFoundException: MainActivity) — resolvido pelo estado S44e (build compila) + instalação manual do APK.
+
+    (S46b) BOTTOM OVERFLOWED BY 13 PIXELS — resolvido com Wrap + ClipRRect.
+
+    (S46c) Failed host lookup — resolvido com permissão de INTERNET no manifesto.
 
 Conhecidas (não-bug):
-(S41) prod@rumo.com state — estado, não bug.
-(S42k) PWA sem PNGs — não-bloqueador.
-(S43d) BOM em build.gradle.kts e AndroidManifest.xml — não-bloqueador.
-(S43e) Info.plist sem hardcode — correto.
 
-Oportunidades (S45+):
-(S44a/e/f) RESOLVER BUILD ANDROID — prioridade absoluta. Rotas S44e ou S44f.
-(S43) Testar app no emulador — bloqueado por S44a.
-(S43) Keystore + signingConfigs — após build passar.
-(S43) Contas Google Play + Apple — só o usuário.
-(S43) Remover BOM — higiene.
+    (S41) prod@rumo.com state — estado, não bug.
 
-SEÇÃO 8 — PRÓXIMOS PASSOS RECOMENDADOS (Sessão 45)
-Primeira ação: commit do handoff + reverter mobile/android/ (Seção 5).
-Segunda ação: inspecionar os 4 arquivos Android.
-Terceira ação: tentar rota S44e (Kotlin integrado, AGP 9.1.0, sem kotlin-android).
-Quarta ação: se falhar, rota S44f (projeto novo + copiar lib/).
-Quinta ação: se build passar -> checklist de teste (login/feed/perfil/upload).
+    (S42k) PWA sem PNGs — não-bloqueador.
 
-SEÇÃO 9 — PEDIDO EXPLÍCITO DO USUÁRIO (histórico + S44)
-S21–S43: acordos mantidos (código completo, handoff completo, aviso de limite, percentual).
-S44: "estou com medo de acabar o limite do site ou do chat, pois não estamos progredindo deu erro novamente" / "vamos fazer o handoff completo, pois quem sabe se no outro chat resolvemos."
-Acordos novos da S44: S44a–S44f.
+    (S43d) BOM em build.gradle.kts e AndroidManifest.xml — não-bloqueador.
 
-PERCENTUAL DE PRONTIDÃO DO PROJETO (fim da Sessão 44)
-Backend — ~95%
-Web — ~99%
-Mobile — ~88% (código ~96%, mas build Android quebrado)
-Bloqueadores não-código — ~25%
-MVP consolidado — ~82%
+    (S43e) Info.plist sem hardcode — correto.
 
-Estimativa: ~3–4 sessões até "pronto pra submeter", +1–2 de review. Total ~5–6 sessões.
+Oportunidades (S47+):
+
+    (S46) Validar feed/perfil/upload no celular real — completar o item 7.
+
+    (S46) Testar splash + ícone no launcher — item 8.
+
+    (S43) Keystore + signingConfigs — item 10, após item 7 completo.
+
+    (S43) Contas Google Play + Apple — item 12, só o usuário.
+
+    (S43) Remover BOM — item 13, higiene.
+
+    (S45h) problems-report.html untracked — remover e confirmar .gitignore.
+
+    (S44) Dois commits de handoff S44 com a mesma mensagem (b893f98, 74ecb32) — cosmético, não reescrever histórico.
+
+SEÇÃO 8 — PRÓXIMOS PASSOS RECOMENDADOS (Sessão 47)
+
+Primeira ação: Se a S46 não commitou (ver Seção 5), fazer o commit agora:
+
+    git status --short --untracked-files=all (confirmar 5 M + 1 ??)
+
+    Remove-Item mobile\android\build\reports\problems\problems-report.html
+
+    git add dos 6 arquivos (5 M + handoff)
+
+    git commit -m "fix(mobile): app roda no celular real + permissao INTERNET + overflow corrigido (Sessao 46)"
+
+    git push
+
+Segunda ação (Fase 0): git log → git status → web build → web lint → mobile analyze → backend pytest → backend ruff → prod backend → prod frontend.
+
+Terceira ação: Completar o item 7 — validar no Redmi Note 8:
+
+    □
+
+    Feed carrega a lista de atividades
+    □
+
+    Perfil mostra estatísticas (StatsCards, StatsChart, ByTypeList)
+    □
+
+    Upload de atividade funciona (ActivityMap renderiza rota)
+    □
+
+    Like/unlike funciona
+    □
+
+    Comentários (criar, listar, excluir) funcionam
+    □
+
+    Export CSV/GPX funciona
+
+Quarta ação: Item 8 — splash + ícone no launcher:
+
+    Fechar o app, olhar o launcher do Redmi, confirmar que o ícone laranja do Rumo aparece (não o ícone padrão do Flutter).
+
+    Abrir o app, confirmar que o splash laranja aparece antes da tela de login.
+
+Quinta ação: Item 10 — keystore + signingConfigs (só após item 7 completo).
+
+Sexta ação: Item 13 — higiene (remover BOM de build.gradle.kts e AndroidManifest.xml, remover comentário com.example se ainda existir).
+SEÇÃO 9 — PEDIDO EXPLÍCITO DO USUÁRIO (histórico + S46)
+
+S21–S45: acordos mantidos (código completo, handoff completo, aviso de limite, percentual).
+
+S46: o usuário confirmou que o app funcionou no celular real após:
+
+    Correção do overflow (activity_detail_page.dart)
+
+    Permissão de INTERNET no AndroidManifest.xml
+
+    Build do APK de release
+
+E pediu explicitamente: "faça um handoff completo e o commit para que possa continuar em outro chat". Este handoff atende.
+
+Acordos novos da S46: S46a–S46e.
+PERCENTUAL DE PRONTIDÃO DO PROJETO (fim da Sessão 46)
+Área	%	Observação
+Backend	~95%	inalterado (180 testes)
+Web	~99%	inalterado
+Mobile	~93%	subiu de ~90% (app roda, login OK, overflow corrigido; falta validar feed/perfil/upload)
+Bloqueadores não-código	~25%	inalterado (contas, keystore)
+MVP consolidado	~85%	subiu de ~83% (app funcional no celular real)
+
+Estimativa: ~2–3 sessões até "pronto pra submeter" + 1–2 de review. Total ~3–5 sessões. A S47 deve ser curta se o item 7 for concluído (validação visual no celular) e o item 10 for feito (keystore).

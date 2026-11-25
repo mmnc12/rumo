@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../models/activity.dart';
@@ -128,14 +127,6 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
   }
 
   /// [Sessão 37] Export CSV/GPX da atividade atual.
-  ///
-  /// - `csv` funciona com/sem rota.
-  /// - `gpx` exige rota (404 "Atividade não possui rota" — o backend
-  ///   já devolve esse texto em `detail`, o SnackBar mostra cru).
-  ///
-  /// Fluxo: API devolve bytes + filename + contentType; `saveAndShare`
-  /// decide o caminho por plataforma (web: download no browser; nativo:
-  /// share sheet). Em erro, SnackBar com a mensagem do backend.
   Future<void> _export(_ExportFormat format) async {
     if (_exporting) return;
     setState(() => _exporting = true);
@@ -229,8 +220,6 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Detalhe'),
-        // [Sessão 37] Menu de export (CSV/GPX). O `_exporting` troca o
-        // ícone por spinner enquanto o download roda.
         actions: [
           if (_exporting)
             const Padding(
@@ -291,6 +280,33 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
 
   Widget _buildBody(ThemeData theme) {
     final a = _activity!;
+    
+    // [Sessão 46] Correção do BOTTOM OVERFLOWED:
+    // Trocado GridView.count (que exige childAspectRatio fixo) por Wrap.
+    // O Wrap mede a altura real de cada card e quebra a linha sem vazar.
+    final stats = <Widget>[
+      if (a.distanceLabel != null)
+        _StatCard(label: 'Distância', value: a.distanceLabel!, icon: Icons.straighten),
+      if (a.durationLabel != null)
+        _StatCard(label: 'Duração', value: a.durationLabel!, icon: Icons.timer_outlined),
+      if (a.paceLabel != null)
+        _StatCard(label: 'Ritmo', value: a.paceLabel!, icon: Icons.speed),
+      if (a.caloriesLabel != null)
+        _StatCard(label: 'Calorias', value: a.caloriesLabel!, icon: Icons.local_fire_department),
+      if (a.elevationGainM != null)
+        _StatCard(
+          label: 'Elevação',
+          value: '${a.elevationGainM!.round()} m',
+          icon: Icons.terrain,
+        ),
+      if (a.avgSpeedMps != null)
+        _StatCard(
+          label: 'Vel. média',
+          value: '${(a.avgSpeedMps! * 3.6).toStringAsFixed(1)} km/h',
+          icon: Icons.speed,
+        ),
+    ];
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -336,35 +352,12 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
         ],
 
         const SizedBox(height: 24),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 2.2,
-          children: [
-            if (a.distanceLabel != null)
-              _StatCard(label: 'Distância', value: a.distanceLabel!, icon: Icons.straighten),
-            if (a.durationLabel != null)
-              _StatCard(label: 'Duração', value: a.durationLabel!, icon: Icons.timer_outlined),
-            if (a.paceLabel != null)
-              _StatCard(label: 'Ritmo', value: a.paceLabel!, icon: Icons.speed),
-            if (a.caloriesLabel != null)
-              _StatCard(label: 'Calorias', value: a.caloriesLabel!, icon: Icons.local_fire_department),
-            if (a.elevationGainM != null)
-              _StatCard(
-                label: 'Elevação',
-                value: '${a.elevationGainM!.round()} m',
-                icon: Icons.terrain,
-              ),
-            if (a.avgSpeedMps != null)
-              _StatCard(
-                label: 'Vel. média',
-                value: '${(a.avgSpeedMps! * 3.6).toStringAsFixed(1)} km/h',
-                icon: Icons.speed,
-              ),
-          ],
+        
+        // [Sessão 46] Wrap em vez de GridView
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: stats,
         ),
 
         // ---------- Rota (mapa) ----------
@@ -460,7 +453,17 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
         ],
       ),
       const SizedBox(height: 12),
-      ActivityMap(track: track),
+      // [Sessão 46] O mapa estava gerando overflow lateral por causa dos
+      // créditos do flutter_map. Envolvemos em ClipRRect + SizedBox para
+      // conter o widget e evitar o vazamento.
+      ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          width: double.infinity,
+          height: 280, // Altura fixa para o mapa, evita conflito com ListView
+          child: ActivityMap(track: track),
+        ),
+      ),
     ];
   }
 
@@ -621,22 +624,44 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
+    
+    // [Sessão 46] O Card agora tem largura definida para funcionar bem no Wrap
+    // e o conteúdo interno se ajusta automaticamente.
+    return Container(
+      width: 160, // Largura fixa para alinhar os cards em 2 colunas
+      constraints: const BoxConstraints(minHeight: 70), // Altura mínima
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min, // Ocupa apenas o espaço necessário
           children: [
             Row(
               children: [
                 Icon(icon, size: 16, color: theme.colorScheme.primary),
                 const SizedBox(width: 4),
-                Text(label, style: theme.textTheme.labelSmall),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: theme.textTheme.labelSmall,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 4),
-            Text(value, style: theme.textTheme.titleMedium),
+            Text(
+              value,
+              style: theme.textTheme.titleMedium,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
       ),
