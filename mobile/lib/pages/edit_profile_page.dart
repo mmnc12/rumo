@@ -29,6 +29,7 @@ import 'package:flutter/services.dart';
 import '../models/user_me.dart';
 import '../services/api.dart';
 import '../services/auth_service.dart';
+import '../utils/error_message.dart'; // [S48-10.1]
 
 class EditProfilePage extends StatefulWidget {
   final AuthService auth;
@@ -206,13 +207,13 @@ class _EditProfilePageState extends State<EditProfilePage> {
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        SnackBar(content: Text(friendlyErrorMessage(e))), // [S48-10.1]
       );
       setState(() => _saving = false);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro inesperado: $e')),
+        SnackBar(content: Text(friendlyErrorMessage(e))), // [S48-10.1]
       );
       setState(() => _saving = false);
     }

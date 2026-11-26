@@ -17,6 +17,7 @@ import 'package:go_router/go_router.dart';
 import '../models/activity.dart';
 import '../services/api.dart';
 import '../services/auth_service.dart';
+import '../utils/error_message.dart'; // [S48-10.1]
 import '../widgets/activity_card.dart';
 
 class FeedPage extends StatefulWidget {
@@ -57,10 +58,10 @@ class _FeedPageState extends State<FeedPage> {
       setState(() => _activities = list);
     } on ApiException catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.message);
+      setState(() => _error = friendlyErrorMessage(e)); // [S48-10.1]
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'Erro: $e');
+      setState(() => _error = friendlyErrorMessage(e)); // [S48-10.1]
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -93,6 +94,8 @@ class _FeedPageState extends State<FeedPage> {
       _replaceActivity(updated);
     } catch (_) {
       // silencioso: se falhar, mantém o estado atual do feed.
+      // [S48-10.1] NÃO traduzido de propósito: erro silencioso, não é
+      // exibido ao usuário. friendlyErrorMessage aqui seria errado.
     }
   }
 

@@ -6,6 +6,7 @@ import '../models/comment.dart';
 import '../services/api.dart';
 import '../services/auth_service.dart';
 import '../utils/download.dart'; // [Sessão 37] saveAndShare
+import '../utils/error_message.dart'; // [S48-10.1]
 import '../widgets/activity_map.dart';
 import '../widgets/like_button.dart';
 
@@ -75,9 +76,9 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
         _activity = Activity.fromJson(data as Map<String, dynamic>);
       });
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      setState(() => _error = friendlyErrorMessage(e)); // [S48-10.1]
     } catch (e) {
-      setState(() => _error = 'Erro: $e');
+      setState(() => _error = friendlyErrorMessage(e)); // [S48-10.1]
     } finally {
       setState(() => _loading = false);
     }
@@ -96,9 +97,9 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
       );
       setState(() => _comments = comments);
     } on ApiException catch (e) {
-      setState(() => _commentsError = e.message);
+      setState(() => _commentsError = friendlyErrorMessage(e)); // [S48-10.1]
     } catch (e) {
-      setState(() => _commentsError = 'Erro: $e');
+      setState(() => _commentsError = friendlyErrorMessage(e)); // [S48-10.1]
     } finally {
       setState(() => _commentsLoading = false);
     }
@@ -118,9 +119,9 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
       // `null` = 404 do backend (atividade sem rota). Esconde o card.
       setState(() => _track = track);
     } on ApiException catch (e) {
-      setState(() => _trackError = e.message);
+      setState(() => _trackError = friendlyErrorMessage(e)); // [S48-10.1]
     } catch (e) {
-      setState(() => _trackError = 'Erro: $e');
+      setState(() => _trackError = friendlyErrorMessage(e)); // [S48-10.1]
     } finally {
       setState(() => _trackLoading = false);
     }
@@ -145,9 +146,9 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
             : 'Exportação GPX da atividade — Rumo',
       );
     } on ApiException catch (e) {
-      _showError(e.message);
+      _showError(friendlyErrorMessage(e)); // [S48-10.1]
     } catch (e) {
-      _showError('Erro ao exportar: $e');
+      _showError(friendlyErrorMessage(e)); // [S48-10.1]
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
@@ -180,9 +181,9 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
         );
       });
     } on ApiException catch (e) {
-      _showError(e.message);
+      _showError(friendlyErrorMessage(e)); // [S48-10.1]
     } catch (e) {
-      _showError('Erro: $e');
+      _showError(friendlyErrorMessage(e)); // [S48-10.1]
     } finally {
       if (mounted) setState(() => _sendingComment = false);
     }
@@ -201,9 +202,9 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
         );
       });
     } on ApiException catch (e) {
-      _showError(e.message);
+      _showError(friendlyErrorMessage(e)); // [S48-10.1]
     } catch (e) {
-      _showError('Erro: $e');
+      _showError(friendlyErrorMessage(e)); // [S48-10.1]
     }
   }
 
@@ -280,10 +281,11 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
 
   Widget _buildBody(ThemeData theme) {
     final a = _activity!;
-    
+
     // [Sessão 46] Correção do BOTTOM OVERFLOWED:
     // Trocado GridView.count (que exige childAspectRatio fixo) por Wrap.
     // O Wrap mede a altura real de cada card e quebra a linha sem vazar.
+    // [S48-10.1] Preservado — não alterado.
     final stats = <Widget>[
       if (a.distanceLabel != null)
         _StatCard(label: 'Distância', value: a.distanceLabel!, icon: Icons.straighten),
@@ -318,7 +320,7 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
         Text(
           '${a.typeLabel} • ${a.startedAtLabel}',
           style: theme.textTheme.bodySmall,
-        ),
+                  ),
 
         // Autor e Botão de Curtir
         if (a.user != null) ...[
@@ -352,8 +354,9 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
         ],
 
         const SizedBox(height: 24),
-        
+
         // [Sessão 46] Wrap em vez de GridView
+        // [S48-10.1] Preservado — não alterado.
         Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -435,6 +438,7 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
     final track = _track;
     if (track == null) {
       // 404: atividade não tem rota — esconde a seção inteira.
+      // [S48-10.1] Preservado (silencioso de propósito).
       return const [];
     }
 
@@ -456,6 +460,7 @@ class _ActivityDetailPageState extends State<ActivityDetailPage> {
       // [Sessão 46] O mapa estava gerando overflow lateral por causa dos
       // créditos do flutter_map. Envolvemos em ClipRRect + SizedBox para
       // conter o widget e evitar o vazamento.
+      // [S48-10.1] Preservado — não alterado.
       ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: SizedBox(
@@ -624,9 +629,10 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     // [Sessão 46] O Card agora tem largura definida para funcionar bem no Wrap
     // e o conteúdo interno se ajusta automaticamente.
+    // [S48-10.1] Preservado — não alterado.
     return Container(
       width: 160, // Largura fixa para alinhar os cards em 2 colunas
       constraints: const BoxConstraints(minHeight: 70), // Altura mínima

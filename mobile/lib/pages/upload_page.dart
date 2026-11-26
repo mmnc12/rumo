@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../services/api.dart';
 import '../services/auth_service.dart';
+import '../utils/error_message.dart'; // [S48-10.1]
 
 class UploadPage extends StatefulWidget {
   final AuthService auth;
@@ -87,6 +88,9 @@ class _UploadPageState extends State<UploadPage> {
         _fileSize = size;
       });
     } catch (e) {
+      // [S48-10.1] NÃO traduzido: falha de leitura de arquivo local, não é
+      // erro de API/rede. A mensagem específica ("Não foi possível ler o
+      // arquivo selecionado") é mais útil que o fallback do tradutor.
       _showError('Não foi possível ler o arquivo selecionado: $e');
     }
   }
@@ -115,10 +119,10 @@ class _UploadPageState extends State<UploadPage> {
       context.pop(true);
     } on ApiException catch (e) {
       if (!mounted) return;
-      _showError(e.message);
+      _showError(friendlyErrorMessage(e)); // [S48-10.1]
     } catch (e) {
       if (!mounted) return;
-      _showError('Falha no upload: $e');
+      _showError(friendlyErrorMessage(e)); // [S48-10.1]
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

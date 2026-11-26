@@ -58,6 +58,7 @@ import '../models/user_me.dart';
 import '../services/api.dart';
 import '../services/auth_service.dart';
 import '../utils/download.dart'; // [Sessão 37] saveAndShare
+import '../utils/error_message.dart'; // [S48-10.1]
 import '../widgets/activity_card.dart';
 import '../widgets/by_type_list.dart';
 import '../widgets/stats_cards.dart';
@@ -162,10 +163,10 @@ class _ProfilePageState extends State<ProfilePage> {
       });
     } on ApiException catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.message);
+      setState(() => _error = friendlyErrorMessage(e)); // [S48-10.1]
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'Erro: $e');
+      setState(() => _error = friendlyErrorMessage(e)); // [S48-10.1]
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -220,6 +221,9 @@ class _ProfilePageState extends State<ProfilePage> {
 
     // Cada Future tem seu próprio catchError → devolve null no erro,
     // sem rejeitar o Future.wait inteiro.
+    // [S48-10.1] NÃO traduzido: rollback silencioso por design (devolve
+    // null; o erro agregado é montado abaixo em _statsError). Traduzir
+    // aqui seria inútil (o retorno é null) e quebraria o contrato.
     final summaryF = widget.auth.api
         .getStatsSummary(userId, token: widget.auth.token)
         .then<Object?>((v) => v)
@@ -273,7 +277,7 @@ class _ProfilePageState extends State<ProfilePage> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _statsError = 'Erro: $e');
+      setState(() => _statsError = friendlyErrorMessage(e)); // [S48-10.1]
     } finally {
       if (mounted) setState(() => _statsLoading = false);
     }
@@ -301,12 +305,12 @@ class _ProfilePageState extends State<ProfilePage> {
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        SnackBar(content: Text(friendlyErrorMessage(e))), // [S48-10.1]
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro: $e')),
+        SnackBar(content: Text(friendlyErrorMessage(e))), // [S48-10.1]
       );
     } finally {
       if (mounted) setState(() => _loadingMore = false);
@@ -337,6 +341,7 @@ class _ProfilePageState extends State<ProfilePage> {
       });
     } catch (_) {
       // silencioso: mantém o estado atual.
+      // [S48-10.1] NÃO traduzido: silencioso por design.
     }
   }
 
@@ -494,10 +499,10 @@ class _ProfilePageState extends State<ProfilePage> {
       _scheduleClearExportInfo();
     } on ApiException catch (e) {
       if (!mounted) return;
-      setState(() => _exportError = e.message);
+      setState(() => _exportError = friendlyErrorMessage(e)); // [S48-10.1]
     } catch (e) {
       if (!mounted) return;
-      setState(() => _exportError = 'Falha ao exportar: $e');
+      setState(() => _exportError = friendlyErrorMessage(e)); // [S48-10.1]
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
@@ -1068,6 +1073,7 @@ class _ProfileHeader extends StatelessWidget {
             // [Sessão 39] Wrap com "Editar perfil" + "Sair" (alinha à
             // direita, quebra em linha em telas estreitas — paridade com
             // o padrão do _SocialListsSection do UserProfilePage da S37).
+            // [S48-10.1] Preservado — não alterado (não é erro).
             Wrap(
               alignment: WrapAlignment.end,
               spacing: 8,

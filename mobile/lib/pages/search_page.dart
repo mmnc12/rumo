@@ -10,6 +10,7 @@ import '../models/activity.dart';
 import '../models/user.dart';
 import '../services/api.dart';
 import '../services/auth_service.dart';
+import '../utils/error_message.dart'; // [S48-10.1]
 import '../widgets/activity_card.dart';
 
 class SearchPage extends StatelessWidget {
@@ -119,14 +120,14 @@ class _UserSearchTabState extends State<_UserSearchTab>
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.message;
+        _error = friendlyErrorMessage(e); // [S48-10.1]
         _loading = false;
         _hasSearched = true;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'Erro: $e';
+        _error = friendlyErrorMessage(e); // [S48-10.1]
         _loading = false;
         _hasSearched = true;
       });
@@ -248,7 +249,7 @@ class _UserSearchTabState extends State<_UserSearchTab>
               u.initial,
               style: TextStyle(color: theme.colorScheme.onPrimaryContainer),
             ),
-          ),
+                      ),
           title: Text(u.username),
           subtitle: u.fullName != null && u.fullName!.isNotEmpty
               ? Text(u.fullName!)
@@ -335,14 +336,14 @@ class _ActivitySearchTabState extends State<_ActivitySearchTab>
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.message;
+        _error = friendlyErrorMessage(e); // [S48-10.1]
         _loading = false;
         _hasSearched = true;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'Erro: $e';
+        _error = friendlyErrorMessage(e); // [S48-10.1]
         _loading = false;
         _hasSearched = true;
       });

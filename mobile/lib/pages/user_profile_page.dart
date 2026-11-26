@@ -49,6 +49,7 @@ import '../models/stats.dart';
 import '../models/user.dart';
 import '../services/api.dart';
 import '../services/auth_service.dart';
+import '../utils/error_message.dart'; // [S48-10.1]
 import '../widgets/activity_card.dart';
 import '../widgets/by_type_list.dart';
 import '../widgets/stats_cards.dart';
@@ -157,6 +158,8 @@ class _UserProfilePageState extends State<UserProfilePage> {
       ).catchError((Object e) {
         // 403 aqui = não segue. Marcamos e devolvemos lista vazia
         // (o Future.wait não pode rejeitar inteiro por causa disso).
+        // [S48-10.1] NÃO traduzido: controle de fluxo (403 → lista vazia,
+        // tratado como _activitiesForbidden, não como _error).
         if (e is ApiException && e.statusCode == 403) {
           return <Activity>[];
         }
@@ -186,10 +189,10 @@ class _UserProfilePageState extends State<UserProfilePage> {
       });
     } on ApiException catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.message);
+      setState(() => _error = friendlyErrorMessage(e)); // [S48-10.1]
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'Erro: $e');
+      setState(() => _error = friendlyErrorMessage(e)); // [S48-10.1]
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -218,6 +221,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
     try {
       // Fase 1: summary + byType (paralelo, catchError individual).
+      // [S48-10.1] NÃO traduzido: controle de fluxo (403 → _Stats403).
       final summaryF = widget.auth.api
           .getStatsSummary(widget.userId, token: widget.auth.token)
           .then<Object?>((v) => v)
@@ -295,11 +299,11 @@ class _UserProfilePageState extends State<UserProfilePage> {
       if (e.statusCode == 403) {
         setState(() => _statsForbidden = true);
       } else {
-        setState(() => _statsError = e.message);
+        setState(() => _statsError = friendlyErrorMessage(e)); // [S48-10.1]
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _statsError = 'Erro: $e');
+      setState(() => _statsError = friendlyErrorMessage(e)); // [S48-10.1]
     } finally {
       if (mounted) setState(() => _statsLoading = false);
     }
@@ -339,10 +343,10 @@ class _UserProfilePageState extends State<UserProfilePage> {
       });
     } on ApiException catch (e) {
       if (!mounted) return;
-      setState(() => _listsError = e.message);
+      setState(() => _listsError = friendlyErrorMessage(e)); // [S48-10.1]
     } catch (e) {
       if (!mounted) return;
-      setState(() => _listsError = 'Erro: $e');
+      setState(() => _listsError = friendlyErrorMessage(e)); // [S48-10.1]
     } finally {
       if (mounted) setState(() => _listsLoading = false);
     }
@@ -367,12 +371,12 @@ class _UserProfilePageState extends State<UserProfilePage> {
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        SnackBar(content: Text(friendlyErrorMessage(e))), // [S48-10.1]
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro: $e')),
+        SnackBar(content: Text(friendlyErrorMessage(e))), // [S48-10.1]
       );
     } finally {
       if (mounted) setState(() => _loadingMore = false);
@@ -407,12 +411,12 @@ class _UserProfilePageState extends State<UserProfilePage> {
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        SnackBar(content: Text(friendlyErrorMessage(e))), // [S48-10.1]
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro: $e')),
+        SnackBar(content: Text(friendlyErrorMessage(e))), // [S48-10.1]
       );
     } finally {
       if (mounted) setState(() => _followLoading = false);
@@ -446,8 +450,11 @@ class _UserProfilePageState extends State<UserProfilePage> {
       }
       // outros erros: mantém estado atual, sem barulho (o follow já
       // mostrou o erro dele; não empilha dois SnackBars).
+      // [S48-10.1] NÃO traduzido: silencioso por design (evita dois
+      // SnackBars; o 403 já vira _activitiesForbidden).
     } catch (_) {
       // silencioso
+      // [S48-10.1] NÃO traduzido: silencioso por design.
     }
   }
 
@@ -469,6 +476,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
       });
     } catch (_) {
       // silencioso
+      // [S48-10.1] NÃO traduzido: silencioso por design.
     }
   }
 
@@ -798,7 +806,7 @@ class _TabButton extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 10),
           child: Center(
-            child: Text(
+                        child: Text(
               label,
               style: TextStyle(
                 color: active
@@ -998,6 +1006,8 @@ class _StatsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // [S48-10.1] Preservado — 403 tratado como mensagem neutra (não é
+    // erro traduzível; o texto "Siga pra ver as estatísticas." é local).
     if (forbidden) {
       return Card(
         child: Padding(
