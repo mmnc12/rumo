@@ -1,50 +1,94 @@
-outro chat
-HANDOFF — SESSÃO 46 (ATUALIZADO)
+HANDOFF — SESSÃO 47 (para a Sessão 48)
 
-    Instruções para quem chega agora: leia a Seção 0 primeiro. Ela contém o contexto operacional e as regras que não mudam. Depois leia a Seção 8 (próximos passos) antes de tocar em qualquer arquivo.
+    Instruções para quem chega agora: leia a Seção 0 primeiro. Ela tem o contexto operacional e as regras que não mudam. Depois leia a Seção 8 (próximos passos) antes de tocar em qualquer arquivo. A S47 fechou sem commit — a primeira ação da S48 é commitar o que está pronto (Seção 5).
 
 SEÇÃO 0 — LEIA PRIMEIRO (contexto operacional)
+Regra de ouro (S21–S47, inalterada)
 
-Regra de ouro (S21–S46, inalterada): você não tem acesso ao disco do usuário. Toda informação chega por Get-Content -Encoding UTF8 ou saída de comando. Nunca inventar caminho, nunca reescrever arquivo não recebido. Se precisar, pedir e esperar.
+Você não tem acesso ao disco do usuário. Toda informação chega por Get-Content -Encoding UTF8 ou saída de comando. Nunca inventar caminho. Nunca reescrever arquivo não recebido. Se precisar, pedir e esperar.
+Regras críticas S21–S46 mantidas integralmente
 
-Regras críticas S21–S45 mantidas integralmente. Adições da S46:
+    Código sempre completo (não diff parcial).
 
-S46a (NOVA — celular real funcional). O app instalou e abriu no Redmi Note 8 (Android 10, API 29, arm64) via APK de release gerado manualmente (flutter build apk --release). O emulador foi abandonado (S45g). O APK foi transferido via nuvem/Telegram e instalado manualmente (contornando o INSTALL_FAILED_USER_RESTRICTED do MIUI).
+    Handoff completo ao chegar em 70–80% do contexto.
 
-S46b (NOVA — bug de layout corrigido). O BOTTOM OVERFLOWED BY 13 PIXELS nos cartões de estatísticas da tela de detalhes foi corrigido: GridView.count (com childAspectRatio fixo) substituído por Wrap em activity_detail_page.dart. O mapa também foi envolvido em ClipRRect + SizedBox(height: 280) para evitar overflow lateral dos créditos do flutter_map.
+    Avisar sobre limite do chat e limite do site/IA (o segundo não é mensurável pelo assistente; declarar essa limitação).
 
-S46c (NOVA — permissão de INTERNET ausente). O AndroidManifest.xml principal não tinha <uses-permission android:name="android.permission.INTERNET" />. Isso fazia o APK de release falhar com Failed host lookup: 'rumo-api-5s0b.onrender.com'. Corrigido: a linha foi adicionada no topo do <manifest>. O app agora faz login normalmente.
+    Percentual de prontidão ao final de cada sessão.
 
-S46d (NOVA — login validado no celular real). Com a permissão de INTERNET, o login com prod@rumo.com funcionou no Redmi Note 8. A tela de detalhes da corrida abre sem overflow. O item 7 do mapa (testar no Android) está desbloqueado e parcialmente validado.
+    Seguir as recomendações do assistente como plano padrão.
 
-S46e (NOVA — fluxo de teste no celular). Para testar no celular real sem depender de USB/MIUI:
+Adições da S47 (NOVAS — importantes)
 
-    flutter build apk --release
+S47a (NOVA — lição aprendida, violação da regra de ouro). Na S47, o assistente reconstruiu o login_page.dart a partir de um Select-String (trechos), assumindo AuthService.instance. Errado: o projeto injeta AuthService por construtor (LoginPage({required this.auth}), widget.auth.login(...)). O erro gerou retrabalho. Regra nova, obrigatória: para qualquer arquivo que não foi recebido inteiro, entregar apenas a regra de substituição (com Ctrl+F), nunca o arquivo completo. Se o arquivo for essencial, pedir Get-Content inteiro antes.
 
-    Transferir build\app\outputs\flutter-apk\app-release.apk via Drive/Telegram
+S47b (NOVA — padrão de injeção do AuthService). O main.dart instancia final AuthService _auth = AuthService(); no _RumoAppState e injeta em todos os pages por construtor:
+dart
 
-    Instalar no celular manualmente (Gerenciador de Arquivos → tocar no APK → permitir fonte desconhecida → Instalar)
+GoRoute(path: '/login', builder: (_, _) => LoginPage(auth: _auth)),
+GoRoute(path: '/feed',  builder: (_, _) => FeedPage(auth: _auth)),
+// ... todos os pages recebem auth: _auth
 
+Não há Provider, não há AuthService.instance, não há context.read. Se algum código novo precisar do auth, usar widget.auth no State ou receber por construtor. Isso não estava documentado no handoff S46 — agora está.
+
+S47c (NOVA — Docker de teste obrigatório para pytest). O pytest local exige o container Docker de teste. Sem ele, todos os testes falham com ConnectionRefusedError em tests/conftest.py:77. O conftest.py aponta para postgresql+asyncpg://rumo:rumo@localhost:5433/rumo_test (porta 5433, não 5432). O container é rumo_postgres_test, definido em backend/docker-compose.test.yml. Comando: docker compose -f docker-compose.test.yml up -d. O handoff S46 não mencionava isso — agora está.
+
+S47d (NOVA — ambiente Docker confirmado). Docker Desktop está instalado e rodando na máquina. Containers ativos: rumo-postgres (postgis/postgis:16-3.4, porta 5432) e rumo-redis (redis:7-alpine, porta 6379). O container de teste (rumo_postgres_test, porta 5433) sobe sob demanda. Postgres 12 nativo instalado mas parado — não usar.
+
+S47e (NOVA — erro de rede interno do ApiClient usa statusCode == 0). O api.dart já lança ApiException(0, 'Falha de rede no upload: $e') e ApiException(0, 'Falha de rede no export: $e') em timeouts de upload/export. O tradutor de erros deve tratar statusCode == 0 como "sem conexão" (já trata — ver error_message.dart).
+
+S47f (NOVA — ApiException contrato confirmado). lib/services/api.dart define:
+dart
+
+class ApiException implements Exception {
+  final int statusCode;   // int (não String, não nullable)
+  final String message;   // .detail do FastAPI já extraído, ou fallback
+  ApiException(this.statusCode, this.message);  // construtor posicional
+}
+
+S47g (NOVA — AuthService extends ChangeNotifier). O AuthService é um ChangeNotifier com login, logout, bootstrap, currentUserId, token, isLoggedIn, loading, api (getter que expõe ApiClient). Não é singleton. Toda a árvore recebe a mesma instância via construtor (S47b).
 SEÇÃO 1 — TL;DR para quem chega agora
 
-Estado do repo: HEAD == origin/main == 74ecb32 (dois commits de handoff S44). A S46 ainda NÃO foi commitada — os arquivos alterados na S46 estão no working tree e precisam ser commitados (ver Seção 5).
+Estado do repo ao fim da S47: HEAD == origin/main == 9d93e95 — a S47 NÃO commitou. Os arquivos alterados estão no working tree:
+text
 
-S46 feita nesta sessão:
+?? mobile/lib/utils/error_message.dart       (novo, criado na S47)
+ M mobile/lib/pages/login_page.dart          (modificado na S47)
 
-    App rodou no Redmi Note 8 (celular real) via APK de release
+Ação imediata da S48: commitar esses 2 arquivos (ver Seção 5, comando exato).
 
-    Bug visual BOTTOM OVERFLOWED corrigido em activity_detail_page.dart (GridView → Wrap)
+S47 fez:
 
-    Mapa contido com ClipRRect + SizedBox
+    Criou lib/utils/error_message.dart — tradutor central de erros (SocketException, TimeoutException, ApiException por statusCode: 0, 401, 403, 404, 409, 422, 429, 5xx; FormatException; fallback). Valida com flutter analyze.
 
-    Permissão de INTERNET adicionada ao AndroidManifest.xml
+    Corrigiu e atualizou lib/pages/login_page.dart — usa friendlyErrorMessage(e) nos dois catch. O erro original (AuthService.instance) foi corrigido para widget.auth (padrão correto do projeto). Valida com flutter analyze.
 
-    Login com prod@rumo.com validado no celular
+S47 NÃO fez (fica para S48):
 
-O que falta (itens 8–13 do mapa): splash + ícone no launcher (8), iOS (9), keystore (10), .gitignore do keystore (11), contas Google Play + Apple (12), higiene de BOM (13).
+    Item 10.1 nos 7 pages restantes: feed_page.dart, activity_detail_page.dart, upload_page.dart, profile_page.dart, user_profile_page.dart, search_page.dart, edit_profile_page.dart.
 
-Percentual consolidado: ~85% (mobile subiu de ~90% para ~93% porque o app roda, faz login e a tela de detalhes não tem overflow; falta validar feed/perfil/upload no celular).
-SEÇÃO 2 — PRODUÇÃO E AMBIENTE (inalterado)
+    Commit do que foi feito (deixado para a S48 para evitar ambiguidade de hash no handoff).
+
+    Item 10.2 (tela de cadastro), 10.3 (animação do mapa), 10.4 (outras melhorias), itens 7, 8, 10, 13 herdados do S46.
+
+Fase 0 da S47 (verificações):
+
+    Web build ✅ (✓ built in 6.12s)
+
+    Web lint ✅ (0 erros)
+
+    Mobile analyze ✅ (No issues found!)
+
+    Backend pytest ✅ (180 passed in 46.96s após subir o container de teste)
+
+    Backend ruff ✅ (All checks passed!)
+
+    Backend prod /health ✅ (200), /docs ✅ (200)
+
+    Frontend prod / ✅ (200)
+
+Percentual consolidado: ~86% (mobile subiu de ~93% para ~94% porque o 10.1 começou; backend/web inalterados).
+SEÇÃO 2 — PRODUÇÃO E AMBIENTE (atualizado S47)
 
     Backend: https://rumo-api-5s0b.onrender.com
 
@@ -66,171 +110,182 @@ SEÇÃO 2 — PRODUÇÃO E AMBIENTE (inalterado)
 
     Emulador: emulador1 — NÃO usar (S45g)
 
-Git ao fim da S46 (esperado, após commit):
+    Docker Desktop: instalado e rodando (S47d). Containers:
+
+        rumo-postgres (postgis/postgis:16-3.4, 5432) — produção local
+
+        rumo-redis (redis:7-alpine, 6379)
+
+        rumo_postgres_test (postgis/postgis:16-3.4, 5433) — deve ser iniciado para rodar pytest
+
+Git ao fim da S47 (esperado após commit da S48):
 text
 
-<novo_hash> (HEAD -> main, origin/main) fix(mobile): app roda no celular real + permissao INTERNET + overflow corrigido (Sessao 46)
+<novo_hash> (HEAD -> main, origin/main) feat(mobile): tradutor de erros amigaveis + login usando friendlyErrorMessage (Sessao 47, 10.1 parcial)
+9d93e95 docs: adiciona backlog da Sessao 47 no handoff (erros amigaveis, cadastro, animacao de rota)
+0898e5e fix(mobile): app roda no celular real + permissao INTERNET + overflow corrigido + .gitignore Flutter (Sessao 46)
 74ecb32 docs: handoff da Sessao 44 (build Android bloqueado)
 b893f98 docs: handoff da Sessao 44
-0ce5626 docs: handoff da Sessao 43
-2e09068 feat(mobile): package br.com.rumo.app + label Rumo + iOS bundle id (Sessao 43, 6/13)
-deb7969 feat(web): politica de privacidade (/privacy) + link no AppHeader (Sessao 43, 3/13)
-3fb3c5e docs: handoff da Sessao 42
-aaeb7c4 feat(mobile): scaffolds android/ios + icone e splash nativo (Sessao 42)
-8576d95 feat(web): identidade visual — favicon laranja + manifest PWA + index.html (Sessao 42)
+...
 
-git status --short --untracked-files=all esperado antes do commit:
-text
+SEÇÃO 3 — O QUE FOI FEITO NA SESSÃO 47
+3.1 Fase 0 — todas as verificações passaram
 
- M docs/HANDOFF.md
- M mobile/android/app/src/main/AndroidManifest.xml
- M mobile/android/app/build.gradle.kts
- M mobile/android/gradle.properties
- M mobile/android/settings.gradle.kts
- M mobile/lib/pages/activity_detail_page.dart
-?? mobile/android/build/reports/problems/problems-report.html
+Listado na Seção 1. Nada a fazer.
+3.2 lib/utils/error_message.dart (novo)
 
-O problems-report.html é lixo de build e NÃO deve ser commitado.
-SEÇÃO 3 — O QUE FOI FEITO NA SESSÃO 46
-3.1 Build Android — resolvido e validado no celular real
+Propósito: centralizar a tradução de exceções para mensagens amigáveis em português.
 
-O app compilou e instalou no Redmi Note 8 via APK de release. O fluxo de teste (S46e) contorna o INSTALL_FAILED_USER_RESTRICTED do MIUI.
-3.2 Bug de layout — BOTTOM OVERFLOWED corrigido
+Função pública: String friendlyErrorMessage(Object e)
 
-Arquivo alterado: mobile/lib/pages/activity_detail_page.dart
+Cobertura:
+Tipo	Mensagem
+SocketException / http.ClientException	"Não foi possível conectar. Verifique sua internet e tente novamente."
+TimeoutException	"O servidor demorou para responder. Tente novamente."
+ApiException(statusCode == 0)	(mesma de rede)
+ApiException(401)	"E-mail ou senha incorretos."
+ApiException(403)	"Você não tem permissão para acessar este conteúdo."
+ApiException(404)	"Conteúdo não encontrado."
+ApiException(409)	"Este e-mail já está cadastrado."
+ApiException(422)	"Verifique os campos e tente novamente."
+ApiException(429)	"Muitas tentativas. Aguarde um momento e tente novamente."
+ApiException(5xx)	"Erro no servidor. Tente novamente em instantes."
+FormatException	"Resposta inválida do servidor. Tente novamente."
+Outros 4xx com message não vazia	a própria e.message
+Fallback	"Algo deu errado. Tente novamente."
 
-Antes: GridView.count com childAspectRatio: 2.2 — os cartões de estatísticas vazavam 13px para baixo.
-Depois: Wrap com spacing: 12, runSpacing: 12 — os cartões medem a altura real e quebram linha sem overflow.
+Detalhes de design:
 
-Mudanças detalhadas:
+    Em kDebugMode, faz debugPrint do erro cru ([friendlyErrorMessage] <Type>: <e>) — preserva depuração sem expor lixo em release.
 
-    GridView.count(...) substituído por Wrap(...).
+    Não importa flutter/material.dart — só dart:async, dart:io, package:flutter/foundation.dart, package:http/http.dart, ../services/api.dart. Utilitário puro, testável.
 
-    _StatCard reescrito: Container(width: 160, constraints: BoxConstraints(minHeight: 70)) com mainAxisSize: MainAxisSize.min — o card cresce conforme o conteúdo, sem altura fixa.
+    5xx nunca expõe e.message (pode conter SQL/traceback).
 
-    ActivityMap envolvido em ClipRRect(borderRadius: 12) + SizedBox(width: double.infinity, height: 280) — evita o overflow lateral dos créditos do flutter_map.
+    401 é tratado como "credenciais inválidas" — a detecção de sessão expirada com redirecionamento fica para 10.4 (toca navegação).
 
-3.3 Permissão de INTERNET — adicionada ao manifesto
+Caminho: mobile/lib/utils/error_message.dart (novo).
+3.3 lib/pages/login_page.dart (modificado)
 
-Arquivo alterado: mobile/android/app/src/main/AndroidManifest.xml
+Mudanças S47:
 
-Antes: sem <uses-permission android:name="android.permission.INTERNET" />. O APK de release não tinha acesso à rede, resultando em ClientException with SocketException: Failed host lookup: 'rumo-api-5s0b.onrender.com'.
+    Import novo: import '../utils/error_message.dart';
 
-Depois: a linha foi adicionada no topo do <manifest>:
-xml
+    on ApiException catch (e) { setState(() => _error = friendlyErrorMessage(e)); }
 
-<uses-permission android:name="android.permission.INTERNET" />
+    catch (e) { setState(() => _error = friendlyErrorMessage(e)); }
 
-3.4 Login validado no celular real
+    Correção crítica (S47a/S47b): LoginPage agora recebe final AuthService auth no construtor; _submit usa widget.auth.login(...) em vez de AuthService.instance.login(...).
 
-Com a permissão de INTERNET, o login com prod@rumo.com funcionou no Redmi Note 8. A tela de detalhes da corrida abre sem overflow.
-3.5 Mapa dos 13 itens (atualizado S46)
-#	Item	Status	Evidência	Depende de
-1	Package Android br.com.rumo.app	✅	2e09068	—
-2	Bundle id iOS br.com.rumo.app	✅	2e09068	—
-3	Label Android "Rumo"	✅	2e09068	—
-4	Info.plist sem hardcode	✅	2e09068	—
-5	Política de privacidade (/privacy)	✅	deb7969	—
-6	Link no AppHeader	✅	deb7969	—
-7	Testar no celular Android real	⚠️ parcial	login OK; falta feed/perfil/upload	S46
-8	Testar splash + ícone no launcher	❌	—	item 7 completo
-9	Testar no simulador iOS	❌	—	usuário ter Mac
-10	Gerar keystore + signingConfigs	❌	—	item 7 completo
-11	.gitignore do keystore	❌	—	item 10
-12	Contas Google Play ($25) + Apple ($99/ano)	❌	—	só usuário
-13	Remover BOM/comentário com.example	❌	—	eu (higiene)
+Contrato correto (referência para os 7 pages restantes):
+dart
+
+class LoginPage extends StatefulWidget {
+  final AuthService auth;
+  const LoginPage({super.key, required this.auth});
+  ...
+}
+// No State:
+await widget.auth.login(...);
+
+Caminho: mobile/lib/pages/login_page.dart (modificado).
+
+Validação: flutter analyze → No issues found!
 SEÇÃO 4 — CONTRATOS DO BACKEND (INALTERADOS)
 
-Nenhuma mudança desde S39. 180 testes passando. Nada a fazer no backend para a S47.
+Nenhuma mudança desde S39. 180 testes passando (confirmado na S47 após subir o container rumo_postgres_test na porta 5433). Nada a fazer no backend para a S48.
+
+Contrato relevante para o 10.1 (erros): o backend FastAPI devolve {"detail": "..."} para erros. O ApiClient._extractMessage já extrai esse detail. O ApiException.message já contém esse valor. O tradutor só formata o que já existe — não modifica o api.dart.
 SEÇÃO 5 — COMMITS PENDENTES / ESTADO DO REPO
 
-Ação imediata na S46 (agora, antes de fechar o chat):
+Ação imediata na S48 (primeira coisa):
 powershell
 
 cd D:\Rumo
+
+# Confirmar o que vai entrar (devem ser 2 arquivos)
 git status --short --untracked-files=all
 
-Confirmar que aparecem os 6 arquivos esperados (5 M + 1 ??). Depois:
-powershell
+# Stage explícito
+git add mobile/lib/utils/error_message.dart
+git add mobile/lib/pages/login_page.dart
 
-cd D:\Rumo
-# Remover o lixo de build (não commitar)
-Remove-Item mobile\android\build\reports\problems\problems-report.html -ErrorAction SilentlyContinue
+# Commit
+git commit -m "feat(mobile): tradutor de erros amigaveis + login usando friendlyErrorMessage (Sessao 47, 10.1 parcial)"
 
-# Commitar os 5 arquivos alterados + o handoff
-git add docs/HANDOFF.md
-git add mobile/android/app/src/main/AndroidManifest.xml
-git add mobile/android/app/build.gradle.kts
-git add mobile/android/gradle.properties
-git add mobile/android/settings.gradle.kts
-git add mobile/lib/pages/activity_detail_page.dart
-git commit -m "fix(mobile): app roda no celular real + permissao INTERNET + overflow corrigido (Sessao 46)"
+# Push
 git push
 
-Mensagem sugerida do commit:
+Mensagem sugerida do commit (se quiser mais detalhe):
 text
 
-fix(mobile): app roda no celular real + permissao INTERNET + overflow corrigido (Sessao 46)
+feat(mobile): tradutor de erros amigaveis + login usando friendlyErrorMessage (Sessao 47, 10.1 parcial)
 
-- AndroidManifest.xml: adiciona <uses-permission android.permission.INTERNET> (S46c)
-  Sem isso, o APK de release falhava com Failed host lookup no login.
-- activity_detail_page.dart: GridView.count -> Wrap nos cards de estatisticas (S46b)
-  Corrige BOTTOM OVERFLOWED BY 13 PIXELS no Redmi Note 8 (API 29).
-- activity_detail_page.dart: ClipRRect + SizedBox(height: 280) no ActivityMap (S46b)
-  Evita overflow lateral dos creditos do flutter_map.
-- gradle.properties + app/build.gradle.kts + settings.gradle.kts: estado S44e (AGP 9.1.0,
-  sem kotlin-android, flags builtInKotlin/newDsl removidas) — build compila e app inicia.
-- docs/HANDOFF.md: handoff da Sessao 46.
+- lib/utils/error_message.dart (novo): friendlyErrorMessage(Object e) traduz
+  SocketException, ClientException, TimeoutException, ApiException (por
+  statusCode: 0, 401, 403, 404, 409, 422, 429, 5xx), FormatException e
+  fallback. Em kDebugMode, debugPrint do erro cru. Nao importa material.dart
+  (utilitario puro).
+- lib/pages/login_page.dart: os dois catch usam friendlyErrorMessage(e).
+  Corrige tambem o contrato do AuthService: LoginPage recebe `final AuthService
+  auth` por construtor (padrao do main.dart) e usa `widget.auth.login(...)`,
+  nao `AuthService.instance`.
 
-Se a S46 fechar sem commit (por limite ou decisão do usuário): a S47 começa pela Seção 5 e faz o commit como primeira ação.
-SEÇÃO 6 — SCRIPTS ÚTEIS (S46)
+Backend intocado. Flutter analyze verde.
 
-Inspecionar estado dos arquivos alterados na S46 (FAZER PRIMEIRO na S47 se não commitado):
+Pendente para a Sessao 48: aplicar o mesmo padrao nos 7 pages restantes
+(feed, activity_detail, upload, profile, user_profile, search, edit_profile).
+
+O que espero ver em git status --short antes do commit: exatamente 2 linhas:
+text
+
+?? mobile/lib/utils/error_message.dart
+ M mobile/lib/pages/login_page.dart
+
+Se aparecer mais alguma coisa (ex.: algum build/), remover do stage antes do commit.
+SEÇÃO 6 — SCRIPTS ÚTEIS (S47)
+Subir o container de teste do backend (obrigatório antes do pytest)
+powershell
+
+cd D:\Rumo\backend
+docker compose -f docker-compose.test.yml up -d
+# aguardar ~3s; depois:
+.\venv\Scripts\Activate.ps1
+python -m pytest -q
+# Esperado: 180 passed
+
+Sem isso, o pytest falha com ConnectionRefusedError em tests/conftest.py:77. O conftest.py aponta para localhost:5433 (não 5432). O Postgres 12 nativo não serve.
+Rodar flutter analyze após editar arquivo mobile
+powershell
+
+cd D:\Rumo\mobile
+& "C:\Users\nasci\flutter\bin\flutter.bat" analyze
+# Esperado: No issues found!
+
+Verificar estado do repo antes de qualquer commit
 powershell
 
 cd D:\Rumo
+git log --oneline -5
 git status --short --untracked-files=all
-git diff --stat
 
-Gerar APK de release para o celular:
+Para os 7 pages restantes do 10.1 (novo processo S47a)
+
+Para cada arquivo:
 powershell
 
 cd D:\Rumo\mobile
-& "C:\Users\nasci\flutter\bin\flutter.bat" build apk --release
-# APK em: D:\Rumo\mobile\build\app\outputs\flutter-apk\app-release.apk
+Get-Content lib\pages\<arquivo>.dart -Encoding UTF8
 
-Transferir para o celular e instalar:
+Colar a saída inteira para o assistente. Nunca pedir para o assistente reconstruir a partir de Select-String.
+SEÇÃO 7 — DÍVIDAS TÉCNICAS (S47)
+Fechadas na S47
 
-    Enviar app-release.apk via Google Drive / Telegram / WhatsApp (como documento)
+    (S46) Erros técnicos crus para o usuário — error_message.dart criado; login já usa. Os 7 pages restantes ficam para S48.
 
-    No celular: Gerenciador de Arquivos → pasta Download → tocar no APK
+    (S46) Falta de documentação do padrão AuthService — agora documentado (S47b).
 
-    Permitir "fonte desconhecida" → Instalar
-
-Rodar no celular via USB (se o MIUI permitir):
-powershell
-
-cd D:\Rumo\mobile
-& "C:\Users\nasci\flutter\bin\flutter.bat" devices  # confirmar c767cacd
-& "C:\Users\nasci\flutter\bin\flutter.bat" run -d c767cacd
-
-Limpar lixo de build:
-powershell
-
-cd D:\Rumo
-Remove-Item mobile\android\build\reports\problems\problems-report.html -ErrorAction SilentlyContinue
-
-SEÇÃO 7 — DÍVIDAS TÉCNICAS (S46)
-
-Fechadas na S46:
-
-    (S45f) App não inicializava (ClassNotFoundException: MainActivity) — resolvido pelo estado S44e (build compila) + instalação manual do APK.
-
-    (S46b) BOTTOM OVERFLOWED BY 13 PIXELS — resolvido com Wrap + ClipRRect.
-
-    (S46c) Failed host lookup — resolvido com permissão de INTERNET no manifesto.
-
-Conhecidas (não-bug):
+Conhecidas (não-bug)
 
     (S41) prod@rumo.com state — estado, não bug.
 
@@ -240,237 +295,249 @@ Conhecidas (não-bug):
 
     (S43e) Info.plist sem hardcode — correto.
 
-Oportunidades (S47+):
-
-    (S46) Validar feed/perfil/upload no celular real — completar o item 7.
-
-    (S46) Testar splash + ícone no launcher — item 8.
-
-    (S43) Keystore + signingConfigs — item 10, após item 7 completo.
-
-    (S43) Contas Google Play + Apple — item 12, só o usuário.
-
-    (S43) Remover BOM — item 13, higiene.
-
-    (S45h) problems-report.html untracked — remover e confirmar .gitignore.
-
     (S44) Dois commits de handoff S44 com a mesma mensagem (b893f98, 74ecb32) — cosmético, não reescrever histórico.
 
-SEÇÃO 8 — PRÓXIMOS PASSOS RECOMENDADOS (Sessão 47)
+Oportunidades (S48+)
 
-Primeira ação: Se a S46 não commitou (ver Seção 5), fazer o commit agora:
+    (S47) Aplicar friendlyErrorMessage nos 7 pages restantes (10.1 completo).
 
-    git status --short --untracked-files=all (confirmar 5 M + 1 ??)
+    (S47) O handoff S46 não mencionava o container Docker de teste — agora está na Seção 6. Considerar adicionar docker compose up -d ao README ou docs/.
 
-    Remove-Item mobile\android\build\reports\problems\problems-report.html
+    (S46) Item 10.2: tela de cadastro (requer verificar se o backend tem POST /auth/register).
 
-    git add dos 6 arquivos (5 M + handoff)
+    (S46) Item 10.3: animação do mapa (Polyline progressiva via AnimationController).
 
-    git commit -m "fix(mobile): app roda no celular real + permissao INTERNET + overflow corrigido (Sessao 46)"
+    (S46) Item 10.4: spinner em botões que faltam, empty states, pull-to-refresh, tratamento global de 401 com redirecionamento.
 
-    git push
+    (S46) Item 7 completo: validar feed/perfil/upload/like/comentários/export no Redmi Note 8.
 
-Segunda ação (Fase 0): git log → git status → web build → web lint → mobile analyze → backend pytest → backend ruff → prod backend → prod frontend.
+    (S46) Item 8: splash + ícone no launcher.
 
-Terceira ação: Completar o item 7 — validar no Redmi Note 8:
+    (S46) Item 10: keystore + signingConfigs.
 
-    □
+    (S46) Item 13: remover BOM de build.gradle.kts e AndroidManifest.xml.
 
-    Feed carrega a lista de atividades
-    □
+SEÇÃO 8 — PRÓXIMOS PASSOS RECOMENDADOS (Sessão 48)
+Primeira ação (obrigatória): commitar a S47
 
-    Perfil mostra estatísticas (StatsCards, StatsChart, ByTypeList)
-    □
+Ver Seção 5. Fazer o git add dos 2 arquivos, commit, push. Confirmar hash novo.
+Segunda ação (Fase 0 padrão): verificações
+powershell
 
-    Upload de atividade funciona (ActivityMap renderiza rota)
-    □
+cd D:\Rumo
+git log --oneline -5
+git status --short --untracked-files=all
 
-    Like/unlike funciona
-    □
+# Web
+cd D:\Rumo\web
+npm run build
+npm run lint
 
-    Comentários (criar, listar, excluir) funcionam
-    □
+# Mobile
+cd D:\Rumo\mobile
+& "C:\Users\nasci\flutter\bin\flutter.bat" analyze
 
-    Export CSV/GPX funciona
+# Backend (subir container de teste primeiro!)
+cd D:\Rumo\backend
+docker compose -f docker-compose.test.yml up -d
+.\venv\Scripts\Activate.ps1
+python -m pytest -q
+ruff check .
 
-Quarta ação: Item 8 — splash + ícone no launcher:
+# Produção
+curl.exe -s -o NUL -w "backend health: %{http_code}`n" https://rumo-api-5s0b.onrender.com/health
+curl.exe -s -o NUL -w "frontend home:  %{http_code}`n" https://rumo-wheat.webfrontend.app/
 
-    Fechar o app, olhar o launcher do Redmi, confirmar que o ícone laranja do Rumo aparece (não o ícone padrão do Flutter).
+Terceira ação: completar 10.1 nos 7 pages restantes (novo processo S47a)
 
-    Abrir o app, confirmar que o splash laranja aparece antes da tela de login.
+Para cada arquivo, em ordem (do maior/mais crítico para o menor):
 
-Quinta ação: Item 10 — keystore + signingConfigs (só após item 7 completo).
+    feed_page.dart — maior, mais catch. Onde o erro de hoje teria doído mais.
 
-Sexta ação: Item 13 — higiene (remover BOM de build.gradle.kts e AndroidManifest.xml, remover comentário com.example se ainda existir).
-SEÇÃO 9 — PEDIDO EXPLÍCITO DO USUÁRIO (histórico + S46)
+    activity_detail_page.dart — S46 mexeu (overflow). Conferir se a correção Wrap + ClipRRect está intacta.
 
-S21–S45: acordos mantidos (código completo, handoff completo, aviso de limite, percentual).
+    upload_page.dart — usa ApiException(0, ...) do api.dart; o tradutor já cobre.
 
-S46: o usuário confirmou que o app funcionou no celular real após:
+    profile_page.dart
 
-    Correção do overflow (activity_detail_page.dart)
+    user_profile_page.dart
 
-    Permissão de INTERNET no AndroidManifest.xml
+    search_page.dart
 
-    Build do APK de release
+    edit_profile_page.dart
 
-E pediu explicitamente: "faça um handoff completo e o commit para que possa continuar em outro chat". Este handoff atende.
+Processo por arquivo:
 
-Acordos novos da S46: S46a–S46e.
-PERCENTUAL DE PRONTIDÃO DO PROJETO (fim da Sessão 46)
+    Usuário roda Get-Content lib\pages\<arquivo>.dart -Encoding UTF8 e cola a saída.
+
+    Assistente devolve o arquivo completo com edições marcadas // [S47-10.1].
+
+    Usuário substitui, roda flutter analyze.
+
+    Se verde, próximo arquivo.
+
+Regra de substituição para cada page (o padrão que o login seguiu):
+
+    Adicionar import '../utils/error_message.dart';
+
+    Todo catch (e) { _error = e.message; } → catch (e) { _error = friendlyErrorMessage(e); }
+
+    Todo catch (e) { _error = 'Erro: $e'; } → catch (e) { _error = friendlyErrorMessage(e); }
+
+    Todo SnackBar(content: Text('$e')) → SnackBar(content: Text(friendlyErrorMessage(e)))
+
+    Preservar o padrão de exibição de cada tela (inline vermelho vs SnackBar). Não misturar.
+
+    Não tocar em validators, navegação, lógica de like/comentário/upload.
+
+Quando os 7 estiverem verdes: commit final do 10.1 completo:
+text
+
+feat(mobile): aplica friendlyErrorMessage em todos os pages (Sessao 48, 10.1 completo)
+
+Quarta ação (se sobrar tempo): escolher entre
+
+    10.2 — tela de cadastro (verificar se backend tem POST /auth/register; se não, criar endpoint no backend primeiro).
+
+    10.4 — melhorias incrementais (spinner em botões que faltam, empty states, pull-to-refresh).
+
+    Item 7 — validação no Redmi Note 8 (feed/perfil/upload/like/comentários/export).
+
+    Item 8 — splash + ícone no launcher.
+
+    Item 10 — keystore + signingConfigs (só após item 7 completo).
+
+Ordem recomendada: terminar 10.1 primeiro (é o que está em andamento), depois 10.2, depois item 7 completo, depois item 10.
+Observação importante sobre o AuthService nos pages restantes
+
+Os 7 pages recebem AuthService por construtor (padrão S47b). Ao colar cada arquivo, o assistente deve verificar o construtor antes de assumir widget.auth. Se algum page não receber auth, o assistente para e pergunta antes de entregar — não reconstrói.
+SEÇÃO 9 — PEDIDO EXPLÍCITO DO USUÁRIO (histórico + S47)
+
+S21–S46: acordos mantidos (código completo, handoff completo, aviso de limite, percentual).
+
+S46: o usuário confirmou que o app funcionou no celular real após as correções do S46.
+
+S47: o usuário pediu explicitamente:
+
+    "vamos deixar algumas coisas acordada, sempre seguir suas recomendações" — o assistente deve apresentar recomendações como plano padrão.
+
+    "sempre colocar o código completo" — mesmo em alteração de 3 linhas.
+
+    "fazer o handoff completo e bem explicado para o próximo chat quando o limite estiver próximo do limite de 70% a 80%" — aviso proativo + handoff.
+
+    "me informasse o percentual de quanto nosso projeto já está pronto" — tabela de percentual ao final.
+
+    "avisasse se caso isso for ocorrer" (referindo-se ao chat acabar no meio do código) — não só limite do chat, mas limite do site/IA. O assistente deve avisar que o limite do site não é mensurável e sinalizar antes de respostas longas.
+
+S47 — decisão de fechamento: ao chegar em ~65%, o assistente recomendou a Opção 3 (commitar o que está pronto + handoff), em vez de tentar mais um arquivo e arriscar corte. O usuário concordou. Isso está em linha com o acordo. A S48 retoma com o commit e os 7 pages restantes.
+
+Acordos novos da S47: S47a–S47g.
+SEÇÃO 10 — PERCENTUAL DE PRONTIDÃO DO PROJETO (fim da Sessão 47)
 Área	%	Observação
-Backend	~95%	inalterado (180 testes)
-Web	~99%	inalterado
-Mobile	~93%	subiu de ~90% (app roda, login OK, overflow corrigido; falta validar feed/perfil/upload)
-Bloqueadores não-código	~25%	inalterado (contas, keystore)
-MVP consolidado	~85%	subiu de ~83% (app funcional no celular real)
+Backend	~95%	inalterado (180 testes passando, ruff verde, prod 200)
+Web	~99%	inalterado (build + lint verdes, prod 200)
+Mobile	~94%	subiu de ~93% (error_message + login corrigido; falta aplicar nos 7 pages restantes)
+Bloqueadores não-código	~25%	inalterado (contas Google Play/Apple, keystore)
+MVP consolidado	~86%	subiu de ~85% (10.1 iniciado com sucesso)
+Variação em relação à S46
 
-Estimativa: ~2–3 sessões até "pronto pra submeter" + 1–2 de review. Total ~3–5 sessões. A S47 deve ser curta se o item 7 for concluído (validação visual no celular) e o item 10 for feito (keystore).
+    Mobile: 93% → 94% (+1% — error_message + login)
 
-SEÇÃO 10 — BACKLOG DA SESSÃO 47 (planejamento)
+    MVP: 85% → 86% (+1%)
 
-Base: repo no commit 0898e5e (S46 fechada). App roda no Redmi Note 8, faz login, tela de detalhes sem overflow.
-10.1 Melhorar mensagens de erro (prioridade alta)
+Estimativa
 
-Problema: erros técnicos aparecem crus para o usuário. Ex.: ClientException with SocketException: Failed host lookup: 'rumo-api-5s0b.onrender.com'. Na tela de login, o texto é vermelho e enorme, sem orientação.
+    10.1 completo (7 pages): ~1 sessão curta (se o processo S47a for seguido à risca, ~2–3 h de trabalho).
 
-Solução proposta:
+    10.2 cadastro (verificar backend + tela): ~1 sessão.
 
-    Criar um tradutor de erros em lib/utils/error_message.dart (novo arquivo):
+    Item 7 completo (validação no celular): ~1 sessão.
 
-        SocketException / ClientException / Failed host lookup → "Não foi possível conectar. Verifique sua internet e tente novamente."
+    Item 10 keystore + Item 8 splash/ícone: ~1 sessão.
 
-        TimeoutException → "O servidor demorou para responder. Tente novamente."
+    Total até "pronto para submeter": ~3–4 sessões. +1–2 de review. Total ~4–6 sessões.
 
-        ApiException com status == 401 → "E-mail ou senha incorretos."
+SEÇÃO 11 — BACKLOG DA SESSÃO 48 (planejamento)
 
-        ApiException com status == 409 → "Este e-mail já está cadastrado."
+Base: repo no commit <novo_hash> (S47 commitada). error_message.dart + login_page.dart commitados.
+11.1 Item 10.1 — aplicar nos 7 pages restantes (prioridade alta)
 
-        ApiException com status == 500 → "Erro no servidor. Tente novamente em instantes."
+Ver Seção 8, Terceira ação. Ordem:
 
-        Fallback: "Algo deu errado. Tente novamente."
+    feed_page.dart
 
-    Substituir todos os 'Erro: $e' e e.message crus pelo tradutor. Arquivos afetados:
+    activity_detail_page.dart
 
-        lib/pages/login_page.dart
+    upload_page.dart
 
-        lib/pages/activity_detail_page.dart
+    profile_page.dart
 
-        lib/pages/feed_page.dart
+    user_profile_page.dart
 
-        lib/pages/profile_page.dart
+    search_page.dart
 
-        lib/pages/upload_page.dart
+    edit_profile_page.dart
 
-        lib/pages/user_profile_page.dart
+Processo: colar inteiro → assistente devolve completo → flutter analyze → próximo.
 
-        lib/pages/search_page.dart
+Quando os 7 verdes: commit feat(mobile): aplica friendlyErrorMessage em todos os pages (Sessao 48, 10.1 completo).
+11.2 Item 10.2 — Tela de Cadastro (prioridade alta)
 
-        lib/pages/edit_profile_page.dart
+Pré-requisito: verificar se o backend tem POST /auth/register:
+powershell
 
-    Padronizar a exibição: SnackBar (para erros de ação) ou texto vermelho inline (para erros de formulário). Não usar os dois ao mesmo tempo para o mesmo erro.
+cd D:\Rumo\backend
+Get-ChildItem app\routers -Filter *.py | Select-String -Pattern "register|/auth" -List
+Get-Content app\routers\auth.py -Encoding UTF8 -ErrorAction SilentlyContinue
 
-10.2 Tela de Cadastro (prioridade alta)
+    Se existir: criar lib/pages/register_page.dart (nome completo, username, e-mail, senha, confirmação; validação local; spinner; link "Já tem conta? Entre"). Adicionar rota /register no main.dart e link na login_page.dart.
 
-Problema: a tela de login não tem link para cadastro. Usuário novo não consegue criar conta.
+    Se não existir: criar no backend primeiro (S48 ou S49) e depois a tela.
 
-Solução proposta:
+11.3 Item 10.4 — Melhorias incrementais (prioridade média)
 
-    Criar lib/pages/register_page.dart (novo arquivo):
+    Spinner em botões que faltam (like, upload, cadastro).
 
-        Campos: nome completo, username, e-mail, senha, confirmação de senha.
+    Empty states amigáveis (feed vazio, perfil sem atividades, busca sem resultados).
 
-        Validação local: e-mail com @, senha ≥ 8 caracteres, senhas iguais, campos não vazios.
+    Pull-to-refresh no feed e no perfil.
 
-        Botão "Cadastrar" com spinner enquanto envia.
+    Tratamento global de 401 com redirecionamento para login (cuidado: toca navegação; testar bem).
 
-        Link "Já tem conta? Entre" que volta para o login.
+11.4 Itens herdados da S46 (não concluídos)
 
-    Integrar com o backend: verificar se o endpoint de registro existe (POST /auth/register ou similar) e qual o contrato. Se não existir, criar no backend também (S47 ou S48).
-
-    Adicionar link na login_page.dart: "Não tem conta? Cadastre-se" abaixo do botão "Entrar".
-
-    Após cadastro bem-sucedido: fazer login automático (se o backend devolver token) ou redirecionar para o login com mensagem "Conta criada. Faça login."
-
-10.3 Animação do percurso no mapa (prioridade média)
-
-Problema: o mapa da tela de detalhes é estático. Seria legal ver a rota sendo "desenhada" progressivamente, simulando a caminhada.
-
-Solução proposta:
-
-    Adicionar botão "Reproduzir rota" abaixo do mapa em activity_detail_page.dart.
-
-    Criar lib/widgets/activity_map_animated.dart (novo arquivo):
-
-        Recebe ActivityTrack.
-
-        Estado: _progress (0.0 a 1.0).
-
-        AnimationController com Duration proporcional ao número de pontos (ex.: 5s para 100 pontos).
-
-        A cada frame, desenhar Polyline com apenas os pontos até _progress * total.
-
-        Botão "Pausar/Retomar" e "Reiniciar".
-
-    Alternativa mais simples: usar flutter_map com Polyline cujo points é recalculado a cada tick do AnimationController. Não precisa de vídeo real, só a linha crescendo.
-
-Nota: o pacote flutter_map já está no pubspec.yaml (usado no activity_map.dart). A animação é só controle de estado + Polyline dinâmica.
-10.4 Outras melhorias sugeridas (prioridade baixa, mas valiosas)
-
-    Feedback visual de carregamento: botões com spinner (CircularProgressIndicator dentro do FilledButton) durante requisições. Já existe em alguns lugares (_sendingComment, _exporting), mas falta em login, cadastro, upload, like.
-
-    Empty states amigáveis:
-
-        Feed vazio → "Nenhuma atividade ainda. Que tal começar?"
-
-        Perfil sem atividades → "Você ainda não registrou nenhuma atividade."
-
-        Busca sem resultados → "Nenhum usuário encontrado."
-
-        Cada empty state com botão de ação (ex.: "Registrar atividade" → UploadPage).
-
-    Validação de formulário com Form + TextFormField:
-
-        Login: e-mail válido, senha não vazia.
-
-        Cadastro: e-mail válido, senha ≥ 8, senhas iguais.
-
-        Upload: campos obrigatórios (tipo, distância, duração).
-
-        Usar validator do TextFormField para mensagens inline.
-
-    Máscaras e formatadores:
-
-        E-mail: lowercase automático.
-
-        Senha: botão "mostrar/ocultar" (IconButton com obscureText).
-
-    Pull-to-refresh no feed e no perfil (RefreshIndicator).
-
-    Tratamento de sessão expirada: se ApiException com status == 401 em qualquer chamada, limpar token e redirecionar para login com mensagem "Sessão expirada. Faça login novamente."
-
-10.5 Itens herdados da S46 (não concluídos)
-
-    Item 7 completo: validar no Redmi Note 8 — feed, perfil, upload, like, comentários, export CSV/GPX.
+    Item 7 completo: validar feed/perfil/upload/like/comentários/export no Redmi Note 8.
 
     Item 8: splash + ícone no launcher.
 
-    Item 10: keystore + signingConfigs.
+    Item 10: keystore + signingConfigs (só após item 7 completo).
 
-    Item 13: higiene (remover BOM de build.gradle.kts e AndroidManifest.xml, remover comentário com.example se ainda existir).
+    Item 13: higiene (remover BOM de build.gradle.kts e AndroidManifest.xml, remover comentário com.example se existir).
 
-10.6 Ordem sugerida para a S47
+11.5 Ordem sugerida para a S48
 
-    Fase 0 (obrigatória): git log, git status, web build/lint, mobile analyze, backend pytest/ruff, prod backend/frontend.
+    Fase 0 (obrigatória): git log/status, web build/lint, mobile analyze, backend pytest/ruff (com container), prod backend/frontend.
 
-    Item 10.1 (mensagens de erro) — rápido, alto impacto, afeta todos os fluxos.
+    Commit da S47 (Seção 5) — se ainda não foi feito.
 
-    Item 10.2 (tela de cadastro) — médio, requer backend (verificar endpoint).
+    Item 10.1 nos 7 pages (processo S47a).
 
-    Item 7 completo (validação no celular) — testar o que foi corrigido na S46 + o cadastro novo.
+    Commit do 10.1 completo.
 
-    Item 10.3 (animação do mapa) — se sobrar tempo, é o mais "uau" mas o menos crítico.
+    Item 10.2 (cadastro) — se o backend tiver endpoint; senão, avaliar criar.
 
-    Item 10.4 (outras melhorias) — incremental, conforme tempo.
+    Item 10.4 (incremental) — conforme tempo.
 
-Se o backend não tiver endpoint de registro, a S47 faz o backend primeiro (S47 ou S48) e a tela de cadastro depois.
+    Item 7 completo (validação no celular) — se sobrar tempo.
+
+RESUMO EXECUTIVO PARA A S48
+
+    O que fazer primeiro: commit dos 2 arquivos pendentes (error_message.dart + login_page.dart) — Seção 5.
+
+    O que fazer depois: Fase 0 completa (Seção 8, Segunda ação).
+
+    O que fazer em seguida: aplicar friendlyErrorMessage nos 7 pages restantes, um por vez, colando o arquivo inteiro e devolvendo completo (Seção 8, Terceira ação).
+
+    O que NÃO fazer: reconstruir arquivo a partir de Select-String (S47a). Assumir AuthService.instance (S47b). Rodar pytest sem subir o container de teste (S47c).
+
+    Regra de ouro: não tenho acesso ao disco. Pedir Get-Content inteiro. Nunca inventar caminho. Nunca reescrever arquivo não recebido.
