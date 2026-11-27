@@ -669,6 +669,55 @@ class ApiClient {
         .toList();
   }
 
+  // ---------- Cadastro (Sessão 49) ----------
+
+  /// `POST /auth/register` — cria um novo usuário.
+  ///
+  /// Endpoint PÚBLICO (não requer token). O backend valida:
+  /// - `email` único (EmailStr)
+  /// - `username` único, min 3 max 50, pattern `^[a-zA-Z0-9_]+$`
+  /// - `password` min 8 max 128
+  /// - `full_name` opcional, max 120
+  /// - `weight_kg` opcional, 0 < x < 500
+  /// - `height_cm` opcional, 0 < x < 300
+  /// - `birth_date` opcional (date ISO)
+  ///
+  /// Sucesso: 201 com `UserResponse` (mesmo shape do /auth/me → `UserMe`).
+  /// Erro:
+  /// - 409 com `detail` = "Email já cadastrado" OU "Username já cadastrado"
+  ///   (o caller deve preservar `e.message` no 409 — S48d)
+  /// - 422 validação Pydantic
+  /// - 429 rate limit (3 cadastros/hora por IP)
+  Future<UserMe> register({
+    required String email,
+    required String username,
+    required String password,
+    String? fullName,
+    double? weightKg,
+    double? heightCm,
+    String? birthDate, // YYYY-MM-DD
+  }) async {
+            final body = <String, dynamic>{
+      'email': email,
+      'username': username,
+      'password': password,
+      'full_name': ?(fullName != null && fullName.trim().isNotEmpty)
+          ? fullName.trim()
+          : null,
+      'weight_kg': ?weightKg,
+      'height_cm': ?heightCm,
+      'birth_date': ?(birthDate != null && birthDate.isNotEmpty)
+          ? birthDate
+          : null,
+    };
+
+    final data = await post('/auth/register', body: body);
+    if (data is! Map<String, dynamic>) {
+      throw ApiException(500, 'Resposta inesperada em /auth/register');
+    }
+    return UserMe.fromJson(data);
+  }
+
   // ---------- internos ----------
 
   /// GET binário autenticado (Sessão 37).

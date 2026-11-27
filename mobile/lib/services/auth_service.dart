@@ -78,6 +78,43 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// [Sessão 49 — item 10.2] Cadastra um novo usuário e faz login automático.
+  ///
+  /// Fluxo:
+  /// 1. `POST /auth/register` (público) — cria o usuário.
+  /// 2. Em seguida, `POST /auth/login` com as mesmas credenciais.
+  /// 3. Salva o token e notifica a UI (mesma semântica de `login`).
+  ///
+  /// Erros:
+  /// - 409 do register propaga como `ApiException` (o caller trata o
+  ///   `e.message` — S48d — porque email e username têm `detail` diferentes).
+  /// - 401 do login só aconteceria se o register tivesse sucesso e o login
+  ///   falhasse por algum motivo estranho (não deveria — mesmas credenciais).
+  Future<void> register({
+    required String email,
+    required String username,
+    required String password,
+    String? fullName,
+    double? weightKg,
+    double? heightCm,
+    String? birthDate,
+  }) async {
+    // 1) Cria o usuário. Se der erro (409/422/429), propaga para o caller.
+    await _api.register(
+      email: email,
+      username: username,
+      password: password,
+      fullName: fullName,
+      weightKg: weightKg,
+      heightCm: heightCm,
+      birthDate: birthDate,
+    );
+
+    // 2) Login automático com as credenciais recém-cadastradas.
+    //    Reusa o mesmo caminho do login normal (POST /auth/login).
+    await login(email, password);
+  }
+
   /// Remove o token (logout).
   Future<void> logout() async {
     _setToken(null);

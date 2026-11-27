@@ -27,6 +27,11 @@
 // [Sessão 39 — fix] builder usa (context, state), não (_, state) — o
 // GoRouterState 18.x NÃO tem `.context` (removido). O context do builder
 // é o que serve pro `context.go('/profile')` no fallback do deep-link.
+//
+// [Sessão 49 — item 10.2] +rota /register (tela de cadastro). Fora do
+// shell — é fluxo. O redirect global foi ajustado: /register é uma
+// "auth page" (como /login) e passa sem login. Sem esse ajuste, o
+// redirect mandaria /register para /login em loop.
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -36,6 +41,7 @@ import 'pages/edit_profile_page.dart'; // [Sessão 39] rota /edit-profile
 import 'pages/feed_page.dart';
 import 'pages/login_page.dart';
 import 'pages/profile_page.dart'; // [Sessão 32] rota /profile
+import 'pages/register_page.dart'; // [Sessão 49] rota /register
 import 'pages/search_page.dart'; // [Sessão 36] rota /search (era user_search_page.dart)
 import 'pages/upload_page.dart'; // [Sessão 31] rota /upload
 import 'pages/user_profile_page.dart'; // [Sessão 34] rota /user/:id
@@ -65,17 +71,30 @@ class _RumoAppState extends State<RumoApp> {
       initialLocation: '/login',
       // [Sessão 32] Redirect global: sem login → /login. Com login em
       // /login → /feed. As rotas do shell (/feed, /profile) exigem auth.
+      //
+      // [Sessão 49 — item 10.2] /register também é "auth page": passa
+      // sem login (é onde o usuário cria a conta). Sem isso, o redirect
+      // mandaria /register → /login em loop.
       redirect: (context, state) {
         final loggedIn = _auth.isLoggedIn;
-        final goingToLogin = state.matchedLocation == '/login';
-        if (!loggedIn && !goingToLogin) return '/login';
-        if (loggedIn && goingToLogin) return '/feed';
+        final goingToAuthPage = state.matchedLocation == '/login' ||
+            state.matchedLocation == '/register';
+        if (!loggedIn && !goingToAuthPage) return '/login';
+        if (loggedIn && goingToAuthPage) return '/feed';
         return null;
       },
       routes: [
         GoRoute(
           path: '/login',
           builder: (_, _) => LoginPage(auth: _auth),
+        ),
+        // [Sessão 49 — item 10.2] Tela de cadastro. Pública (sem auth).
+        // O AuthService.register() faz login automático após o 201, e o
+        // redirect leva para /feed (loggedIn == true, /register é auth
+        // page).
+        GoRoute(
+          path: '/register',
+          builder: (_, _) => RegisterPage(auth: _auth),
         ),
         GoRoute(
           path: '/upload',

@@ -129,6 +129,12 @@ class _LoginPageState extends State<LoginPage> {
                             )
                           : const Text('Entrar'),
                     ),
+                    const SizedBox(height: 8),
+                    // [Sessão 49 — item 10.2] Link para a tela de cadastro.
+                    TextButton(
+                      onPressed: _loading ? null : () => context.go('/register'),
+                      child: const Text('Não tem conta? Criar conta'),
+                    ),
                   ],
                 ),
               ),
