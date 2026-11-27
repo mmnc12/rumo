@@ -11,6 +11,7 @@
 //             agora o FeedPage passa). Se activity.user for null (não
 //             deveria — /feed embute user — mas é defensivo), onAuthorTap
 //             fica null e o header herda o onTap do card (abre detalhe).
+// [S50-10.4] Empty state amigável do feed (era Text cru).
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -148,7 +149,45 @@ class _FeedPageState extends State<FeedPage> {
                   ),
                 )
               : _activities.isEmpty
-                  ? const Center(child: Text('Nenhuma atividade ainda.'))
+                  // [S50-10.4] Empty state amigável: ícone + título +
+                  // subtítulo + CTA para o upload. O CTA reusa
+                  // _openUpload() (mesmo fluxo do FAB), então ao voltar
+                  // com `true` o feed recarrega sozinho.
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.directions_run,
+                              size: 64,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Nenhuma atividade ainda',
+                              style: Theme.of(context).textTheme.titleMedium,
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Envie seu primeiro arquivo GPX ou FIT para começar.',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 24),
+                            FilledButton.icon(
+                              onPressed: _openUpload,
+                              icon: const Icon(Icons.upload_file),
+                              label: const Text('Enviar atividade'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
                   : RefreshIndicator(
                       onRefresh: _load,
                       child: ListView.separated(

@@ -47,6 +47,8 @@
 // Em sucesso: setState(_me) + Future.wait([_load(), _loadStats()]) —
 // mesma ação do pull-to-refresh. `_openEditProfile` usa `context.push`
 // do go_router (já importado).
+//
+// [S50-10.4] Empty state amigável de "minhas atividades" (era Text cru).
 import 'dart:async'; // [Sessão 37] Timer do feedback transitório
 
 import 'package:flutter/material.dart';
@@ -379,6 +381,19 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  // [S50-10.4] Abre a tela de upload a partir do empty state. Mesma
+  // lógica do FeedPage: upload é evento raro, refresh completo é mais
+  // simples e correto que refresh de item único. `_refreshAll()` já
+  // recarrega perfil+lista e stats em paralelo (mesma ação do
+  // RefreshIndicator).
+  Future<void> _openUpload() async {
+    final uploaded = await context.push<bool>('/upload');
+    if (!mounted) return;
+    if (uploaded == true) {
+      _refreshAll();
+    }
+  }
+
   // ===== [Sessão 37] Export em lote =====
 
   /// Abre o date picker e atualiza `_exportFrom` ou `_exportTo`.
@@ -606,11 +621,43 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                       ),
                       const SizedBox(height: 8),
+                      // [S50-10.4] Empty state amigável: dentro do
+                      // ListView (não Center de tela cheia) para não
+                      // quebrar o RefreshIndicator. CTA reusa
+                      // _openUpload() — mesmo fluxo do FAB do feed.
                       if (_activities.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 32),
-                          child: Center(
-                            child: Text('Você ainda não enviou atividades.'),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 32),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.directions_run,
+                                size: 64,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Você ainda não enviou atividades',
+                                style:
+                                    Theme.of(context).textTheme.titleMedium,
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Envie seu primeiro GPX ou FIT para ver '
+                                'suas estatísticas aqui.',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 24),
+                              FilledButton.icon(
+                                onPressed: _openUpload,
+                                icon: const Icon(Icons.upload_file),
+                                label: const Text('Enviar atividade'),
+                              ),
+                            ],
                           ),
                         )
                       else

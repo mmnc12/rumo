@@ -92,11 +92,26 @@ class _LikeButtonState extends State<LikeButton> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              liked ? Icons.favorite : Icons.favorite_border,
-              size: 20,
-              color: color,
-            ),
+            // Enquanto o request está em voo, mostramos um spinner do
+            // mesmo tamanho do ícone para não pular o layout. O estado
+            // otimista já foi aplicado pelo pai via onChanged, então o
+            // usuário vê a mudança imediata; o spinner só sinaliza que
+            // o POST/DELETE ainda está sendo confirmado.
+            if (_inFlight)
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: color,
+                ),
+              )
+            else
+              Icon(
+                liked ? Icons.favorite : Icons.favorite_border,
+                size: 20,
+                color: color,
+              ),
             const SizedBox(width: 4),
             Text(
               '${widget.activity.likesCount}',

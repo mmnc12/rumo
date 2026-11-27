@@ -1,6 +1,8 @@
 // ignore_for_file: unnecessary_overrides
 // [Sessão 36] Busca unificada: Usuários + Atividades (paridade com
 // SearchPage.tsx do web).
+// [S50-10.4] Empty states amigáveis de "nada encontrado" nas duas abas
+// (eram Text cru). Mantido sem CTA: busca vazia não tem ação óbvia.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -225,13 +227,34 @@ class _UserSearchTabState extends State<_UserSearchTab>
         ),
       );
     }
+    // [S50-10.4] Empty state amigável de "nada encontrado". Sem CTA:
+    // busca vazia não tem ação óbvia — o usuário só precisa digitar
+    // outra coisa (o campo continua acima, com foco preservado).
     if (_hasSearched && _results.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(
-            'Nenhum usuário encontrado para "${_query.trim()}".',
-            textAlign: TextAlign.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.person_search,
+                size: 48,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Nenhum usuário encontrado',
+                style: theme.textTheme.titleMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Para "${_query.trim()}".',
+                style: theme.textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
         ),
       );
@@ -249,7 +272,7 @@ class _UserSearchTabState extends State<_UserSearchTab>
               u.initial,
               style: TextStyle(color: theme.colorScheme.onPrimaryContainer),
             ),
-                      ),
+          ),
           title: Text(u.username),
           subtitle: u.fullName != null && u.fullName!.isNotEmpty
               ? Text(u.fullName!)
@@ -449,13 +472,34 @@ class _ActivitySearchTabState extends State<_ActivitySearchTab>
         ),
       );
     }
+    // [S50-10.4] Empty state amigável de "nada encontrado". Sem CTA:
+    // busca vazia não tem ação óbvia — o usuário só precisa digitar
+    // outra coisa (o campo continua acima, com foco preservado).
     if (_hasSearched && _results.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(
-            'Nenhuma atividade encontrada para "${_query.trim()}".',
-            textAlign: TextAlign.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.search_off,
+                size: 48,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Nenhuma atividade encontrada',
+                style: theme.textTheme.titleMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Para "${_query.trim()}".',
+                style: theme.textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
         ),
       );
