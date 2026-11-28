@@ -27,10 +27,21 @@ class ApiClient {
 
   final http.Client _client = http.Client();
 
+  // [Sessão 51 — item 10.4 Onda B] Callback opcional disparado em 401
+  // de chamadas AUTENTICADAS (não no login — 401 de senha errada é
+  // esperado e não deve deslogar). O AuthService injeta este callback
+  // após criar o ApiClient (setter público, mutável). O ApiClient NÃO
+  // conhece AuthService nem navegação — só chama o callback. Quem
+  // navega é o refreshListenable do GoRouter em main.dart.
+  void Function()? onUnauthorized;
+
   /// Faz o login e retorna o token JWT.
   ///
   /// O backend espera `application/x-www-form-urlencoded` com
   /// `username` (e-mail) e `password`.
+  ///
+  /// [Sessão 51] NÃO dispara `onUnauthorized` — um 401 aqui é senha
+  /// errada (usuário ainda não logado), não sessão expirada.
   Future<String> login(String email, String password) async {
     final uri = Uri.parse('$baseUrl/auth/login');
     final response = await _client
@@ -409,8 +420,7 @@ class ApiClient {
         .map((e) => User.fromJson(e as Map<String, dynamic>))
         .toList();
   }
-
-  // ---------- Upload (Sessão 31) ----------
+    // ---------- Upload (Sessão 31) ----------
 
   /// Envia um arquivo GPX ou FIT para `POST /activities/upload`.
   ///
@@ -431,6 +441,8 @@ class ApiClient {
   /// NOTA: NÃO usa `_send` porque `_send` é JSON-only. Multipart tem
   /// contrato próprio (headers gerados pelo `MultipartRequest`, body
   /// binário). Os endpoints existentes ficam intocados.
+  ///
+  /// [Sessão 51] Dispara `onUnauthorized` em 401 — upload autenticado.
   Future<Activity> uploadActivity({
     File? file,
     List<int>? bytes,
@@ -489,6 +501,8 @@ class ApiClient {
     final response = await http.Response.fromStream(streamed);
 
     if (response.statusCode != 201) {
+      // [Sessão 51] 401 em upload autenticado → dispara callback.
+      if (response.statusCode == 401) onUnauthorized?.call();
       throw ApiException(
         response.statusCode,
         _extractMessage(response.body) ?? 'Falha no upload',
@@ -645,8 +659,7 @@ class ApiClient {
       entryCount: entryCount,
     );
   }
-
-  // ---------- Followers (Sessão 37) ----------
+    // ---------- Followers (Sessão 37) ----------
 
   /// `GET /users/{userId}/followers?limit=&offset=` — quem segue o usuário.
   ///
@@ -697,7 +710,7 @@ class ApiClient {
     double? heightCm,
     String? birthDate, // YYYY-MM-DD
   }) async {
-            final body = <String, dynamic>{
+    final body = <String, dynamic>{
       'email': email,
       'username': username,
       'password': password,
@@ -731,6 +744,8 @@ class ApiClient {
   /// JSON (`{"detail": "..."}`) mesmo no export (o erro é JSON, o sucesso
   /// é o blob). Quando o corpo do erro não é JSON, cai no fallback
   /// `Erro <status>`.
+  ///
+  /// [Sessão 51] Dispara `onUnauthorized` em 401 — export autenticado.
   Future<({Uint8List bytes, String filename, String contentType})> _fetchBlob(
     String path, {
     required String fallbackFilename,
@@ -752,6 +767,8 @@ class ApiClient {
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      // [Sessão 51] 401 em export autenticado → dispara callback.
+      if (response.statusCode == 401) onUnauthorized?.call();
       throw ApiException(
         response.statusCode,
         _extractMessage(response.body) ?? 'Erro ${response.statusCode}',
@@ -791,6 +808,10 @@ class ApiClient {
     return name;
   }
 
+  /// [Sessão 51] Dispara `onUnauthorized` em 401 — chamadas autenticadas
+  /// (GET/POST/PUT/DELETE). O `login` NÃO usa `_send` (é multipart
+  /// urlencoded próprio) e por isso não dispara — 401 de senha errada
+  /// é esperado e não deve deslogar.
   Future<http.Response> _send(
     String method,
     String path, {
@@ -830,6 +851,8 @@ class ApiClient {
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      // [Sessão 51] 401 em chamada autenticada → dispara callback.
+      if (response.statusCode == 401) onUnauthorized?.call();
       throw ApiException(
         response.statusCode,
         _extractMessage(response.body) ?? 'Erro ${response.statusCode}',

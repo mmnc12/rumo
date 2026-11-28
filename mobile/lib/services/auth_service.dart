@@ -24,6 +24,34 @@ class AuthService extends ChangeNotifier {
 
   ApiClient get api => _api;
 
+  /// [Sessão 51 — item 10.4 Onda B] Construtor explícito para injetar o
+  /// callback de 401 no ApiClient. O corpo do construtor roda DEPOIS da
+  /// inicialização dos campos, então `_api` já existe quando setamos o
+  /// callback. O ApiClient NÃO conhece AuthService — só chama a função.
+  AuthService() {
+    _api.onUnauthorized = _handleUnauthorized;
+  }
+
+  /// [Sessão 51 — item 10.4 Onda B] Chamado pelo ApiClient quando uma
+  /// chamada AUTENTICADA recebe 401 (token expirado/inválido).
+  ///
+  /// Guard `isLoggedIn`: idempotente — se duas chamadas 401 chegarem
+  /// juntas, a segunda não faz nada (o token já foi limpo pela primeira).
+  /// Evita loop e logout duplicado.
+  ///
+  /// Só faz logout. A navegação para /login é consequência do
+  /// `refreshListenable: _auth` no GoRouter (main.dart): `logout()`
+  /// chama `notifyListeners()`, o GoRouter reavalia o redirect e, como
+  /// `!isLoggedIn && !authPage`, manda para /login. Sem esse
+  /// refreshListenable, o logout não navegaria (a rota não mudou).
+  void _handleUnauthorized() {
+    if (!isLoggedIn) return;
+    // ignore: discarded_futures — logout() é async mas o callback é sync.
+    // O AuthService não tem como aguardar aqui; a UI reage via
+    // notifyListeners() (loading/token) e o redirect do GoRouter.
+    logout();
+  }
+
   /// Id do usuário autenticado (claim `sub` do JWT; fallback `user_id`).
   ///
   /// Retorna `null` quando não há token, quando o token é malformado ou

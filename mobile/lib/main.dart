@@ -32,6 +32,14 @@
 // shell — é fluxo. O redirect global foi ajustado: /register é uma
 // "auth page" (como /login) e passa sem login. Sem esse ajuste, o
 // redirect mandaria /register para /login em loop.
+//
+// [Sessão 51 — item 10.4 Onda B] +refreshListenable: _auth no GoRouter.
+// O AuthService (ChangeNotifier) é um Listenable; o GoRouter reavalia
+// o redirect a cada notifyListeners(). Quando o ApiClient dispara
+// onUnauthorized (401 em chamada autenticada), o AuthService faz logout(),
+// que chama notifyListeners() → o GoRouter reevalua o redirect e manda
+// para /login. Sem esse refreshListenable, o logout NÃO navegaria (a
+// rota não muda sozinha; o redirect só roda quando a rota muda).
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -69,6 +77,12 @@ class _RumoAppState extends State<RumoApp> {
 
     _router = GoRouter(
       initialLocation: '/login',
+      // [Sessão 51 — item 10.4 Onda B] O GoRouter escuta o AuthService.
+      // A cada notifyListeners() (login, logout, bootstrap), o redirect
+      // é reavaliado. É isso que faz o 401 global NAVEGAR: o callback
+      // onUnauthorized do ApiClient → AuthService._handleUnauthorized →
+      // logout() → notifyListeners() → GoRouter reevalua → /login.
+      refreshListenable: _auth,
       // [Sessão 32] Redirect global: sem login → /login. Com login em
       // /login → /feed. As rotas do shell (/feed, /profile) exigem auth.
       //
