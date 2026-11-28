@@ -1,7 +1,7 @@
-HANDOFF — SESSÃO 51 (para a Sessão 52)
+HANDOFF — SESSÃO 51/52 (para a Sessão 53)
 SEÇÃO 0 — LEIA PRIMEIRO (contexto operacional)
 
-Regra de ouro (S21–S51, inalterada): Você não tem acesso ao disco do usuário. Toda informação chega por Get-Content -Encoding UTF8 ou saída de comando. Nunca inventar caminho. Nunca reescrever arquivo não recebido. Se precisar, pedir e esperar.
+Regra de ouro (S21–S52, inalterada): Você não tem acesso ao disco do usuário. Toda informação chega por Get-Content -Encoding UTF8 ou saída de comando. Nunca inventar caminho. Nunca reescrever arquivo não recebido. Se precisar, pedir e esperar.
 
 Regras críticas mantidas: código sempre completo (não diff parcial); handoff completo ao chegar em 70–80% do contexto; avisar sobre limite do chat e limite do site/IA (o segundo não é mensurável pelo assistente — declarar essa limitação); percentual de prontidão ao final; seguir as recomendações do assistente como plano padrão.
 
@@ -55,7 +55,7 @@ Adições S50 (mantidas):
 
     S50e — Empty state do feed/perfil/busca: convenção adotada. Ícone 64 (feed/perfil) ou 48 (busca), onSurfaceVariant, título titleMedium, subtítulo bodyMedium, textAlign: TextAlign.center. No feed/perfil: CTA FilledButton.icon "Enviar atividade" → _openUpload(). Na busca: sem CTA. Empty state do feed/perfil fica dentro do ListView (não Center de tela cheia) para não quebrar o RefreshIndicator. Na busca, o _buildBody retorna Center.
 
-Adições S51 (NOVAS):
+Adições S51 (mantidas):
 
     S51a — ApiClient não tinha hook global de 401. Foi adicionado um campo público mutável void Function()? onUnauthorized; e chamadas if (response.statusCode == 401) onUnauthorized?.call(); em três pontos: _send (GET/POST/PUT/DELETE), _fetchBlob (export) e uploadActivity. O login NÃO dispara — 401 de senha errada é esperado e não deve deslogar.
 
@@ -69,31 +69,55 @@ Adições S51 (NOVAS):
 
     S51f — O refreshListenable: _auth faz o GoRouter reavaliar o redirect a cada notifyListeners() — inclusive no bootstrap() (quando loading vira false e o token é lido do storage). Isso é desejado (na inicialização, o redirect precisa saber se está logado). O redirect é puro (não tem efeito colateral), então não deve causar loop. Mas atenção ao primeiro frame: initialLocation: '/login' + bootstrap() assíncrono podem competir. Se aparecer "piscar" entre login e feed na inicialização, a correção é mostrar splash enquanto _auth.loading == true (não antecipar; testar primeiro).
 
+Adições S52 (NOVAS — esta sessão):
+
+    S52a — O commit da Onda B JÁ FOI FEITO entre a S51 e a S52 (hash 49b4275, mensagem feat(mobile): tratamento global de 401 + refreshListenable (Sessao 51, 10.4 Onda B)). O handoff da S51 também foi commitado (docs/HANDOFF.md). Working tree limpo. A Onda B está commitada mas NÃO foi validada comportamentalmente — o teste manual da Seção 5 do handoff S51 (5 passos, incl. 7.10/401) ainda não foi executado com sucesso/registro. Isso é o que falta para fechar a Onda B de verdade.
+
+    S52b — O usuário gerou e instalou o APK debug no Redmi Note 8 e está testando manualmente. O APK é flutter build apk --debug, que mostra o banner "DEBUG" no canto superior direito — esperado e correto em debug (some no release, que só sai depois do Item 10/keystore). Não é bug.
+
+    S52c — O usuário inseriu o bloco temporário de teste do 401 no _send do api.dart (Seção 5.5.1 do handoff S51), entre a linha 820 (}) async {) e a 821 (final uri = Uri.parse(...)), com a estrutura exata: // TESTE TEMPORÁRIO — REMOVER DEPOIS (Sessao 51, Secao 5.5) + if (path.contains('/activities')) { onUnauthorized?.call(); throw ApiException(401, 'Token expirado (teste)'); }. Esse bloco PRECISA ser revertido ao final dos testes (Seção 5.5.3) — senão o app desloga toda vez que abrir o feed. Status na S52: inserido, NÃO revertido ainda (o teste 7.10 provavelmente foi feito com o bloco, mas o resultado não foi registrado antes da cota acabar).
+
+    S52d — O usuário confirmou 1 validação de comportamento: o tratamento de erro amigável no feed funciona — se o servidor demora, aparece "servidor demorando, tente novamente" em vez da mensagem crua ("antes aparecia uma mensagem feia"). Isso valida o friendlyErrorMessage (S48b) + ApiException(0, ...) (S47e) no caminho de timeout — não é o 401 global (7.10), é outro caminho. Sinal positivo, mas não fecha a Onda B.
+
+    S52e — Diagnóstico do mapa (faixa amarela/preta "POWERED BY 69 PIXELS"): NÃO é bug. O activity_map.dart usa tile.openstreetmap.org (linha 58) e tem SimpleAttributionWidget configurado (linhas 115–116 e 204–206, alternando _esriAttribution/_osmAttribution conforme _satelite). A faixa amarela/preta é placeholder/overlay padrão do flutter_map enquanto os tiles carregam (ou overlay de atribuição do próprio pacote em versões recentes). É cosmético. Não vale a pena mexer agora. Na S53, confirmar com uma pergunta simples: "a faixa some depois que o mapa carrega?" — se sim, cosmético, ignorar; se fica permanente, investigar SimpleAttributionWidget (alignment/backgroundColor padrão que precisa ser customizado). O mapa em si funciona (ruas visíveis, traçado da rota desenhado na screenshot).
+
+    S52f — O usuário mencionou "a barra de baixo está estranha, já tinha relatado e consertado, só que voltou" — NÃO CONFIRMADO o que exatamente está estranho. Pode ser: (a) FAB (botão laranja de upload) cobrindo o último card do feed (visível na screenshot); (b) espaçamento/insets da NavigationBar; (c) cor/label errada; (d) outra coisa. Não assumir (S48e). Na S53, pedir descrição do usuário + o trecho do feed_page.dart/profile_page.dart relevante antes de corrigir. Pode ser falso positivo ("voltou" pode ser que nunca foi exatamente esse ponto, ou era outra tela).
+
+    S52g — Cota apertada: o usuário avisou que restam ~37% da cota diária do site/IA. Decisão: handoff imediato (este documento) antes de esgotar. Limite do site/IA não é mensurável pelo assistente — o usuário é quem informa. Isso confirma a limitação declarada na S51: o assistente não consegue prever o corte do site, só o usuário consegue avisar.
+
 SEÇÃO 1 — TL;DR para quem chega agora
 
-Estado do repo no fim da S51: HEAD == origin/main == 9753ed9 (commit do handoff S50). Working tree tem 3 arquivos modificados NÃO commitados (a Onda B da S51):
+Estado do repo no fim da S52: HEAD == origin/main == 49b4275 (commit da Onda B S51) + commit do handoff S51 em cima (docs/HANDOFF.md). Working tree limpo no repo. Porém, o api.dart no disco do usuário tem o bloco temporário de teste do 401 inserido (S52c) e NÃO revertido — ou seja, o git status provavelmente vai mostrar M mobile/lib/services/api.dart agora. Primeira ação da S53: verificar git status e reverter o bloco temporário antes de qualquer outra coisa (S52c / Seção 5.5.3 do handoff S51).
 
-    M mobile/lib/services/api.dart (callback onUnauthorized + 3 disparos de 401)
+O que a S52 fez: commit do handoff S51 (docs), geração do APK debug, instalação no Redmi Note 8, início do teste manual do Item 7. Validações confirmadas: erro amigável no timeout funciona (S52d). Diagnóstico do mapa feito (S52e — cosmético, não bug). Diagnóstico da "barra de baixo" NÃO confirmado (S52f — precisa de descrição do usuário).
 
-    M mobile/lib/services/auth_service.dart (construtor + _handleUnauthorized)
+O que a S52 NÃO fez (fica para a S53):
 
-    M mobile/lib/main.dart (refreshListenable: _auth)
+    Reverter o bloco temporário do api.dart (S52c) — obrigatório antes de qualquer commit futuro.
 
-Os 3 arquivos passaram no flutter analyze (No issues found!), validados um por um.
+    Registrar o resultado do 7.10 (401 global no celular) — foi provavelmente testado, mas o resultado não foi reportado antes da cota acabar. Se o app deslogou ao entrar no feed, a Onda B está validada; se não, diagnosticar (Seção 5.7 do handoff S51).
 
-O que a S51 fez: implementou a Onda B do item 10.4 (tratamento global de 401 + verificação do pull-to-refresh). O pull-to-refresh já existia (S50d confirmado: RefreshIndicator em feed_page.dart linha 191, profile_page.dart linha 549, user_profile_page.dart linha 518) — não foi tocado. O 401 global foi implementado nos 3 arquivos acima.
+    Completar os fluxos 7.3–7.9 do Item 7 (feed, perfil, upload, comentários, export, busca, follow) — status de cada um não registrado.
 
-O que a S51 NÃO fez (fica para a S52):
+    Resolver a "barra de baixo estranha" (S52f) — precisa de descrição do usuário primeiro.
 
-    Teste manual dos 5 cenários (roteiro completo na Seção 5). O código está verde no analyze, mas não foi validado comportamentalmente. Isso é o primeiro item da S52.
+    Commitar o resultado do teste (se tudo passar) ou corrigir (se falhar).
 
-    Commit dos 3 arquivos + commit deste handoff (só depois do teste manual passar).
+    Itens herdados: Item 8 (splash/ícone), Item 10 (keystore), Item 13 (BOM).
 
-    Itens herdados da S46: item 7 (validação no Redmi Note 8, incl. cadastro), item 8 (splash + ícone), item 10 (keystore + signingConfigs), item 13 (remover BOM de build.gradle.kts e AndroidManifest.xml).
+Ação imediata da S53:
 
-Ação imediata da S52: executar o teste manual (Seção 5). Se passar, commitar (Seção 6). Se falhar, diagnosticar (Seção 5.7 tem os suspeitos).
+    cd D:\Rumo; git status --short --untracked-files=all → esperado: M mobile/lib/services/api.dart (bloco temporário) + possivelmente outros.
 
-Percentual consolidado: ~92% (Mobile subiu de ~98% para ~99%; MVP subiu de ~91% para ~92%; 10.4 Onda B implementada, pendente de teste/commit).
+    Reverter o bloco temporário (Seção 5.5.3 do handoff S51): remover as 5 linhas do // TESTE TEMPORÁRIO e confirmar com Select-String "TESTE TEMPORÁRIO" → zero ocorrências.
+
+    Perguntar ao usuário o resultado do 7.10 (deslogou? caiu no /login? travou? loop? tela cinza?).
+
+    Perguntar a descrição da "barra de baixo estranha".
+
+    Continuar o teste do Item 7 (7.3–7.9).
+
+Percentual consolidado (fim da S52): ~92% (inalterado em relação à S51 — a Onda B está commitada mas não validada; a validação comportamental pendente é o que falta para o Mobile subir de ~99% para ~99,5% e o MVP de ~92% para ~92,5%).
 SEÇÃO 2 — PRODUÇÃO E AMBIENTE
 
     Backend: https://rumo-api-5s0b.onrender.com
@@ -112,64 +136,80 @@ SEÇÃO 2 — PRODUÇÃO E AMBIENTE
 
     Android Studio: C:\Program Files\Android\Android Studio\bin\studio64.exe
 
-    Celular de teste: Redmi Note 8 (Android 10, API 29, arm64) — c767cacd no flutter devices
+    Celular de teste: Redmi Note 8 (Android 10, API 29, arm64) — c767cacd no flutter devices. APK debug instalado na S52 (banner "DEBUG" visível — esperado em debug).
 
     Emulador: emulador1 — NÃO usar (S45g)
 
     Docker Desktop: instalado e rodando. rumo-postgres (postgis/postgis:16-3.4, 5432), rumo-redis (redis:7-alpine, 6379), rumo_postgres_test (postgis/postgis:16-3.4, 5433 — sob demanda).
 
-Git ao fim da S51 (esperado após o commit da S52):
+Git ao fim da S52 (esperado após reverter o bloco temporário):
 text
 
-<novo_hash>  (HEAD -> main, origin/main) feat(mobile): tratamento global de 401 + refreshListenable (Sessao 51, 10.4 Onda B)
+49b4275  (HEAD -> main, origin/main) feat(mobile): tratamento global de 401 + refreshListenable (Sessao 51, 10.4 Onda B)
+<novo_hash>  docs: handoff da Sessao 51 (10.4 Onda B implementada, teste manual pendente, licoes S51a-f)
 9753ed9  docs: handoff da Sessao 50 (10.4 Onda A completa, licoes S50a-e)
 3c534ec  feat(mobile): empty states amigáveis + spinner no like (Sessao 50, 10.4 Onda A)
 82d58de  docs: handoff da Sessao 49 (10.2 completo, licoes S49a-d)
 211a713  feat(mobile): tela de cadastro + rota /register + register no ApiClient/AuthService (Sessao 49, 10.2 completo)
 
-SEÇÃO 3 — O QUE FOI FEITO NA SESSÃO 51
-3.1 Verificação inicial (S48e — não confiar só no handoff)
+⚠️ Atenção: o git status no início da S53 deve mostrar M mobile/lib/services/api.dart (bloco temporário do teste 7.10, S52c). Reverter antes de commitar qualquer coisa.
+SEÇÃO 3 — O QUE FOI FEITO NA SESSÃO 52
+3.1 Verificação inicial (S48e)
 
-O usuário colou git status --short --untracked-files=all (vazio) e git log --oneline -3:
+O usuário rodou git log --oneline -3 e git status --short --untracked-files=all:
 text
 
-9753ed9 (HEAD -> main, origin/main) docs: handoff da Sessao 50 (10.4 Onda A completa, licoes S50a-e)
+49b4275 (HEAD -> main, origin/main) feat(mobile): tratamento global de 401 + refreshListenable (Sessao 51, 10.4 Onda B)
+9753ed9 docs: handoff da Sessao 50 (10.4 Onda A completa, licoes S50a-e)
 3c534ec feat(mobile): empty states amigáveis + spinner no like (Sessao 50, 10.4 Onda A)
-82d58de docs: handoff da Sessao 49 (10.2 completo, licoes S49a-d)
+ M docs/HANDOFF.md
 
-Conclusão: o commit da Onda A e o handoff da S50 já estavam feitos (provavelmente no fim da S50 ou entre sessões). A "primeira ação obrigatória da S51" (commit da Onda A) já estava concluída. Working tree limpo, HEAD == origin/main.
-3.2 Fase 0 — tudo verde (confirmado pelo usuário)
-Verificação	Resultado
-flutter analyze	No issues found! (confirmado)
-npm run build	OK (confirmado)
-npm run lint	0 erros (confirmado)
-docker compose -f docker-compose.test.yml up -d	Running (confirmado)
-pytest -q	180 passed (confirmado)
-ruff check .	All checks passed! (confirmado)
-Prod backend /health	OK (confirmado)
-Prod frontend /	OK (confirmado)
-3.3 Item 10.4 — Onda B (IMPLEMENTADA, analyze verde, teste manual pendente)
+Conclusão: a Onda B já estava commitada (49b4275) desde antes da S52. Faltava só commitar o handoff S51 (docs/HANDOFF.md).
+3.2 Commit do handoff S51
 
-Verificação do pull-to-refresh (S50d confirmado): busca de RefreshIndicator no mobile/lib retornou:
+O usuário executou git add docs/HANDOFF.md; git commit -m "docs: handoff da Sessao 51 (...)"; git push. Working tree ficou limpo. Repo em estado consistente: código da Onda B + docs, ambos commitados e pushados.
+3.3 Geração do APK debug e instalação no Redmi
 
-    feed_page.dart linha 191 — RefreshIndicator(
+Decisão: testar no celular via APK (mais prático que cabo/emulador). flutter build apk --debug gerou D:\Rumo\mobile\build\app\outputs\flutter-apk\app-debug.apk. Usuário instalou no Redmi Note 8. Banner "DEBUG" no canto superior direito é esperado (build debug).
+3.4 Bloco temporário do 401 no api.dart
 
-    profile_page.dart linha 549 — RefreshIndicator( (com comentários sobre Future.wait nas linhas 14, 360, 368, 388, 626)
+Para testar o 7.10 (fiação 401 → logout → redirect), o usuário inseriu o bloco temporário no _send do api.dart, entre as linhas 820 e 821 (antes da montagem da URI). O bloco é:
+dart
 
-    user_profile_page.dart linha 518 — RefreshIndicator( (bônus)
+    // TESTE TEMPORÁRIO — REMOVER DEPOIS (Sessao 51, Secao 5.5)
+    if (path.contains('/activities')) {
+      onUnauthorized?.call();
+      throw ApiException(401, 'Token expirado (teste)');
+    }
 
-Conclusão: pull-to-refresh já existe nos três. Nada a fazer. Item marcado como completo sem tocar.
+Status: inserido, não revertido. Precisa ser removido na S53 (Seção 5.5.3 do handoff S51).
+3.5 Validações confirmadas na S52
 
-Tratamento global de 401 — 3 arquivos alterados:
-#	Arquivo	Mudança
-1	lib/services/api.dart	Campo novo void Function()? onUnauthorized; (após _client). Disparo if (response.statusCode == 401) onUnauthorized?.call(); em 3 pontos: _send (antes do throw do bloco de erro), _fetchBlob (idem), uploadActivity (antes do throw do != 201). login intocado (não dispara — 401 de senha errada é esperado). Comentários novos explicando.
-2	lib/services/auth_service.dart	Construtor explícito AuthService() { _api.onUnauthorized = _handleUnauthorized; }. Método novo _handleUnauthorized(): guard if (!isLoggedIn) return; + logout() (com // ignore: discarded_futures). Todo o resto idêntico (login, register, bootstrap, logout, currentUserId, decode).
-3	lib/main.dart	Uma linha nova no GoRouter(...): refreshListenable: _auth,. Comentário de topo explicando a Onda B. Todo o resto idêntico.
+    Erro amigável no timeout: o usuário viu "servidor demorando, tente novamente" em vez da mensagem crua. Confirma friendlyErrorMessage + ApiException(0, ...) no caminho de timeout. (Não é o 401 global.)
 
-Validação: cada arquivo passou flutter analyze imediatamente após a substituição. No issues found! nos 3 (99.3s, 42.5s, 97.8s). O // ignore: discarded_futures foi aceito (não deu Unnecessary ignore), confirmando que a regra está ativa (S51e).
-3.4 Commits da S51
+    Feed funcional: a screenshot mostra atividades reais carregando (produser, "Teste mapa - rota sintetica", "Caminhada vespertina"), com mapa, distância, tempo, kcal, data, contador de like/comentário. O feed está renderizando corretamente.
 
-Nenhum. Os 3 arquivos estão no working tree, não commitados (decisão consciente: commitar só depois do teste manual passar — o analyze não pega lógica).
+    Mapa funcional: ruas, traçado da rota, tiles do OSM carregando. A faixa amarela/preta é cosmética (S52e).
+
+3.6 Diagnóstico do mapa (S52e)
+
+activity_map.dart:
+
+    Linha 3: import 'package:flutter_map/flutter_map.dart';
+
+    Linhas 17, 58, 62, 63: comentário + _osmTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png' + _osmAttribution = 'OpenStreetMap contributors' + _esriAttribution = ...
+
+    Linhas 111, 172: TileLayer(...) (dois: um para o mapa normal, um para satélite)
+
+    Linhas 115–116, 204–206: SimpleAttributionWidget(source: Text(_satelite ? _esriAttribution : _osmAttribution))
+
+A faixa amarela/preta é placeholder/overlay padrão do flutter_map. Não é bug. Confirmar na S53 se some ao carregar (cosmético) ou fica (investigar SimpleAttributionWidget). Não vale a pena mexer agora.
+3.7 "Barra de baixo estranha" (S52f — NÃO CONFIRMADO)
+
+O usuário mencionou que "já tinha relatado e consertado, só que voltou". Não foi possível diagnosticar (cota acabou antes). Hipóteses: (a) FAB cobrindo o último card do feed (visível na screenshot); (b) insets/altura da NavigationBar; (c) cor/label; (d) outra coisa. Não assumir. Na S53, pedir descrição + trecho do feed_page.dart/profile_page.dart relevante.
+3.8 Commits da S52
+
+Um commit: o handoff S51 (docs/HANDOFF.md). Nenhum commit de código na S52 (a Onda B já estava commitada; o bloco temporário é de teste e não deve ser commitado).
 SEÇÃO 4 — CONTRATOS DO BACKEND (INALTERADOS)
 
 Nenhuma mudança de código no backend desde S39. 180 testes passando. Contratos relevantes (inalterados desde S49):
@@ -180,118 +220,82 @@ Nenhuma mudança de código no backend desde S39. 180 testes passando. Contratos
 
     ApiException.message já contém o detail do FastAPI. O tradutor só formata o que já existe.
 
-Nota sobre 401: o backend retorna 401 quando o token JWT está ausente, malformado ou expirado. Não há endpoint de revogação de token — o que torna o teste "real" de token expirado difícil em prod (ver Seção 5.5).
-SEÇÃO 5 — TESTE MANUAL DA ONDA B (PRIMEIRA AÇÃO DA S52)
+Nota sobre 401: o backend retorna 401 quando o token JWT está ausente, malformado ou expirado. Não há endpoint de revogação de token — o que torna o teste "real" de token expirado difícil em prod (por isso o bloco temporário no _send).
+SEÇÃO 5 — TESTE MANUAL — STATUS NA S52 (o que falta na S53)
 
-Contexto: o código está verde no flutter analyze, mas não foi validado comportamentalmente. Os 5 passos abaixo cobrem regressão + o caso novo (401 global). Execute na ordem. Se algum falhar, ver Seção 5.7 (diagnóstico).
-5.1 Passo 1 — Login normal (regressão)
+O teste manual do Item 7 (10 fluxos) foi parcialmente executado. Status registrado:
+#	Fluxo	Status S52	Observação
+7.1	Cadastro	Não registrado	Atenção: rate limit 3/h por IP
+7.2	Login	Implicitamente OK	O app está logado (produser)
+7.3	Feed	Parcialmente OK	Feed carrega (screenshot), mas rolar/pull-to-refresh/like/abrir detalhe não registrados
+7.4	Perfil	Não registrado	
+7.5	Upload	Não registrado	
+7.6	Comentários	Não registrado	
+7.7	Export	Não registrado	
+7.8	Busca	Não registrado	
+7.9	Follow	Não registrado	
+7.10	401 global	NÃO REGISTRADO	Bloco temporário inserido, mas resultado não reportado. Prioridade máxima na S53.
+5.1 Roteiro do 7.10 (prioridade máxima na S53)
 
-    Abrir o app, logar com credenciais válidas.
+Com o bloco temporário no api.dart (ainda presente no disco do usuário — S52c):
 
-    Esperado: entra no /feed, sem piscar, sem loop, sem tela cinza.
+    Abrir o app no Redmi (está logado).
 
-    Confirma: refreshListenable não quebrou o fluxo normal.
+    Sair do feed e voltar (ou puxar para atualizar, ou trocar de aba e voltar). O app tenta GET /activities → bloco temporário dispara onUnauthorized?.call() → AuthService.logout() → refreshListenable → redirect.
 
-5.2 Passo 2 — Logout manual (regressão)
+    Esperado: o app desloga sozinho e cai no /login, sem travar, sem loop, sem tela cinza.
 
-    Ainda logado, ir em Perfil → Sair.
+    Se acontecer: Onda B validada. 🎉
 
-    Esperado: vai para /login, sem travar.
+    Se não acontecer: diagnosticar com a Seção 5.7 do handoff S51:
 
-    Confirma: refreshListenable não duplicou navegação nem causou loop.
+        App não desloga: (a) bloco no lugar errado; (b) onUnauthorized não setado; (c) _handleUnauthorized não chama logout().
 
-5.3 Passo 3 — Senha errada no login (o caso que NÃO pode deslogar)
+        App desloga mas não navega: refreshListenable: _auth ausente no main.dart.
 
-    Na tela de login, digitar e-mail válido + senha errada. Tocar em Entrar.
+        App desloga com senha errada: alguém chamou onUnauthorized no login (verificar api.dart).
 
-    Esperado: mensagem de erro local na LoginPage (o tradutor trata). Permanece no login. Não navega, não mostra "sessão expirada", não chama logout().
+5.2 Reversão obrigatória (S52c)
 
-    Por que é crítico: o login do ApiClient não dispara onUnauthorized (decisão explícita). Se este passo falhar (app desloga ou mostra mensagem estranha), é bug de lógica — ver Seção 5.7.
+Após o 7.10 (passando ou falhando):
+powershell
 
-5.4 Passo 4 — Login após logout (regressão)
+# 1) Remover o bloco temporário do api.dart (editor)
+# 2) Confirmar que sumiu:
+cd D:\Rumo\mobile\lib\services
+Get-Content api.dart -Encoding UTF8 | Select-String -Pattern "TESTE TEMPORÁRIO"
+# Esperado: zero ocorrências
+# 3) Rebuild limpo (opcional, para APK final sem o bloco):
+cd D:\Rumo\mobile
+& "C:\Users\nasci\flutter\bin\flutter.bat" analyze
+& "C:\Users\nasci\flutter\bin\flutter.bat" build apk --debug
 
-    Depois do passo 2 ou 3, logar de novo com credenciais válidas.
-
-    Esperado: entra no /feed normalmente. Confirma que _token/_cachedUserId foram limpos corretamente.
-
-5.5 Passo 5 — 401 real (fiação) — com código temporário
-
-Por que temporário: o backend em prod não tem revogação de token e o JWT é assinado — não dá para "expirar de fora". A forma confiável de testar a fiação callback → logout → refreshListenable → redirect é forçar um 401 temporariamente e depois reverter.
-
-5.5.1. Alteração temporária no api.dart: abrir mobile/lib/services/api.dart, encontrar o método _send e adicionar, logo no início do método (antes de montar a URI):
-dart
-
-    // TESTE TEMPORÁRIO — REMOVER DEPOIS
-    if (path.contains('/activities')) {
-      onUnauthorized?.call();
-      throw ApiException(401, 'Token expirado (teste)');
-    }
-
-O que isso faz: qualquer chamada a _send cujo path contenha /activities (o feed usa listActivities → get('/activities?...') → _send('GET', '/activities?...')) simula o que o _send faria num 401 real: chama o callback e lança o erro. Não testa a resposta HTTP real, mas testa a fiação inteira (callback → AuthService → logout → refreshListenable → redirect), que é o que a Onda B adiciona.
-
-5.5.2. Rodar o teste:
-
-    Salvar o api.dart alterado.
-
-    cd D:\Rumo\mobile; & "C:\Users\nasci\flutter\bin\flutter.bat" analyze → deve dar No issues found! (o bloco temporário é válido).
-
-    Rodar o app (flutter run ou hot restart).
-
-    Fazer login (o login em si não chama /activities — deve funcionar).
-
-    Ao entrar no /feed, o app tenta carregar atividades → _send('GET', '/activities...') → bloco temporário dispara onUnauthorized e lança 401.
-
-    Esperado: o app desloga e cai no /login automaticamente, sem travar, sem loop, sem tela cinza.
-
-5.5.3. Reverter (obrigatório): remover o bloco // TESTE TEMPORÁRIO — REMOVER DEPOIS do _send. Salvar. Rodar flutter analyze → No issues found!. Confirmar que o bloco sumiu (buscar TESTE TEMPORÁRIO no arquivo — não deve achar nada).
-
-5.5.4. Após reverter: fazer login de novo → deve entrar no /feed normalmente (o feed volta a carregar). Confirma que a reversão foi limpa.
-5.6 Se tudo passar
-
-    O código da Onda B está validado (analyze + comportamento).
-
-    Commitar (Seção 6): os 3 arquivos + este handoff.
-
-    Seguir para o backlog (Seção 8).
-
-5.7 Se algo falhar — diagnóstico
-Passo	Sintoma	Suspeita	Correção
-1, 2 ou 4	Pisca entre login e feed; loop; tela cinza	Interação refreshListenable × bootstrap() no primeiro frame (S51f)	Mostrar splash enquanto _auth.loading == true no build do _RumoAppState (ou ajustar initialLocation). Não antecipar — testar primeiro.
-1, 2 ou 4	Logout manual não navega	refreshListenable ausente ou notifyListeners não chamado	Verificar refreshListenable: _auth no main.dart e notifyListeners() no logout().
-5	App não desloga ao entrar no feed	(a) bloco temporário não foi inserido no lugar certo; (b) onUnauthorized não está setado (construtor do AuthService não rodou); (c) _handleUnauthorized não chama logout()	Adicionar debugPrint('401 callback') no _handleUnauthorized e ver no console. Verificar se AuthService() é o mesmo _auth do main.dart (é — _RumoAppState._auth).
-5	App desloga mas não navega	refreshListenable ausente	Verificar refreshListenable: _auth no GoRouter(...).
-3	App desloga com senha errada (BUG)	Alguém chamou onUnauthorized no login	Verificar login do ApiClient — não deve ter onUnauthorized?.call(). (O código entregue não tem; confirmar.)
-5 (revertido)	Feed não carrega depois de reverter	Bloco temporário não removido	Buscar TESTE TEMPORÁRIO no api.dart — deve ser zero ocorrências.
+Se esquecer de reverter: o app desloga toda vez que abrir o feed. Não commitar o api.dart com o bloco.
 SEÇÃO 6 — COMMITS PENDENTES / ESTADO DO REPO
 
-Ação da S52 (só depois do teste manual passar — Seção 5.6):
+Estado esperado no início da S53:
 powershell
 
 cd D:\Rumo
-# 1) Confirmar o que vai entrar (3 arquivos M + o handoff se já colado)
+git log --oneline -3
 git status --short --untracked-files=all
 
-# 2) Stage explícito (NÃO usar git add -A)
-git add mobile/lib/services/api.dart
-git add mobile/lib/services/auth_service.dart
-git add mobile/lib/main.dart
+Esperado:
 
-# 3) Commit da Onda B
-git commit -m "feat(mobile): tratamento global de 401 + refreshListenable (Sessao 51, 10.4 Onda B)"
+    HEAD == origin/main == commit do handoff S51 (docs), com 49b4275 logo abaixo.
 
-# 4) Push
-git push
+    git status deve mostrar M mobile/lib/services/api.dart (bloco temporário do 7.10, S52c) — reverter antes de commitar.
 
-Depois (commit deste handoff): quando colar este handoff em docs/HANDOFF.md, commitar:
+Após reverter o bloco temporário: working tree limpo. Nenhum commit pendente de código. O próximo commit será o que resultar do teste do Item 7 (se houver correção) ou o commit deste handoff S52.
+
+Commit deste handoff (quando colar em docs/HANDOFF.md):
 powershell
 
+cd D:\Rumo
 git add docs/HANDOFF.md
-git commit -m "docs: handoff da Sessao 51 (10.4 Onda B implementada, teste manual pendente, licoes S51a-f)"
+git commit -m "docs: handoff da Sessao 52 (teste manual parcial no Redmi, diagnostico do mapa, licoes S52a-g)"
 git push
 
-O que espero ver em git status --short antes do commit da Onda B: exatamente 3 linhas M (api.dart, auth_service.dart, main.dart) — e nenhum ??. Se aparecer ?? cls ou outro untracked, não commitar — investigar primeiro (S48: cls acidental do PowerShell). S48e: verificar sempre; o handoff é documento, não fonte de verdade.
-
-Se o teste manual (Seção 5) falhar: NÃO commitar. Diagnosticar (Seção 5.7), corrigir, revalidar (flutter analyze + teste), só então commitar.
 SEÇÃO 7 — SCRIPTS ÚTEIS
 
 Subir o container de teste (obrigatório antes do pytest — S47c):
@@ -313,6 +317,18 @@ cd D:\Rumo\mobile
 & "C:\Users\nasci\flutter\bin\flutter.bat" analyze
 # Esperado: No issues found!
 
+Build do APK debug:
+powershell
+
+cd D:\Rumo\mobile
+& "C:\Users\nasci\flutter\bin\flutter.bat" build apk --debug
+# Saída: D:\Rumo\mobile\build\app\outputs\flutter-apk\app-debug.apk
+
+Instalar no Redmi (adb):
+powershell
+
+adb install -r D:\Rumo\mobile\build\app\outputs\flutter-apk\app-debug.apk
+
 Verificar estado do repo antes de qualquer commit:
 powershell
 
@@ -330,7 +346,8 @@ Para os próximos arquivos (processo S48a + correção S50a):
     Get-Content <arquivo> -Encoding UTF8 | Select-Object -First 250
     Get-Content <arquivo> -Encoding UTF8 | Select-Object -Skip 250
 
-    >600 linhas: 3 partes:
+        600 linhas: 3 partes:
+
     powershell
 
     Get-Content <arquivo> -Encoding UTF8 | Select-Object -First 400
@@ -339,7 +356,7 @@ Para os próximos arquivos (processo S48a + correção S50a):
 
     NUNCA usar Get-Content arquivo -Skip N — não existe no PS 5.1 (S50a).
 
-Descobrir onde está algo no projeto (economiza contexto):
+Descobrir onde está algo no projeto:
 powershell
 
 cd D:\Rumo\mobile\lib
@@ -351,143 +368,61 @@ powershell
 (Get-Content D:\Rumo\mobile\lib\caminho\arquivo.dart -Encoding UTF8).Count
 
 SEÇÃO 8 — DÍVIDAS TÉCNICAS E BACKLOG DETALHADO
-8.1 Fechadas na S51
+8.1 Fechadas na S52
 
-    (S46) Item 10.4 — Onda B (401 global). ✅ Implementada nos 3 arquivos, analyze verde. Pendente de teste manual + commit (não é dívida de código, é validação pendente).
+    Commit do handoff S51 (docs/HANDOFF.md). ✅
 
-    (S50d) Pull-to-refresh no feed/perfil. ✅ Confirmado que já existia (RefreshIndicator em feed_page.dart:191, profile_page.dart:549, user_profile_page.dart:518). Nada foi feito — não era dívida.
+    Diagnóstico do mapa (faixa amarela/preta "POWERED BY 69 PIXELS"). ✅ Cosmético, não bug (S52e).
 
-8.2 Conhecidas (não-bug)
+    Validação do erro amigável no timeout (S52d). ✅ friendlyErrorMessage + ApiException(0, ...) funcionam.
 
-    (S41) prod@rumo.com state — estado, não bug.
+8.2 Abertas / pendentes (S53)
 
-    (S42k) PWA sem PNGs — não-bloqueador.
+    Reverter bloco temporário do api.dart (S52c) — obrigatório antes de qualquer commit futuro.
 
-    (S43d) BOM em build.gradle.kts e AndroidManifest.xml — não-bloqueador (item 13).
+    Registrar resultado do 7.10 (401 global no celular). Prioridade máxima.
 
-    (S43e) Info.plist sem hardcode — correto.
+    Completar fluxos 7.3–7.9 do Item 7.
 
-    (S44) Dois commits de handoff S44 com a mesma mensagem — cosmético, não reescrever histórico.
+    Diagnosticar "barra de baixo estranha" (S52f) — precisa de descrição do usuário primeiro.
 
-8.3 Backlog para S52+ (passo a passo)
+    Commitar resultado do teste (se passar) ou corrigir (se falhar).
+
+8.3 Backlog para S53+ (passo a passo)
+
 Item 7 — Validação no Redmi Note 8 (prioridade alta, ~1 sessão)
 
-Objetivo: testar o app real no celular (Android 10, API 29, arm64) cobrindo os fluxos principais. Atenção ao rate limit do register: 3/hora por IP (S49d) — se testar muitas vezes, pode bater no limite.
+    Status: parcialmente feito na S52. Faltam 7.3–7.9 + registro do 7.10.
 
-Pré-requisitos:
+    Roteiro completo na Seção 8.3 do handoff S51 (inalterado).
 
-    Redmi Note 8 conectado (flutter devices deve mostrar c767cacd).
+    Atenção: 7.1 (cadastro) tem rate limit 3/h — testar uma vez e validar bem.
 
-    Backend de prod acessível (https://rumo-api-5s0b.onrender.com/health → OK).
-
-    App buildado: cd D:\Rumo\mobile; & "C:\Users\nasci\flutter\bin\flutter.bat" run -d c767cacd (ou flutter build apk --debug e instalar).
-
-Roteiro de teste (cobrir tudo):
-#	Fluxo	O que testar	Esperado
-7.1	Cadastro	Abrir /register, criar conta nova (e-mail/username únicos, senha ≥8).	201 → login automático → /feed. Cuidado: 3/hora por IP.
-7.2	Login	Logar com a conta criada.	Entra no /feed.
-7.3	Feed	Rolar o feed; pull-to-refresh; like; abrir detalhe.	Scroll suave; refresh funciona; like atualiza contador; detalhe abre.
-7.4	Perfil	Abrir /profile; pull-to-refresh; editar perfil (/edit-profile); ver stats.	Perfil carrega; refresh funciona; edição salva; stats aparecem.
-7.5	Upload	Abrir /upload; escolher arquivo GPX/FIT; preencher título; enviar.	Spinner durante envio; sucesso → volta pro feed com a atividade nova.
-7.6	Comentários	Abrir detalhe; criar comentário; deletar o próprio comentário.	Comentário aparece; delete some.
-7.7	Export	No detalhe, exportar CSV e GPX (unitário); exportar em lote (ZIP) no perfil.	Download/compartilhamento abre o share sheet; arquivo correto.
-7.8	Busca	Abrir /search; buscar usuário e atividade (abas).	Resultados aparecem; empty state correto.
-7.9	Follow	Abrir /user/:id de terceiro; seguir/deixar de seguir.	Botão alterna; lista de following atualiza.
-7.10	401 global	Repetir o teste da Seção 5.5 no celular (com o bloco temporário).	Desloga e cai no /login.
-
-Atenção especial:
-
-    7.1 (cadastro): rate limit 3/h. Se precisar testar mais, aguardar ou usar outro IP (não recomendado). Testar uma vez e validar bem.
-
-    7.5 (upload): testar com GPX e FIT (se tiver arquivo). O upload é multipart, o caminho File (Android) é diferente do bytes (Web) — no celular usa File.
-
-    7.10 (401): lembrar de reverter o bloco temporário depois.
-
-Saída esperada: todos os 10 fluxos OK. Se algum falhar, anotar qual + comportamento + mensagem (se houver) e reportar.
 Item 8 — Splash + ícone no launcher (prioridade média, ~0,5 sessão)
 
-Objetivo: ter splash screen e ícone do app no launcher Android (e iOS, se for o caso).
+    Bloqueio: precisa de um PNG 1024×1024 do ícone do Rumo (não existe — S42k).
 
-Passo a passo:
+    Usar flutter_launcher_icons e flutter_native_splash (dev dependencies).
 
-    Ícone: criar/preparar um PNG 1024×1024 do ícone do Rumo (não existe ainda — S42k menciona PWA sem PNGs).
+    Detalhes na Seção 8.3 do handoff S51.
 
-    Usar flutter_launcher_icons (dev dependency) para gerar os ícones Android/iOS a partir do PNG. Configurar flutter_launcher_icons.yaml com android: true, ios: true, image_path: "assets/icon/icon.png". Rodar dart run flutter_launcher_icons.
-
-    Splash: usar flutter_native_splash (dev dependency). Configurar flutter_native_splash.yaml com color: "#F97316" (laranja do tema) e image: assets/splash/splash.png (logo centralizado). Rodar dart run flutter_native_splash:create.
-
-    Testar no Redmi Note 8: ícone aparece no launcher; splash aparece ao abrir.
-
-    Commitar.
-
-Atenção: o flutter_native_splash e o flutter_launcher_icons geram arquivos nativos (android/app/src/main/res/..., ios/Runner/Assets.xcassets/...). Não reescrever à mão — usar as ferramentas. Verificar git status depois para ver o que foi gerado.
 Item 10 — Keystore + signingConfigs (prioridade média, só após item 7, ~0,5 sessão)
 
-Objetivo: configurar assinatura de release do Android (obrigatório para publicar na Play Store).
+    Detalhes na Seção 8.3 do handoff S51.
 
-Passo a passo:
+    Atenção: o BOM em build.gradle.kts (S43d / item 13) pode atrapalhar — remover antes.
 
-    Gerar keystore: keytool -genkey -v -keystore D:\Rumo\mobile\android\app\rumo-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias rumo. Guardar a senha em local seguro (não commitar).
-
-    Criar android/key.properties (não commitar — adicionar ao .gitignore):
-    text
-
-    storePassword=<senha>
-    keyPassword=<senha>
-    keyAlias=rumo
-    storeFile=rumo-release.jks
-
-    Editar android/app/build.gradle.kts: ler o key.properties, configurar signingConfigs { create("release") { ... } } e usar signingConfig = signingConfigs.getByName("release") no buildTypes.release.
-
-    Adicionar key.properties e *.jks ao .gitignore.
-
-    Testar: flutter build apk --release → APK assinado. Instalar no Redmi Note 8 e validar.
-
-    Commitar (só o build.gradle.kts e .gitignore; nunca o .jks nem o key.properties).
-
-Atenção: o BOM em build.gradle.kts (S43d / item 13) pode atrapalhar a edição — remover o BOM antes (item 13).
 Item 13 — Remover BOM de build.gradle.kts e AndroidManifest.xml (prioridade baixa, ~0,1 sessão)
 
-Objetivo: remover o Byte Order Mark (BOM) UTF-8 desses arquivos (S43d). O BOM pode causar problemas em ferramentas de build/edição.
+    Detalhes na Seção 8.3 do handoff S51.
 
-Passo a passo:
+    Pode ser feito junto com o item 10 (mesmo arquivo).
 
-    Verificar se há BOM: Get-Content D:\Rumo\mobile\android\app\build.gradle.kts -Encoding Byte -TotalCount 3 → se for 239 187 191, tem BOM.
+SEÇÃO 9 — PEDIDO EXPLÍCITO DO USUÁRIO (histórico + S52)
 
-    Remover: ler o conteúdo como UTF8, salvar de novo sem BOM. Em PowerShell:
-    powershell
+    S21–S51: acordos mantidos (código completo, handoff completo, aviso de limite, percentual, seguir recomendações).
 
-    $p = 'D:\Rumo\mobile\android\app\build.gradle.kts'
-    $c = Get-Content $p -Encoding UTF8 -Raw
-    [System.IO.File]::WriteAllText($p, $c, (New-Object System.Text.UTF8Encoding $false))
-
-    Repetir para AndroidManifest.xml (se tiver BOM).
-
-    Verificar: Get-Content ... -Encoding Byte -TotalCount 3 → não deve ser 239 187 191.
-
-    flutter build apk --debug para confirmar que o build não quebrou.
-
-    Commitar.
-
-Ordem sugerida para a S52+
-
-    Teste manual da Onda B (Seção 5) — primeira coisa, antes de qualquer código novo.
-
-    Commit da Onda B + handoff (Seção 6) — se o teste passar.
-
-    Item 7 (validação no Redmi Note 8) — cobre tudo, incl. cadastro (atenção ao rate limit 3/h).
-
-    Item 8 (splash + ícone) — precisa de PNG do ícone (não existe; criar primeiro).
-
-    Item 10 (keystore + signing) — só depois do item 7 completo.
-
-    Item 13 (BOM) — pode ser feito junto com o item 10 (mesmo arquivo build.gradle.kts).
-
-SEÇÃO 9 — PEDIDO EXPLÍCITO DO USUÁRIO (histórico + S51)
-
-    S21–S50: acordos mantidos (código completo, handoff completo, aviso de limite, percentual, seguir recomendações).
-
-    S51: o usuário reforçou no início da sessão os mesmos 5 pontos da S50:
+    S52: o usuário reforçou os mesmos 5 pontos no início da sessão:
 
         "sempre seguir suas recomendações" (mesmo que atualize só parte do código).
 
@@ -497,64 +432,76 @@ SEÇÃO 9 — PEDIDO EXPLÍCITO DO USUÁRIO (histórico + S51)
 
         "informar o percentual de quanto nosso projeto já está pronto, isso depois de fazermos o handoff no final do chat".
 
-        "gostaria que você avisasse se caso isso for ocorrer [o chat acabar no meio do código] — não estou falando apenas do limite do chat, mas sim o limite do site (IA)". O assistente respondeu com honestidade: o limite do site/IA não é mensurável pelo assistente. O que dá para fazer: entregar arquivo completo um por um, validar imediatamente, nunca deixar código pela metade entre duas mensagens, handoff enxuto e frequente. Isso é o máximo garantível; o resto está fora do alcance.
+        "gostaria que você avisasse se caso isso for ocorrer [o chat acabar no meio do código] — não estou falando apenas do limite do chat, mas sim o limite do site (IA)". O assistente respondeu com honestidade: o limite do site/IA não é mensurável pelo assistente. O que dá para fazer: entregar arquivo completo um por um, validar imediatamente, nunca deixar código pela metade entre duas mensagens, handoff enxuto e frequente. Isso é o máximo garantível; o resto está fora do alcance. A S52 confirmou isso na prática: o usuário avisou "resta 37% da cota" — o assistente não teria como prever esse número; só o usuário consegue.
 
-    S51 — decisão de fechamento: ao perceber que o contexto estava acima de 70% (após entregar os 3 arquivos da Onda B, todos verdes no analyze, mas antes do teste manual), o assistente parou e propôs o handoff. O usuário concordou e pediu handoff detalhado cobrindo tudo o que falta (não só o teste). O handoff foi entregue (este documento). O teste manual fica para a S52 (ou para o usuário executar sozinho entre sessões).
+    S52 — decisão de fechamento: ao ser avisado da cota em 37%, o assistente parou imediatamente e propôs o handoff, sem tentar "espremer" mais um diagnóstico. O usuário concordou. Este handoff foi entregue.
 
-Acordos novos da S51: S51a–S51f (ver Seção 0).
-SEÇÃO 10 — PERCENTUAL DE PRONTIDÃO DO PROJETO (fim da Sessão 51)
+Acordos novos da S52: S52a–S52g (ver Seção 0).
+SEÇÃO 10 — PERCENTUAL DE PRONTIDÃO DO PROJETO (fim da Sessão 52)
 Área	%	Observação
 Backend	~95%	inalterado (180 testes, ruff; prod OK)
 Web	~99%	inalterado (prod OK)
-Mobile	~99%	subiu de ~98% (10.4 Onda B implementada: 401 global + refreshListenable; analyze verde nos 3 arquivos; teste manual pendente)
+Mobile	~99%	inalterado em relação à S51 (Onda B commitada, mas validação comportamental ainda pendente — 7.10 não registrado)
 Bloqueadores não-código	~25%	inalterado (contas Google Play/Apple, keystore)
-MVP consolidado	~92%	subiu de ~91% (10.4 Onda B implementada; falta teste + commit)
+MVP consolidado	~92%	inalterado em relação à S51 (a validação pendente é o que falta para subir)
 
-Variação em relação à S50: Mobile 98% → 99% (+1%); MVP 91% → 92% (+1%).
+Variação em relação à S51: nenhuma (0%). A S52 foi de verificação/teste/diagnóstico, não de implementação nova. O Mobile e o MVP só sobem quando o 7.10 for validado (Mobile → ~99,5%, MVP → ~92,5%).
 
 Estimativa até "pronto para submeter":
 
-    Teste manual da Onda B + commit: ~0,2–0,5 sessão (parte de uma sessão).
-
-    Item 7 (validação no celular, incl. cadastro): ~1 sessão.
+    Registrar 7.10 + completar 7.3–7.9 + reverter bloco: ~0,5–1 sessão.
 
     Item 8 (splash/ícone): ~0,5 sessão (precisa criar PNG do ícone).
 
     Item 10 (keystore) + item 13 (BOM): ~0,5–1 sessão.
 
-    Total: ~2,5–3 sessões + 1 de review. ~3–4 sessões.
+    Total: ~1,5–2,5 sessões + 1 de review. ~2,5–3,5 sessões.
 
-SEÇÃO 11 — BACKLOG DA SESSÃO 52 (planejamento)
+SEÇÃO 11 — BACKLOG DA SESSÃO 53 (planejamento)
 
-Base: repo em 9753ed9 (working tree com 3 arquivos M da Onda B, não commitados).
+Base: repo em 49b4275 + commit do handoff S51. Working tree deve ter M mobile/lib/services/api.dart (bloco temporário do 7.10, S52c).
 
-    Teste manual da Onda B (Seção 5) — primeira coisa. 5 passos, incluindo o teste temporário de 401 (Seção 5.5). Reverter o bloco temporário ao fim.
+    Verificar git status (S48e). Esperado: M mobile/lib/services/api.dart.
 
-    Commit da Onda B + handoff (Seção 6) — se o teste passar. 3 arquivos + docs/HANDOFF.md.
+    Perguntar ao usuário:
 
-    Item 7 — validação no Redmi Note 8 (10 fluxos da Seção 8.3). Atenção ao rate limit 3/h no cadastro.
+        Resultado do 7.10: o app deslogou e caiu no /login ao entrar no feed? Travou? Loop? Tela cinza?
 
-    Item 8 — splash + ícone (precisa criar PNG do ícone primeiro).
+        Descrição da "barra de baixo estranha" (S52f): o que exatamente está estranho?
 
-    Item 10 — keystore + signingConfigs (só após item 7).
+    Reverter o bloco temporário do api.dart (Seção 5.2 deste handoff / Seção 5.5.3 do handoff S51). Confirmar com Select-String "TESTE TEMPORÁRIO" → zero ocorrências.
 
-    Item 13 — remover BOM (pode ser junto com o item 10).
+    Se o 7.10 passou: Onda B validada. Commit do handoff S52. Seguir para 7.3–7.9.
 
-Ordem sugerida: Teste manual → commit → item 7 → item 8 → item 10 + item 13.
-SEÇÃO 12 — RESUMO EXECUTIVO PARA A S52
+    Se o 7.10 falhou: diagnosticar (Seção 5.7 do handoff S51), corrigir, revalidar, só então commitar.
 
-    Primeiro: executar o teste manual da Onda B (Seção 5, 5 passos, incl. o teste temporário de 401 na Seção 5.5 e reverter depois).
+    Se a "barra de baixo" for o FAB cobrindo o card: pedir o trecho do feed_page.dart (e profile_page.dart, se aplicável), corrigir com padding no fim do ListView/SliverPadding.
 
-    Se passar: commitar os 3 arquivos + este handoff (Seção 6).
+    Continuar o Item 7 (7.3–7.9).
 
-    Se falhar: diagnosticar (Seção 5.7), corrigir, revalidar, só então commitar.
+    Depois: Item 8 (splash/ícone — precisa criar PNG) → Item 10 (keystore) + Item 13 (BOM).
 
-    Depois: item 7 (Redmi Note 8) → item 8 (splash/ícone) → item 10 (keystore) + item 13 (BOM).
+Ordem sugerida: verificar status → reverter bloco → registrar 7.10 → diagnosticar "barra de baixo" → completar 7.3–7.9 → commit do handoff S52 → Item 8 → Item 10 + Item 13.
+SEÇÃO 12 — RESUMO EXECUTIVO PARA A S53
 
-    O que NÃO fazer: reconstruir arquivo a partir de Select-String (S47a); assumir AuthService.instance (S47b); rodar pytest sem container (S47c); traduzir catch (_) silencioso/rollback/403 como erro (S48b); confiar no handoff sem git log/git status (S48e); usar ?key: value para valor opcional em map literal (S49b — é key: ?value); esquecer de incluir /register no redirect (S49c); usar Get-Content -Skip no PS 5.1 (S50a — usar | Select-Object -Skip); assumir que pull-to-refresh/spinner no upload precisam ser feitos (S50b/S50d — já existiam); commitar a Onda B antes do teste manual passar (S51 — o analyze não pega lógica); esquecer o refreshListenable (S51d — sem ele, o 401 não navega).
+    Primeiro: git status (S48e). Esperado: M mobile/lib/services/api.dart (bloco temporário do 7.10).
+
+    Perguntar ao usuário: (a) resultado do 7.10 (deslogou/não deslogou, travou/loop/tela cinza); (b) descrição da "barra de baixo estranha".
+
+    Reverter o bloco temporário do api.dart (obrigatório — Seção 5.2 deste handoff). Confirmar com Select-String "TESTE TEMPORÁRIO" → zero ocorrências.
+
+    Se o 7.10 passou: Onda B validada. Commitar o handoff S52. Seguir para 7.3–7.9.
+
+    Se o 7.10 falhou: diagnosticar (Seção 5.7 do handoff S51), corrigir, revalidar, só então commitar.
+
+    Depois: completar Item 7 (7.3–7.9) → Item 8 (splash/ícone) → Item 10 (keystore) + Item 13 (BOM).
+
+    O que NÃO fazer: reconstruir arquivo a partir de Select-String (S47a); assumir AuthService.instance (S47b); rodar pytest sem container (S47c); traduzir catch (_) silencioso/rollback/403 como erro (S48b); confiar no handoff sem git log/git status (S48e); usar ?key: value para valor opcional em map literal (S49b — é key: ?value); esquecer de incluir /register no redirect (S49c); usar Get-Content -Skip no PS 5.1 (S50a — usar | Select-Object -Skip); assumir que pull-to-refresh/spinner no upload precisam ser feitos (S50b/S50d — já existiam); esquecer de reverter o bloco temporário do api.dart (S52c — senão o app desloga toda vez que abrir o feed); assumir que a faixa amarela/preta do mapa é bug (S52e — é cosmética do flutter_map); assumir o que é a "barra de baixo estranha" sem perguntar (S52f — pedir descrição primeiro).
 
     Regra de ouro: não tenho acesso ao disco. Pedir Get-Content inteiro. Nunca inventar caminho. Nunca reescrever arquivo não recebido.
 
-PERCENTUAL DE PRONTIDÃO (fim da S51)
+PERCENTUAL DE PRONTIDÃO (fim da S52)
 
 Backend ~95% · Web ~99% · Mobile ~99% · Bloqueadores não-código ~25% · MVP consolidado ~92%
+
+Variação em relação à S51: nenhuma. A S52 foi de verificação/teste/diagnóstico. O Mobile e o MVP só sobem quando o 7.10 for validado (Mobile → ~99,5%, MVP → ~92,5%).
